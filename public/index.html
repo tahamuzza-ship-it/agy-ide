@@ -1,477 +1,484 @@
 <!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AGY-IDE — Powered by Antigravity</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;600;700&family=Orbitron:wght@600;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.43.0/min/vs/loader.js"></script>
-</head>
-<body>
+    <html lang="es">
+    <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>AGY-IDE — Powered by Antigravity</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;600;700&family=Orbitron:wght@600;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.43.0/min/vs/loader.js"></script>
+    </head>
+    <body>
 
-<div id="app" class="mv-editor">
+    <div id="app" class="mv-editor">
 
-  <!-- ══ HEADER ══ -->
-  <header id="header">
-    <div class="logo">⚡<span>AGY</span>-IDE</div>
+    <!-- HEADER -->
+    <header id="header">
+      <div class="logo">⚡<span>AGY</span>-IDE</div>
 
-    <div class="pc-pills">
-      <div class="pc-pill"><span class="dot" id="dot-pc1"></span> PC1</div>
-      <div class="pc-pill"><span class="dot" id="dot-pc2"></span> PC2</div>
-    </div>
-
-    <div class="pc-select">
-      <label>TARGET</label>
-      <select id="pc-target">
-        <option value="PC1">PC1 Win</option>
-        <option value="PC2">PC2 Linux</option>
-        <option value="ANY">Cualquiera</option>
-      </select>
-    </div>
-
-    <div class="header-btns">
-      <button class="hbtn hbtn-run"  id="btn-run">▶ EJECUTAR</button>
-      <button class="hbtn hbtn-goal" id="btn-goal">/goal</button>
-      <button class="hbtn hbtn-clr"  id="btn-clear-out">🗑 Output</button>
-      <button class="hbtn hbtn-clr"  id="btn-clear-chat">🗑 Chat</button>
-    </div>
-  </header>
-
-  <!-- ══ WORKSPACE ══ -->
-  <main id="workspace">
-
-    <!-- Editor -->
-    <div class="panel" id="panel-editor">
-      <div class="panel-bar">
-        <span class="icon">📝</span> EDITOR
-        <span class="badge" id="editor-lang">javascript</span>
+      <div class="pc-pills">
+        <div class="pc-pill"><span class="dot" id="dot-pc1"></span> PC1</div>
+        <div class="pc-pill"><span class="dot" id="dot-pc2"></span> PC2</div>
       </div>
-      <div id="monaco-container"></div>
-    </div>
 
-    <!-- Right column: Output + Chat -->
-    <div id="panel-right">
+      <div class="pc-select">
+        <label>TARGET</label>
+        <select id="pc-target">
+          <option value="PC1">PC1 Win</option>
+          <option value="PC2">PC2 Linux</option>
+          <option value="ANY">Cualquiera</option>
+        </select>
+      </div>
 
-      <!-- Output -->
-      <div class="panel" id="panel-output">
+      <div class="header-btns">
+        <button class="hbtn hbtn-run"  id="btn-run">▶ EJECUTAR</button>
+        <button class="hbtn hbtn-goal" id="btn-goal">/goal</button>
+        <button class="hbtn hbtn-clr"  id="btn-clear-out">🗑 Output</button>
+        <button class="hbtn hbtn-clr"  id="btn-clear-chat">🗑 Chat</button>
+      </div>
+    </header>
+
+    <!-- WORKSPACE -->
+    <main id="workspace">
+
+      <!-- Editor -->
+      <div class="panel" id="panel-editor">
         <div class="panel-bar">
-          <span class="icon">⚡</span> OUTPUT — AGY
-          <span id="out-status" class="badge">listo</span>
+          <span class="icon">📝</span> EDITOR
+          <span class="badge" id="editor-lang">javascript</span>
         </div>
-        <div id="output"></div>
+        <div id="monaco-container"></div>
       </div>
 
-      <!-- Chat -->
-      <div class="panel" id="panel-chat">
-        <div class="panel-bar">
-          <span class="icon">🤖</span> CHAT CON AGY
+      <!-- Right column: Output + Chat -->
+      <div id="panel-right">
+
+        <!-- Output -->
+        <div class="panel" id="panel-output">
+          <div class="panel-bar">
+            <span class="icon">⚡</span> OUTPUT — AGY
+            <span id="out-status" class="badge">listo</span>
+          </div>
+          <div id="output"></div>
         </div>
-        <div id="chat-messages"></div>
-        <div id="chat-input-wrap">
-          <textarea id="chat-input" rows="1" placeholder="Escribe una instrucción para AGY…"></textarea>
-          <button id="chat-send">➤</button>
+
+        <!-- Chat -->
+        <div class="panel" id="panel-chat">
+          <div class="panel-bar">
+            <span class="icon">🤖</span> CHAT CON AGY
+          </div>
+          <div id="chat-messages"></div>
+          <div id="chat-input-wrap">
+            <textarea id="chat-input" rows="1" placeholder="Escribe una instrucción para AGY…"></textarea>
+            <button id="chat-send">➤</button>
+          </div>
         </div>
-      </div>
 
-    </div><!-- /panel-right -->
-  </main>
+      </div><!-- /panel-right -->
+    </main>
 
-  <!-- ══ MOBILE NAV ══ -->
-  <nav id="mobile-nav">
-    <button class="mnav-btn active" data-panel="editor">
-      <span class="micon">📝</span>EDITOR
-    </button>
-    <button class="mnav-btn" data-panel="output">
-      <span class="micon">⚡</span>OUTPUT
-    </button>
-    <button class="mnav-btn" data-panel="chat">
-      <span class="micon">🤖</span>AGY
-    </button>
-  </nav>
+    <!-- MOBILE NAV -->
+    <nav id="mobile-nav">
+      <button class="mnav-btn active" data-panel="editor">
+        <span class="micon">📝</span>EDITOR
+      </button>
+      <button class="mnav-btn" data-panel="output">
+        <span class="micon">⚡</span>OUTPUT
+      </button>
+      <button class="mnav-btn" data-panel="chat">
+        <span class="micon">🤖</span>AGY
+      </button>
+    </nav>
 
-</div><!-- /app -->
+    </div><!-- /app -->
 
-<script>
-(function() {
-'use strict';
+    <script>
+    (function() {
+    'use strict';
 
-/* ══════════════════════════════════════════
-   ESTADO
-══════════════════════════════════════════ */
-const STORAGE_KEY = 'agyide_chat_v1';
-let monacoEditor = null;
-let pendingRun   = false;
+    /* ══════════════════════════════════════════
+     ESTADO
+    ══════════════════════════════════════════ */
+    const STORAGE_KEY = 'agyide_chat_v1';
+    let monacoEditor = null;
+    let pendingRun   = false;
 
-/* ══════════════════════════════════════════
-   UTILS
-══════════════════════════════════════════ */
-function ts() {
-  return new Date().toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
-}
-
-function getPcTarget() {
-  return document.getElementById('pc-target').value;
-}
-
-/* ══════════════════════════════════════════
-   CHAT — persistencia LocalStorage
-══════════════════════════════════════════ */
-function loadHistory() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
-}
-function saveHistory(msgs) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs.slice(-120))); } catch {}
-}
-
-let chatHistory = loadHistory();
-
-function renderHistory() {
-  const box = document.getElementById('chat-messages');
-  box.innerHTML = '';
-  chatHistory.forEach(m => _appendBubble(m.role, m.text, m.time, false));
-  box.scrollTop = box.scrollHeight;
-}
-
-function _appendBubble(role, text, time, save = true) {
-  const box = document.getElementById('chat-messages');
-  const wrap = document.createElement('div');
-  wrap.className = `msg msg-${role === 'user' ? 'user' : 'agt'}`;
-
-  const bubble = document.createElement('div');
-  bubble.className = 'msg-bubble';
-  bubble.textContent = text;
-
-  const meta = document.createElement('div');
-  meta.className = 'msg-meta';
-  meta.textContent = time || ts();
-
-  wrap.appendChild(bubble);
-  wrap.appendChild(meta);
-  box.appendChild(wrap);
-  box.scrollTop = box.scrollHeight;
-
-  if (save) {
-    chatHistory.push({ role, text, time: meta.textContent });
-    saveHistory(chatHistory);
-  }
-  return bubble;
-}
-
-function appendUser(text) { _appendBubble('user', text); }
-
-function appendThinking() {
-  const box = document.getElementById('chat-messages');
-  const wrap = document.createElement('div');
-  wrap.className = 'msg msg-agt';
-  const bubble = document.createElement('div');
-  bubble.className = 'msg-bubble thinking';
-  bubble.innerHTML = '<span class="spinner"></span>AGY está procesando…';
-  wrap.appendChild(bubble);
-  box.appendChild(wrap);
-  box.scrollTop = box.scrollHeight;
-  return { wrap, bubble };
-}
-
-function finalizeThinking(wrap, bubble, text) {
-  bubble.className = 'msg-bubble';
-  bubble.textContent = text;
-  const meta = document.createElement('div');
-  meta.className = 'msg-meta';
-  meta.textContent = ts();
-  wrap.appendChild(meta);
-  chatHistory.push({ role: 'agt', text, time: meta.textContent });
-  saveHistory(chatHistory);
-  const box = document.getElementById('chat-messages');
-  box.scrollTop = box.scrollHeight;
-}
-
-/* ══════════════════════════════════════════
-   OUTPUT
-══════════════════════════════════════════ */
-function setOutStatus(txt, color) {
-  const el = document.getElementById('out-status');
-  el.textContent = txt;
-  el.style.color = color || '';
-}
-
-function appendOutput(label, content, isError) {
-  const out = document.getElementById('output');
-  const block = document.createElement('div');
-  block.className = 'out-block' + (isError ? ' out-error' : '');
-  block.innerHTML = `<div class="out-meta">${label}</div><div class="out-content">${escHtml(content)}</div>`;
-  out.appendChild(block);
-  out.scrollTop = out.scrollHeight;
-}
-
-function escHtml(s) {
-  return String(s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-/* ══════════════════════════════════════════
-   AGY API
-══════════════════════════════════════════ */
-async function sendToAGY(instruction, target) {
-  const r = await fetch('/api/send', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ instruction, target: target || getPcTarget() })
-  });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json(); // { id, status, ... }
-}
-
-async function pollStatus(id, maxMs = 90000) {
-  const start = Date.now();
-  while (Date.now() - start < maxMs) {
-    await new Promise(res => setTimeout(res, 5000));
-    const r = await fetch(`/api/status/${id}`);
-    if (!r.ok) continue;
-    const d = await r.json();
-    if (d.status === 'done' || d.status === 'error') return d;
-  }
-  return { status: 'error', result: 'Tiempo de espera agotado (90s)' };
-}
-
-/* ══════════════════════════════════════════
-   EJECUTAR código
-══════════════════════════════════════════ */
-async function runCode() {
-  if (pendingRun) return;
-  const code = monacoEditor ? monacoEditor.getValue() : '';
-  if (!code.trim()) return;
-
-  pendingRun = true;
-  setOutStatus('⏳ enviando…', '#ffcc00');
-  document.getElementById('btn-run').disabled = true;
-
-  const lang = document.getElementById('editor-lang').textContent;
-  const instruction = `EJECUTAR el siguiente código ${lang}:\n\`\`\`${lang}\n${code}\n\`\`\`\nMuéstrame el output completo.`;
-
-  try {
-    const sent = await sendToAGY(instruction);
-    if (!sent.id) throw new Error(sent.error || 'Sin ID de tarea');
-
-    appendOutput(`📤 ${ts()} — enviado a ${getPcTarget()} (${sent.id.slice(0,8)}…)`, instruction, false);
-    setOutStatus('⏳ ejecutando…', '#ffcc00');
-
-    const result = await pollStatus(sent.id);
-    const isErr  = result.status === 'error';
-    appendOutput(`${isErr ? '❌' : '✅'} ${ts()} — resultado`, result.result || '(sin output)', isErr);
-    setOutStatus(isErr ? '❌ error' : '✅ listo', isErr ? '#ff5555' : '#00ff88');
-
-  } catch (e) {
-    appendOutput(`❌ ${ts()} — fallo`, e.message, true);
-    setOutStatus('❌ error', '#ff5555');
-  } finally {
-    pendingRun = false;
-    document.getElementById('btn-run').disabled = false;
-  }
-}
-
-/* ══════════════════════════════════════════
-   CHAT SEND
-══════════════════════════════════════════ */
-async function sendChat(raw) {
-  const msg = raw.trim();
-  if (!msg) return;
-
-  const send = document.getElementById('chat-send');
-  const inp  = document.getElementById('chat-input');
-  send.disabled = true;
-  inp.value = '';
-
-  appendUser(msg);
-  const { wrap, bubble } = appendThinking();
-
-  try {
-    const sent = await sendToAGY(msg);
-    if (!sent.id) throw new Error(sent.error || 'Sin ID');
-
-    const result = await pollStatus(sent.id);
-    finalizeThinking(wrap, bubble, result.result || '(respuesta vacía)');
-  } catch (e) {
-    finalizeThinking(wrap, bubble, '⚠ Error: ' + e.message);
-  } finally {
-    send.disabled = false;
-    inp.focus();
-  }
-}
-
-/* ══════════════════════════════════════════
-   /goal MODE
-══════════════════════════════════════════ */
-async function sendGoal() {
-  const code = monacoEditor ? monacoEditor.getValue() : '';
-  if (!code.trim()) {
-    alert('Escribe el objetivo en el editor y haz clic en /goal');
-    return;
-  }
-  const instruction = `/goal\n${code}`;
-  const { wrap, bubble } = appendThinking();
-
-  // Switch to chat panel on mobile
-  switchPanel('chat');
-
-  try {
-    const sent = await sendToAGY(instruction);
-    if (!sent.id) throw new Error(sent.error || 'Sin ID');
-    appendOutput(`🎯 ${ts()} — /goal enviado (${sent.id.slice(0,8)}…)`, instruction, false);
-    const result = await pollStatus(sent.id, 180000); // 3min para /goal
-    finalizeThinking(wrap, bubble, result.result || '(sin respuesta)');
-    appendOutput(`✅ ${ts()} — /goal completado`, result.result || '', result.status === 'error');
-  } catch (e) {
-    finalizeThinking(wrap, bubble, '⚠ ' + e.message);
-  }
-}
-
-/* ══════════════════════════════════════════
-   HEARTBEAT — estado PC1/PC2
-══════════════════════════════════════════ */
-async function checkHeartbeat() {
-  try {
-    const r = await fetch('/api/heartbeat');
-    if (!r.ok) return;
-    const d = await r.json();
-    const set = (id, data) => {
-      const dot = document.getElementById(id);
-      if (!dot) return;
-      const on = data && data.online;
-      dot.className = 'dot ' + (on ? 'online' : 'offline');
-      dot.parentElement.title = on
-        ? `Online — hace ${data.seconds_ago}s`
-        : 'Offline';
-    };
-    if (d.PC1) set('dot-pc1', d.PC1);
-    if (d.PC2) set('dot-pc2', d.PC2);
-  } catch {}
-}
-
-/* ══════════════════════════════════════════
-   MOBILE PANEL SWITCHER
-══════════════════════════════════════════ */
-function switchPanel(name) {
-  const app = document.getElementById('app');
-  app.className = `mv-${name}`;
-  document.querySelectorAll('.mnav-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.panel === name);
-  });
-  if (name === 'editor' && monacoEditor) {
-    setTimeout(() => monacoEditor.layout(), 60);
-  }
-}
-
-/* ══════════════════════════════════════════
-   MONACO INIT
-══════════════════════════════════════════ */
-function initMonaco() {
-  require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.43.0/min/vs' } });
-  require(['vs/editor/editor.main'], function() {
-    monaco.editor.defineTheme('agyDark', {
-      base: 'vs-dark',
-      inherit: true,
-      rules: [
-        { token: 'comment',  foreground: '526075', fontStyle: 'italic' },
-        { token: 'keyword',  foreground: '00f3ff', fontStyle: 'bold' },
-        { token: 'string',   foreground: '00ff88' },
-        { token: 'number',   foreground: 'ffcc00' },
-      ],
-      colors: {
-        'editor.background':          '#070c1a',
-        'editor.foreground':          '#e0e8ff',
-        'editorLineNumber.foreground':'#3a4a60',
-        'editor.lineHighlightBackground':'#0c1225',
-        'editorCursor.foreground':    '#00f3ff',
-        'editor.selectionBackground': '#00f3ff30',
-      }
-    });
-
-    monacoEditor = monaco.editor.create(
-      document.getElementById('monaco-container'),
-      {
-        value: `// AGY-IDE — escribe aquí tu código o instrucción\n// Haz clic en ▶ EJECUTAR para enviarlo a AGY\n\nconsole.log("Hola desde AGY! 🤖");\n`,
-        language:         'javascript',
-        theme:            'agyDark',
-        fontSize:         13,
-        lineHeight:       20,
-        minimap:          { enabled: false },
-        scrollBeyondLastLine: false,
-        wordWrap:         'on',
-        automaticLayout:  true,
-        padding:          { top: 10, bottom: 10 },
-        fontFamily:       "'Fira Code', monospace",
-        fontLigatures:    true,
-      }
-    );
-
-    // Cambiar badge de lenguaje al cambiar el modelo
-    monacoEditor.onDidChangeModelLanguage(() => {
-      const lang = monacoEditor.getModel().getLanguageId();
-      document.getElementById('editor-lang').textContent = lang;
-    });
-
-    // Ctrl+Enter ejecuta
-    monacoEditor.addCommand(
-      monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
-      runCode
-    );
-  });
-}
-
-/* ══════════════════════════════════════════
-   EVENTOS
-══════════════════════════════════════════ */
-function bindEvents() {
-  // Botones header
-  document.getElementById('btn-run').addEventListener('click', runCode);
-  document.getElementById('btn-goal').addEventListener('click', sendGoal);
-  document.getElementById('btn-clear-out').addEventListener('click', () => {
-    document.getElementById('output').innerHTML = '';
-    setOutStatus('listo', '');
-  });
-  document.getElementById('btn-clear-chat').addEventListener('click', () => {
-    chatHistory = [];
-    saveHistory([]);
-    document.getElementById('chat-messages').innerHTML = '';
-  });
-
-  // Chat send
-  const inp  = document.getElementById('chat-input');
-  const send = document.getElementById('chat-send');
-  send.addEventListener('click', () => sendChat(inp.value));
-  inp.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendChat(inp.value);
+    /* ══════════════════════════════════════════
+     UTILS
+    ══════════════════════════════════════════ */
+    function ts() {
+    return new Date().toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
     }
-  });
-  // Auto-resize textarea
-  inp.addEventListener('input', () => {
+
+    function getPcTarget() {
+    return document.getElementById('pc-target').value;
+    }
+
+    /* ══════════════════════════════════════════
+     CHAT — persistencia LocalStorage
+    ══════════════════════════════════════════ */
+    function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
+    }
+    function saveHistory(msgs) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(msgs.slice(-120))); } catch {}
+    }
+
+    let chatHistory = loadHistory();
+
+    function renderHistory() {
+    const box = document.getElementById('chat-messages');
+    box.innerHTML = '';
+    chatHistory.forEach(m => _appendBubble(m.role, m.text, m.time, false));
+    box.scrollTop = box.scrollHeight;
+    }
+
+    function _appendBubble(role, text, time, save = true) {
+    const box = document.getElementById('chat-messages');
+    const wrap = document.createElement('div');
+    wrap.className = 'msg msg-' + (role === 'user' ? 'user' : 'agt');
+
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
+    bubble.textContent = text;
+
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    meta.textContent = time || ts();
+
+    wrap.appendChild(bubble);
+    wrap.appendChild(meta);
+    box.appendChild(wrap);
+    box.scrollTop = box.scrollHeight;
+
+    if (save) {
+      chatHistory.push({ role, text, time: meta.textContent });
+      saveHistory(chatHistory);
+    }
+    return bubble;
+    }
+
+    function appendUser(text) { _appendBubble('user', text); }
+
+    function appendThinking() {
+    const box = document.getElementById('chat-messages');
+    const wrap = document.createElement('div');
+    wrap.className = 'msg msg-agt';
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble thinking';
+    bubble.innerHTML = '<span class="spinner"></span>AGY está procesando…';
+    wrap.appendChild(bubble);
+    box.appendChild(wrap);
+    box.scrollTop = box.scrollHeight;
+    return { wrap, bubble };
+    }
+
+    function finalizeThinking(wrap, bubble, text) {
+    bubble.className = 'msg-bubble';
+    bubble.textContent = text;
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    meta.textContent = ts();
+    wrap.appendChild(meta);
+    chatHistory.push({ role: 'agt', text, time: meta.textContent });
+    saveHistory(chatHistory);
+    const box = document.getElementById('chat-messages');
+    box.scrollTop = box.scrollHeight;
+    }
+
+    /* ══════════════════════════════════════════
+     OUTPUT
+    ══════════════════════════════════════════ */
+    function setOutStatus(txt, color) {
+    const el = document.getElementById('out-status');
+    el.textContent = txt;
+    el.style.color = color || '';
+    }
+
+    function appendOutput(label, content, isError) {
+    const out = document.getElementById('output');
+    const block = document.createElement('div');
+    block.className = 'out-block' + (isError ? ' out-error' : '');
+    block.innerHTML = '<div class="out-meta">' + label + '</div><div class="out-content">' + escHtml(content) + '</div>';
+    out.appendChild(block);
+    out.scrollTop = out.scrollHeight;
+    }
+
+    function escHtml(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    /* ══════════════════════════════════════════
+     AGY API
+    ══════════════════════════════════════════ */
+    async function sendToAGY(instruction, target) {
+    const r = await fetch('/api/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instruction, target: target || getPcTarget() })
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+    }
+
+    async function pollStatus(id, maxMs) {
+    maxMs = maxMs || 90000;
+    const start = Date.now();
+    while (Date.now() - start < maxMs) {
+      await new Promise(res => setTimeout(res, 5000));
+      const r = await fetch('/api/status/' + id);
+      if (!r.ok) continue;
+      const d = await r.json();
+      if (d.status === 'done' || d.status === 'error') return d;
+    }
+    return { status: 'error', result: 'Tiempo de espera agotado (90s)' };
+    }
+
+    /* ══════════════════════════════════════════
+     EJECUTAR código
+    ══════════════════════════════════════════ */
+    async function runCode() {
+    if (pendingRun) return;
+    const code = monacoEditor ? monacoEditor.getValue() : '';
+    if (!code.trim()) return;
+
+    pendingRun = true;
+    setOutStatus('⏳ enviando…', '#ffcc00');
+    document.getElementById('btn-run').disabled = true;
+
+    const lang = document.getElementById('editor-lang').textContent;
+    const instruction = 'EJECUTAR el siguiente código ' + lang + ':\n```' + lang + '\n' + code + '\n```\nMuéstrame el output completo.';
+
+    try {
+      const sent = await sendToAGY(instruction);
+      if (!sent.id) throw new Error(sent.error || 'Sin ID de tarea');
+
+      appendOutput('📤 ' + ts() + ' — enviado a ' + getPcTarget() + ' (' + sent.id.slice(0,8) + '…)', instruction, false);
+      setOutStatus('⏳ ejecutando…', '#ffcc00');
+
+      // Cambiar a output en móvil para ver resultados
+      if (window.innerWidth <= 768) switchPanel('output');
+
+      const result = await pollStatus(sent.id);
+      const isErr  = result.status === 'error';
+      appendOutput((isErr ? '❌' : '✅') + ' ' + ts() + ' — resultado', result.result || '(sin output)', isErr);
+      setOutStatus(isErr ? '❌ error' : '✅ listo', isErr ? '#ff5555' : '#00ff88');
+
+    } catch (e) {
+      appendOutput('❌ ' + ts() + ' — fallo', e.message, true);
+      setOutStatus('❌ error', '#ff5555');
+    } finally {
+      pendingRun = false;
+      document.getElementById('btn-run').disabled = false;
+    }
+    }
+
+    /* ══════════════════════════════════════════
+     CHAT SEND
+    ══════════════════════════════════════════ */
+    async function sendChat(raw) {
+    const msg = raw.trim();
+    if (!msg) return;
+
+    const send = document.getElementById('chat-send');
+    const inp  = document.getElementById('chat-input');
+    send.disabled = true;
+    inp.value = '';
     inp.style.height = 'auto';
-    inp.style.height = Math.min(inp.scrollHeight, 100) + 'px';
-  });
 
-  // Mobile nav
-  document.querySelectorAll('.mnav-btn').forEach(btn => {
-    btn.addEventListener('click', () => switchPanel(btn.dataset.panel));
-  });
-}
+    appendUser(msg);
+    const { wrap, bubble } = appendThinking();
 
-/* ══════════════════════════════════════════
-   BOOT
-══════════════════════════════════════════ */
-window.addEventListener('DOMContentLoaded', function() {
-  renderHistory();
-  bindEvents();
-  initMonaco();
-  checkHeartbeat();
-  setInterval(checkHeartbeat, 12000);
-});
+    try {
+      const sent = await sendToAGY(msg);
+      if (!sent.id) throw new Error(sent.error || 'Sin ID');
 
-})();
-</script>
+      const result = await pollStatus(sent.id);
+      finalizeThinking(wrap, bubble, result.result || '(respuesta vacía)');
+    } catch (e) {
+      finalizeThinking(wrap, bubble, '⚠ Error: ' + e.message);
+    } finally {
+      send.disabled = false;
+      inp.focus();
+    }
+    }
 
-</body>
-</html>
+    /* ══════════════════════════════════════════
+     /goal MODE
+    ══════════════════════════════════════════ */
+    async function sendGoal() {
+    const code = monacoEditor ? monacoEditor.getValue() : '';
+    if (!code.trim()) {
+      alert('Escribe el objetivo en el editor y haz clic en /goal');
+      return;
+    }
+    const instruction = '/goal\n' + code;
+    const { wrap, bubble } = appendThinking();
+
+    switchPanel('chat');
+
+    try {
+      const sent = await sendToAGY(instruction);
+      if (!sent.id) throw new Error(sent.error || 'Sin ID');
+      appendOutput('🎯 ' + ts() + ' — /goal enviado (' + sent.id.slice(0,8) + '…)', instruction, false);
+      const result = await pollStatus(sent.id, 180000);
+      finalizeThinking(wrap, bubble, result.result || '(sin respuesta)');
+      appendOutput('✅ ' + ts() + ' — /goal completado', result.result || '', result.status === 'error');
+    } catch (e) {
+      finalizeThinking(wrap, bubble, '⚠ ' + e.message);
+    }
+    }
+
+    /* ══════════════════════════════════════════
+     HEARTBEAT — estado PC1/PC2
+    ══════════════════════════════════════════ */
+    async function checkHeartbeat() {
+    try {
+      const r = await fetch('/api/heartbeat');
+      if (!r.ok) return;
+      const d = await r.json();
+      const set = (id, data) => {
+        const dot = document.getElementById(id);
+        if (!dot) return;
+        const on = data && data.online;
+        dot.className = 'dot ' + (on ? 'online' : 'offline');
+        dot.parentElement.title = on
+          ? 'Online — hace ' + data.seconds_ago + 's'
+          : 'Offline';
+      };
+      if (d.PC1) set('dot-pc1', d.PC1);
+      if (d.PC2) set('dot-pc2', d.PC2);
+    } catch {}
+    }
+
+    /* ══════════════════════════════════════════
+     MOBILE PANEL SWITCHER
+    ══════════════════════════════════════════ */
+    function switchPanel(name) {
+    const app = document.getElementById('app');
+    app.className = 'mv-' + name;
+    document.querySelectorAll('.mnav-btn').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.panel === name);
+    });
+    if (name === 'editor' && monacoEditor) {
+      setTimeout(function() { monacoEditor.layout(); }, 80);
+    }
+    // Al cambiar al chat: hacer scroll al último mensaje
+    if (name === 'chat') {
+      setTimeout(function() {
+        const box = document.getElementById('chat-messages');
+        if (box) box.scrollTop = box.scrollHeight;
+        const inp = document.getElementById('chat-input');
+        if (inp) inp.focus();
+      }, 80);
+    }
+    }
+
+    /* ══════════════════════════════════════════
+     MONACO INIT
+    ══════════════════════════════════════════ */
+    function initMonaco() {
+    require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.43.0/min/vs' } });
+    require(['vs/editor/editor.main'], function() {
+      monaco.editor.defineTheme('agyDark', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [
+          { token: 'comment',  foreground: '526075', fontStyle: 'italic' },
+          { token: 'keyword',  foreground: '00f3ff', fontStyle: 'bold' },
+          { token: 'string',   foreground: '00ff88' },
+          { token: 'number',   foreground: 'ffcc00' },
+        ],
+        colors: {
+          'editor.background':          '#070c1a',
+          'editor.foreground':          '#e0e8ff',
+          'editorLineNumber.foreground':'#3a4a60',
+          'editor.lineHighlightBackground':'#0c1225',
+          'editorCursor.foreground':    '#00f3ff',
+          'editor.selectionBackground': '#00f3ff30',
+        }
+      });
+
+      monacoEditor = monaco.editor.create(
+        document.getElementById('monaco-container'),
+        {
+          value: '// AGY-IDE — escribe aquí tu código o instrucción\n// Ctrl+Enter para ejecutar | botón /goal para objetivos largos\n\nconsole.log("Hola desde AGY! 🤖");\n',
+          language:         'javascript',
+          theme:            'agyDark',
+          fontSize:         13,
+          lineHeight:       20,
+          minimap:          { enabled: false },
+          scrollBeyondLastLine: false,
+          wordWrap:         'on',
+          automaticLayout:  true,
+          padding:          { top: 10, bottom: 10 },
+          fontFamily:       "'Fira Code', monospace",
+          fontLigatures:    true,
+        }
+      );
+
+      monacoEditor.onDidChangeModelLanguage(function() {
+        var lang = monacoEditor.getModel().getLanguageId();
+        document.getElementById('editor-lang').textContent = lang;
+      });
+
+      monacoEditor.addCommand(
+        monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
+        runCode
+      );
+    });
+    }
+
+    /* ══════════════════════════════════════════
+     EVENTOS
+    ══════════════════════════════════════════ */
+    function bindEvents() {
+    document.getElementById('btn-run').addEventListener('click', runCode);
+    document.getElementById('btn-goal').addEventListener('click', sendGoal);
+    document.getElementById('btn-clear-out').addEventListener('click', function() {
+      document.getElementById('output').innerHTML = '';
+      setOutStatus('listo', '');
+    });
+    document.getElementById('btn-clear-chat').addEventListener('click', function() {
+      chatHistory = [];
+      saveHistory([]);
+      document.getElementById('chat-messages').innerHTML = '';
+    });
+
+    const inp  = document.getElementById('chat-input');
+    const send = document.getElementById('chat-send');
+    send.addEventListener('click', function() { sendChat(inp.value); });
+    inp.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChat(inp.value);
+      }
+    });
+    inp.addEventListener('input', function() {
+      inp.style.height = 'auto';
+      inp.style.height = Math.min(inp.scrollHeight, 100) + 'px';
+    });
+
+    document.querySelectorAll('.mnav-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() { switchPanel(btn.dataset.panel); });
+    });
+    }
+
+    /* ══════════════════════════════════════════
+     BOOT
+    ══════════════════════════════════════════ */
+    window.addEventListener('DOMContentLoaded', function() {
+    renderHistory();
+    bindEvents();
+    initMonaco();
+    checkHeartbeat();
+    setInterval(checkHeartbeat, 12000);
+    });
+
+    })();
+    </script>
+
+    </body>
+    </html>
