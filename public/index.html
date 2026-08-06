@@ -17,8 +17,12 @@
   <div style="text-align:center;max-width:320px;width:90%;padding:32px 28px;background:#0c1225;border:1px solid rgba(0,243,255,0.25);border-radius:16px;box-shadow:0 0 40px rgba(0,243,255,0.1);">
     <div style="font-family:'Orbitron',monospace;font-size:1.3rem;font-weight:900;color:#00f3ff;margin-bottom:4px;">⚡<span style="color:#f000ff">AGY</span>-IDE</div>
     <div style="font-size:0.72rem;color:#8c9cb2;margin-bottom:24px;letter-spacing:0.1em;">ACCESO RESTRINGIDO</div>
-    <input id="auth-input" type="password" placeholder="Contraseña…"
-      style="width:100%;background:#111827;border:1px solid rgba(0,243,255,0.3);border-radius:8px;color:#e0e8ff;padding:10px 14px;font-size:0.9rem;outline:none;margin-bottom:12px;box-sizing:border-box;">
+    <div style="position:relative;margin-bottom:12px;">
+      <input id="auth-input" type="password" placeholder="Contraseña…"
+        style="width:100%;background:#111827;border:1px solid rgba(0,243,255,0.3);border-radius:8px;color:#e0e8ff;padding:10px 40px 10px 14px;font-size:0.9rem;outline:none;box-sizing:border-box;">
+      <button id="auth-eye" type="button" onclick="(function(){var i=document.getElementById('auth-input');i.type=i.type==='password'?'text':'password';document.getElementById('auth-eye').textContent=i.type==='password'?'👁':'🙈';})()"
+        style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1rem;line-height:1;padding:0;color:#8c9cb2;">👁</button>
+    </div>
     <button id="auth-btn"
       style="width:100%;background:#00f3ff;color:#000;border:none;border-radius:8px;padding:11px;font-weight:700;font-size:0.9rem;cursor:pointer;letter-spacing:0.05em;">
       ENTRAR
