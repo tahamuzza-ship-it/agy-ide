@@ -6,7 +6,7 @@ const PORT = process.env.PORT || 3000;
 
 const REPLIT_API  = 'https://automate-make.replit.app';
 const AGY_KEY     = process.env.ANTIGRAVITY_KEY || 'ag-sgn-2026-roberto';
-const AGY_IDE_PWD = process.env.AGY_IDE_PASSWORD || 'sgn2026';
+const AGY_IDE_PWD = process.env.AGY_IDE_PASSWORD || 'YO_SOY_LA_TORMENTA';
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
