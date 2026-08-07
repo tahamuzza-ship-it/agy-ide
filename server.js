@@ -432,9 +432,14 @@ app.post('/api/goal/cancel', requirePwd, async (req, res) => {
 });
 
 /* POST /api/telegram-webhook — recibe comandos de @Codearquitect_bot
-   Soporta: /goal cancel <session_id>  |  /goal status <session_id>
-   Seguridad: valida X-Telegram-Bot-Api-Secret-Token si TELEGRAM_WEBHOOK_SECRET está configurado
+   Soporta: /goal cancel <id>  |  /goal status <id>  |  /goal <objetivo>
+   Seguridad: TELEGRAM_WEBHOOK_SECRET es OBLIGATORIO; ruta no se registra si falta
 */
+if (!TG_WEBHOOK_SECRET) {
+  console.error('FATAL: TELEGRAM_WEBHOOK_SECRET no configurado — ruta /api/telegram-webhook deshabilitada por seguridad.');
+  console.error('Configura TELEGRAM_WEBHOOK_SECRET en Railway y registra el webhook con ese secret_token.');
+} else {
+
 app.post('/api/telegram-webhook', async (req, res) => {
   res.sendStatus(200); // responder rápido a Telegram
   try {
@@ -530,6 +535,8 @@ app.post('/api/telegram-webhook', async (req, res) => {
     console.error('[telegram-webhook]', e.message);
   }
 });
+
+} // end if (TG_WEBHOOK_SECRET) — route not registered when secret is absent
 
 /* ══════════════════════════════════════════
    STARTUP — reconcile interrupted sessions
