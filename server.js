@@ -8,10 +8,16 @@ const REPLIT_API  = 'https://automate-make.replit.app';
 const AGY_KEY     = process.env.ANTIGRAVITY_KEY || 'ag-sgn-2026-roberto';
 const AGY_IDE_PWD = process.env.AGY_IDE_PASSWORD || 'YO_SOY_LA_TORMENTA';
 
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY;
+const GEMINI_KEY   = process.env.GEMINI_API_KEY;
+const TG_TOKEN     = process.env.TELEGRAM_BOT_TOKEN;
+const TG_CHAT_ID   = process.env.TELEGRAM_LEAD_ARCHITECT_CHAT_ID;
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-/* ── helpers ── */
+/* ── helpers — Antigravity ── */
 async function replitPost(p, body) {
   const r = await fetch(`${REPLIT_API}${p}`, {
     method: 'POST',
@@ -27,22 +33,243 @@ async function replitGet(p) {
   return r.json();
 }
 
-/* ── Auth middleware ── */
+/* ── helpers — Supabase REST ── */
+function sbHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_KEY,
+    'Authorization': `Bearer ${SUPABASE_KEY}`
+  };
+}
+async function sbInsert(table, data) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
+    body: JSON.stringify(data)
+  });
+  if (!r.ok) throw new Error(`Supabase insert ${table}: ${await r.text()}`);
+}
+async function sbPatch(table, id, data) {
+  await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
+    body: JSON.stringify(data)
+  });
+}
+async function sbGet(table, id) {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}&select=*`, {
+    headers: sbHeaders()
+  });
+  const rows = await r.json();
+  return Array.isArray(rows) ? rows[0] || null : null;
+}
+
+/* ── helpers — Gemini ── */
+async function gemini(prompt) {
+  if (!GEMINI_KEY) return '';
+  const r = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
+      })
+    }
+  );
+  const d = await r.json();
+  return d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+}
+
+/* ── helpers — Telegram ── */
+async function tgSend(msg) {
+  if (!TG_TOKEN || !TG_CHAT_ID) return;
+  await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: TG_CHAT_ID, text: msg, parse_mode: 'HTML' })
+  }).catch(e => console.error('[tgSend]', e.message));
+}
+
+/* ── helpers — AGY poll ── */
+async function pollAGY(id, maxMs = 120000) {
+  const start = Date.now();
+  while (Date.now() - start < maxMs) {
+    await new Promise(r => setTimeout(r, 4000));
+    try {
+      const d = await replitGet(`/api/antigravity/status/${id}`);
+      if (d.status === 'done' || d.status === 'error') return d;
+    } catch {}
+  }
+  return { status: 'error', result: 'Tiempo de espera agotado (120s)' };
+}
+
+/* ══════════════════════════════════════════════════════════════
+   GOAL LOOP — auto-healer + Supabase logging + Telegram report
+══════════════════════════════════════════════════════════════ */
+async function runGoalLoop(sessionId, goalText, target, maxSteps) {
+
+  /* append an entry to the session log array in Supabase */
+  async function addLog(entry) {
+    try {
+      const session = await sbGet('goal_sessions', sessionId);
+      if (!session) return;
+      const log = Array.isArray(session.log) ? session.log : [];
+      log.push({ ts: new Date().toISOString(), ...entry });
+      await sbPatch('goal_sessions', sessionId, { log });
+    } catch (e) {
+      console.error('[addLog]', e.message);
+    }
+  }
+
+  async function isCancelled() {
+    const s = await sbGet('goal_sessions', sessionId);
+    return s?.status === 'cancelled';
+  }
+
+  try {
+    /* ── STEP 1: Decompose goal into executable steps ── */
+    await addLog({ type: 'system', msg: 'Analizando objetivo con Gemini...' });
+
+    const planPrompt =
+`Eres un agente de desarrollo autónomo en ${target} (${target === 'PC1' ? 'Windows' : 'Linux/Ubuntu'}).
+Objetivo: "${goalText}"
+
+Descompón en pasos concretos y ejecutables (máximo ${maxSteps}).
+Cada paso = un comando PowerShell/bash o instrucción de Node.js específica.
+Responde SOLO con un JSON array de strings, sin texto extra:
+["paso 1", "paso 2", ...]`;
+
+    const planRaw = await gemini(planPrompt);
+    let steps;
+    try {
+      const m = planRaw.match(/\[[\s\S]*\]/);
+      steps = JSON.parse(m ? m[0] : planRaw);
+      if (!Array.isArray(steps)) throw new Error('not array');
+    } catch {
+      steps = [goalText]; // fallback: treat entire goal as a single step
+    }
+    steps = steps.slice(0, maxSteps).filter(s => typeof s === 'string' && s.trim());
+
+    await sbPatch('goal_sessions', sessionId, { max_steps: steps.length });
+    await addLog({ type: 'plan', msg: `${steps.length} pasos generados`, steps });
+
+    /* ── STEP 2: Execute each step with Auto-Healer ── */
+    let stepsDone = 0;
+
+    for (let si = 0; si < steps.length; si++) {
+      /* Check for cancel between steps */
+      if (await isCancelled()) {
+        await addLog({ type: 'cancelled', msg: 'Sesión cancelada por el usuario' });
+        return;
+      }
+
+      const originalStep = steps[si];
+      let currentInstruction = originalStep;
+      let lastError = null;
+      let success = false;
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        /* Auto-Healer: regenerate instruction if this is a retry */
+        if (attempt > 0) {
+          await addLog({ type: 'healer', msg: `Auto-Healer intento ${attempt + 1}...`, prevError: lastError });
+          const healPrompt =
+`El siguiente comando falló en ${target}:
+Comando: ${currentInstruction}
+Error: ${lastError}
+
+Genera un comando alternativo que logre el mismo objetivo evitando este error.
+Responde SOLO con el comando corregido, sin explicaciones.`;
+          const fixed = await gemini(healPrompt);
+          if (fixed.trim()) currentInstruction = fixed.trim();
+        }
+
+        await addLog({ type: 'step', step: si + 1, total: steps.length, msg: currentInstruction });
+
+        try {
+          /* Send to AGY — confirmed:true is tied to goal_session_id (not a global flag) */
+          const prefixed = target === 'ANY' ? currentInstruction : `[${target}] ${currentInstruction}`;
+          const sent = await replitPost('/api/antigravity/send', {
+            instruction: prefixed,
+            target,
+            confirmed: true,           // ← autorización de sesión, NO flag global
+            goal_session_id: sessionId  // ← atado a esta sesión específica
+          });
+
+          if (!sent || !sent.id) throw new Error(sent?.error || 'Sin ID de tarea');
+
+          const result = await pollAGY(sent.id, 120000);
+
+          if (result.status === 'error') {
+            lastError = result.result || 'Error desconocido';
+            await addLog({ type: 'step_error', step: si + 1, attempt: attempt + 1, msg: lastError });
+          } else {
+            success = true;
+            stepsDone++;
+            await sbPatch('goal_sessions', sessionId, { steps_done: stepsDone });
+            await addLog({ type: 'step_ok', step: si + 1, msg: result.result || 'OK' });
+            break;
+          }
+        } catch (e) {
+          lastError = e.message;
+          await addLog({ type: 'step_error', step: si + 1, attempt: attempt + 1, msg: e.message });
+        }
+      } // end retry loop
+
+      /* After 3 attempts: critical block */
+      if (!success) {
+        const reason = `Paso ${si + 1}/${steps.length} falló 3 veces.\nÚltimo error: ${lastError}`;
+        await sbPatch('goal_sessions', sessionId, { status: 'blocked', result: reason });
+        await addLog({ type: 'blocked', msg: reason });
+        await tgSend(
+          `❌ <b>GOAL BLOQUEADO</b>\n\n` +
+          `<b>Sesión:</b> <code>${sessionId}</code>\n` +
+          `<b>Objetivo:</b> ${goalText.slice(0, 200)}\n` +
+          `<b>Bloqueo:</b> ${reason.slice(0, 400)}\n\n` +
+          `<i>Pasos completados: ${stepsDone}/${steps.length}</i>`
+        );
+        return;
+      }
+    } // end steps loop
+
+    /* ── All steps done ── */
+    const summary = `${stepsDone}/${steps.length} pasos completados con éxito`;
+    await sbPatch('goal_sessions', sessionId, { status: 'done', result: summary });
+    await addLog({ type: 'done', msg: summary });
+    await tgSend(
+      `✅ <b>GOAL COMPLETADO</b>\n\n` +
+      `<b>Sesión:</b> <code>${sessionId}</code>\n` +
+      `<b>Objetivo:</b> ${goalText.slice(0, 200)}\n` +
+      `<b>Resultado:</b> ${summary}`
+    );
+
+  } catch (e) {
+    const errMsg = `Error fatal en goal loop: ${e.message}`;
+    console.error('[goal-loop]', errMsg);
+    await sbPatch('goal_sessions', sessionId, { status: 'error', result: errMsg }).catch(() => {});
+    await tgSend(`❌ <b>GOAL ERROR FATAL</b>\n\n<code>${sessionId}</code>\n${errMsg.slice(0, 400)}`).catch(() => {});
+  }
+}
+
+/* ══════════════════════════════════════════
+   AUTH MIDDLEWARE
+══════════════════════════════════════════ */
 function requirePwd(req, res, next) {
   const pwd = req.headers['x-agyide-pwd'] || (req.body && req.body._pwd);
   if (pwd === AGY_IDE_PWD) return next();
   return res.status(401).json({ error: 'No autorizado' });
 }
 
-/* ── RUTAS ── */
+/* ══════════════════════════════════════════
+   RUTAS EXISTENTES
+══════════════════════════════════════════ */
 
-// Verificar contraseña
 app.post('/api/auth', (req, res) => {
   const pwd = req.body && req.body.pwd;
   res.json({ ok: pwd === AGY_IDE_PWD });
 });
 
-// Heartbeat — público (solo estado de PCs, sin info sensible)
 app.get('/api/heartbeat', async (_req, res) => {
   try {
     const r = await fetch(`${REPLIT_API}/api/antigravity/heartbeat`);
@@ -52,7 +279,6 @@ app.get('/api/heartbeat', async (_req, res) => {
   }
 });
 
-// Enviar instrucción a AGY — protegido
 app.post('/api/send', requirePwd, async (req, res) => {
   try {
     const { instruction, target = 'PC1' } = req.body;
@@ -66,7 +292,6 @@ app.post('/api/send', requirePwd, async (req, res) => {
   }
 });
 
-// Consultar resultado — protegido
 app.get('/api/status/:id', requirePwd, async (req, res) => {
   try {
     const data = await replitGet(`/api/antigravity/status/${req.params.id}`);
@@ -76,8 +301,6 @@ app.get('/api/status/:id', requirePwd, async (req, res) => {
   }
 });
 
-
-// Reportar diff de archivo al Dashboard (proxy to Replit API server)
 app.post('/api/report-diff', requirePwd, async (req, res) => {
   try {
     const { filename, before, after } = req.body;
@@ -94,8 +317,6 @@ app.post('/api/report-diff', requirePwd, async (req, res) => {
   }
 });
 
-
-// Poll for pending reverts queued by the Dashboard — AGY-IDE applies them to Monaco
 app.get('/api/revert-pending', requirePwd, async (_req, res) => {
   try {
     const r = await fetch(`${REPLIT_API}/api/antigravity/file-revert-pending`, {
@@ -108,4 +329,135 @@ app.get('/api/revert-pending', requirePwd, async (_req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log(`AGY-IDE ▶  puerto ${PORT}`));
+/* ══════════════════════════════════════════
+   RUTAS — /goal AGENT MODE
+══════════════════════════════════════════ */
+
+/* POST /api/goal — lanza una sesión autónoma */
+app.post('/api/goal', requirePwd, async (req, res) => {
+  try {
+    const { goal, target = 'PC1', max_steps = 50 } = req.body;
+    if (!goal || !goal.trim()) return res.status(400).json({ error: 'goal requerido' });
+    if (!SUPABASE_URL || !SUPABASE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
+
+    const sessionId = `goal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    await sbInsert('goal_sessions', {
+      id:        sessionId,
+      goal_text: goal.trim(),
+      target:    target,
+      status:    'running',
+      steps_done: 0,
+      max_steps:  Number(max_steps) || 50,
+      retries:    0,
+      log:        [],
+      result:     null,
+      created_at: new Date().toISOString()
+    });
+
+    /* Fire-and-forget: async loop, does NOT block the response */
+    runGoalLoop(sessionId, goal.trim(), target, Number(max_steps) || 50).catch(e =>
+      console.error('[goal-loop fatal]', e.message)
+    );
+
+    res.json({ id: sessionId, status: 'running' });
+  } catch (e) {
+    console.error('[/api/goal]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/* GET /api/goal/status/:id — estado actual de la sesión */
+app.get('/api/goal/status/:id', requirePwd, async (req, res) => {
+  try {
+    if (!SUPABASE_URL) return res.status(503).json({ error: 'Supabase no configurado' });
+    const session = await sbGet('goal_sessions', req.params.id);
+    if (!session) return res.status(404).json({ error: 'Sesión no encontrada' });
+    res.json(session);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/* POST /api/goal/cancel — detiene la sesión en emergencia */
+app.post('/api/goal/cancel', requirePwd, async (req, res) => {
+  try {
+    const { id } = req.body;
+    if (!id) return res.status(400).json({ error: 'id requerido' });
+    if (!SUPABASE_URL) return res.status(503).json({ error: 'Supabase no configurado' });
+    await sbPatch('goal_sessions', id, {
+      status: 'cancelled',
+      result: 'Cancelado manualmente por el usuario'
+    });
+    res.json({ ok: true, id });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/* POST /api/telegram-webhook — recibe comandos de @Codearquitect_bot
+   Soporta: /goal cancel <session_id>
+*/
+app.post('/api/telegram-webhook', async (req, res) => {
+  res.sendStatus(200); // responder rápido a Telegram
+  try {
+    const msg = req.body?.message;
+    if (!msg || !msg.text) return;
+
+    const text = msg.text.trim();
+    const chatId = msg.chat?.id;
+
+    /* Solo aceptar comandos del Lead Architect */
+    if (String(chatId) !== String(TG_CHAT_ID)) return;
+
+    /* /goal cancel <session_id> */
+    const cancelMatch = text.match(/^\/goal\s+cancel\s+(\S+)/i);
+    if (cancelMatch) {
+      const sid = cancelMatch[1];
+      await sbPatch('goal_sessions', sid, {
+        status: 'cancelled',
+        result: 'Cancelado vía Telegram'
+      });
+      await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: `✅ Goal <code>${sid}</code> cancelado.`,
+          parse_mode: 'HTML'
+        })
+      });
+      return;
+    }
+
+    /* /goal status <session_id> */
+    const statusMatch = text.match(/^\/goal\s+status\s+(\S+)/i);
+    if (statusMatch) {
+      const sid = statusMatch[1];
+      const session = await sbGet('goal_sessions', sid);
+      if (!session) {
+        await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text: `❌ Sesión <code>${sid}</code> no encontrada.`, parse_mode: 'HTML' })
+        });
+        return;
+      }
+      const log = Array.isArray(session.log) ? session.log : [];
+      const lastEntries = log.slice(-3).map(e => `• ${e.type}: ${(e.msg || '').slice(0, 80)}`).join('\n');
+      await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: `📊 <b>Goal Status</b>\n<b>ID:</b> <code>${sid}</code>\n<b>Estado:</b> ${session.status}\n<b>Pasos:</b> ${session.steps_done}/${session.max_steps}\n\n${lastEntries || '(sin log aún)'}`,
+          parse_mode: 'HTML'
+        })
+      });
+    }
+  } catch (e) {
+    console.error('[telegram-webhook]', e.message);
+  }
+});
+
+app.listen(PORT, () => console.log(`AGY-IDE ▶  puerto ${PORT} | /goal mode ACTIVO`));

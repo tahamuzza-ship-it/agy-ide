@@ -99,6 +99,78 @@
     </main>
 
     <!-- MOBILE NAV -->
+
+    <!-- /GOAL PANEL ─────────────────────────────────────── -->
+    <div id="goal-overlay" style="display:none;position:fixed;inset:0;background:rgba(4,8,20,0.92);z-index:8000;align-items:center;justify-content:center;font-family:'Inter',sans-serif;backdrop-filter:blur(4px);">
+      <div style="width:min(680px,96vw);background:#0c1225;border:1px solid rgba(0,243,255,0.2);border-radius:16px;box-shadow:0 0 60px rgba(0,243,255,0.08);overflow:hidden;display:flex;flex-direction:column;max-height:90vh;">
+
+        <!-- Header -->
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid rgba(0,243,255,0.12);background:#080f1f;">
+          <div>
+            <span style="font-family:'Orbitron',monospace;font-size:1rem;font-weight:900;color:#00f3ff;">🎯 MODO AGENTE</span>
+            <span style="font-size:0.7rem;color:#8c9cb2;margin-left:10px;letter-spacing:0.1em;">AGY ejecuta pasos autónomamente</span>
+          </div>
+          <button id="goal-close" style="background:none;border:none;color:#8c9cb2;font-size:1.2rem;cursor:pointer;padding:4px 8px;line-height:1;">✕</button>
+        </div>
+
+        <!-- Form (hidden while running) -->
+        <div id="goal-form" style="padding:20px;display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <label style="font-size:0.75rem;color:#8c9cb2;display:block;margin-bottom:6px;letter-spacing:0.08em;">OBJETIVO</label>
+            <textarea id="goal-input" rows="4" placeholder="Ej: Crear un script Node.js que lea todos los archivos .js del proyecto y genere un reporte de dependencias…"
+              style="width:100%;background:#111827;border:1px solid rgba(0,243,255,0.25);border-radius:8px;color:#e0e8ff;padding:10px 14px;font-size:0.875rem;outline:none;box-sizing:border-box;resize:vertical;font-family:'Inter',sans-serif;line-height:1.5;min-height:90px;"></textarea>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:140px;">
+              <label style="font-size:0.75rem;color:#8c9cb2;display:block;margin-bottom:6px;letter-spacing:0.08em;">TARGET</label>
+              <select id="goal-target" style="width:100%;background:#111827;border:1px solid rgba(0,243,255,0.25);border-radius:8px;color:#e0e8ff;padding:9px 12px;font-size:0.875rem;outline:none;">
+                <option value="PC1">PC1 Windows</option>
+                <option value="PC2">PC2 Linux</option>
+                <option value="ANY">Cualquiera</option>
+              </select>
+            </div>
+            <div style="flex:1;min-width:140px;">
+              <label style="font-size:0.75rem;color:#8c9cb2;display:block;margin-bottom:6px;letter-spacing:0.08em;">MÁX PASOS</label>
+              <input id="goal-maxsteps" type="number" value="20" min="1" max="50"
+                style="width:100%;background:#111827;border:1px solid rgba(0,243,255,0.25);border-radius:8px;color:#e0e8ff;padding:9px 12px;font-size:0.875rem;outline:none;box-sizing:border-box;">
+            </div>
+          </div>
+          <button id="goal-start"
+            style="background:linear-gradient(135deg,#00b4d8,#00f3ff);color:#000;border:none;border-radius:8px;padding:12px;font-weight:700;font-size:0.9rem;cursor:pointer;letter-spacing:0.05em;transition:opacity 0.2s;">
+            🚀 INICIAR AGENTE AUTÓNOMO
+          </button>
+          <div style="font-size:0.72rem;color:#526075;text-align:center;line-height:1.5;">
+            AGY ejecutará todos los pasos con <code style="color:#00f3ff;">confirmed:true</code> sin pedir OK.<br>
+            Recibirás notificación en Telegram al terminar o si hay bloqueo crítico.
+          </div>
+        </div>
+
+        <!-- Progress (hidden while in form state) -->
+        <div id="goal-progress" style="display:none;flex-direction:column;overflow:hidden;flex:1;">
+          <div style="padding:14px 20px 8px;border-bottom:1px solid rgba(0,243,255,0.08);display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <span id="goal-status-badge" style="font-size:0.72rem;font-weight:700;letter-spacing:0.1em;padding:3px 10px;border-radius:20px;background:#052e16;color:#86efac;border:1px solid #166534;">⏳ EJECUTANDO</span>
+              <span id="goal-steps-label" style="font-size:0.78rem;color:#8c9cb2;">paso 0/0</span>
+            </div>
+            <button id="goal-cancel-btn"
+              style="background:#1a0000;border:1px solid #7f1d1d;color:#fca5a5;border-radius:6px;padding:5px 14px;font-size:0.78rem;cursor:pointer;font-weight:600;">
+              🛑 CANCELAR
+            </button>
+          </div>
+          <!-- Progress bar -->
+          <div style="padding:0 20px;margin:10px 0 0;">
+            <div style="background:#111827;border-radius:99px;height:6px;overflow:hidden;">
+              <div id="goal-bar" style="height:100%;border-radius:99px;background:linear-gradient(90deg,#00b4d8,#00f3ff);width:0%;transition:width 0.5s ease;"></div>
+            </div>
+          </div>
+          <!-- Live log -->
+          <div id="goal-log" style="flex:1;overflow-y:auto;padding:12px 20px;font-family:'Fira Code',monospace;font-size:0.78rem;line-height:1.6;color:#8c9cb2;min-height:200px;max-height:calc(90vh - 200px);"></div>
+        </div>
+
+      </div>
+    </div>
+    <!-- /GOAL PANEL ─────────────────────────────────────── -->
+
     <nav id="mobile-nav">
       <button class="mnav-btn active" data-panel="editor">
         <span class="micon">📝</span>EDITOR
@@ -407,30 +479,184 @@
     }
 
     /* ══════════════════════════════════════════
-     /goal MODE
+     /goal PANEL — Modo Agente Autónomo
     ══════════════════════════════════════════ */
-    async function sendGoal() {
-    const code = monacoEditor ? monacoEditor.getValue() : '';
-    if (!code.trim()) {
-      alert('Escribe el objetivo en el editor y haz clic en /goal');
-      return;
-    }
-    const instruction = '/goal\n' + code;
-    const { wrap, bubble } = appendThinking();
+    let _goalSessionId  = null;
+    let _goalPollTimer  = null;
 
-    switchPanel('chat');
+    function openGoalPanel() {
+      const overlay = document.getElementById('goal-overlay');
+      overlay.style.display = 'flex';
+      // Pre-fill from editor if it has content
+      const code = monacoEditor ? monacoEditor.getValue().trim() : '';
+      const inp  = document.getElementById('goal-input');
+      if (code && !inp.value) inp.value = code;
+      // Reset to form view
+      showGoalForm();
+      setTimeout(function() { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }, 80);
+    }
 
-    try {
-      const sent = await sendToAGY(instruction);
-      if (!sent.id) throw new Error(sent.error || 'Sin ID');
-      appendOutput('🎯 ' + ts() + ' — /goal enviado (' + sent.id.slice(0,8) + '…)', instruction, false);
-      const result = await pollStatus(sent.id, 180000);
-      finalizeThinking(wrap, bubble, result.result || '(sin respuesta)');
-      appendOutput('✅ ' + ts() + ' — /goal completado', result.result || '', result.status === 'error');
-    } catch (e) {
-      finalizeThinking(wrap, bubble, '⚠ ' + e.message);
+    function closeGoalPanel() {
+      document.getElementById('goal-overlay').style.display = 'none';
+      stopGoalPoll();
     }
+
+    function showGoalForm() {
+      document.getElementById('goal-form').style.display = 'flex';
+      document.getElementById('goal-progress').style.display = 'none';
     }
+
+    function showGoalProgress() {
+      document.getElementById('goal-form').style.display = 'none';
+      var pg = document.getElementById('goal-progress');
+      pg.style.display = 'flex';
+    }
+
+    function goalLogLine(entry) {
+      var log = document.getElementById('goal-log');
+      var row = document.createElement('div');
+      var color = '#8c9cb2';
+      var icon  = '·';
+      if (entry.type === 'plan')       { color = '#00f3ff'; icon = '📋'; }
+      else if (entry.type === 'step')  { color = '#e0e8ff'; icon = '▶'; }
+      else if (entry.type === 'step_ok')   { color = '#86efac'; icon = '✅'; }
+      else if (entry.type === 'step_error'){ color = '#fca5a5'; icon = '❌'; }
+      else if (entry.type === 'healer')    { color = '#ffcc00'; icon = '🔧'; }
+      else if (entry.type === 'blocked')   { color = '#f87171'; icon = '🚫'; }
+      else if (entry.type === 'done')      { color = '#86efac'; icon = '🏁'; }
+      else if (entry.type === 'cancelled') { color = '#ffcc00'; icon = '⚠'; }
+      else if (entry.type === 'system')    { color = '#526075'; icon = '·'; }
+      var stepStr = entry.step ? (' [' + entry.step + '/' + (entry.total || '?') + ']') : '';
+      row.style.color = color;
+      row.style.padding = '1px 0';
+      row.textContent  = icon + stepStr + ' ' + (entry.msg || '').slice(0, 200);
+      log.appendChild(row);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function updateGoalBadge(status, stepsDone, maxSteps) {
+      var badge = document.getElementById('goal-status-badge');
+      var label = document.getElementById('goal-steps-label');
+      var bar   = document.getElementById('goal-bar');
+      var pct   = maxSteps > 0 ? Math.round((stepsDone / maxSteps) * 100) : 0;
+      bar.style.width = pct + '%';
+      label.textContent = 'paso ' + stepsDone + '/' + maxSteps;
+      if (status === 'running') {
+        badge.textContent = '⏳ EJECUTANDO';
+        badge.style.background = '#052e16'; badge.style.color = '#86efac'; badge.style.borderColor = '#166534';
+        bar.style.background = 'linear-gradient(90deg,#00b4d8,#00f3ff)';
+      } else if (status === 'done') {
+        badge.textContent = '✅ COMPLETADO';
+        badge.style.background = '#052e16'; badge.style.color = '#86efac'; badge.style.borderColor = '#166534';
+        bar.style.background = '#00ff88'; bar.style.width = '100%';
+      } else if (status === 'blocked') {
+        badge.textContent = '🚫 BLOQUEADO';
+        badge.style.background = '#1a0000'; badge.style.color = '#fca5a5'; badge.style.borderColor = '#7f1d1d';
+        bar.style.background = '#ef4444';
+      } else if (status === 'cancelled') {
+        badge.textContent = '⚠ CANCELADO';
+        badge.style.background = '#1a1200'; badge.style.color = '#ffcc00'; badge.style.borderColor = '#7a5f00';
+      } else if (status === 'error') {
+        badge.textContent = '❌ ERROR';
+        badge.style.background = '#1a0000'; badge.style.color = '#fca5a5'; badge.style.borderColor = '#7f1d1d';
+      }
+    }
+
+    var _lastLogLen = 0;
+    async function pollGoalStatus(sessionId) {
+      try {
+        var r = await fetch('/api/goal/status/' + sessionId, {
+          headers: { 'x-agyide-pwd': getStoredPwd() }
+        });
+        if (!r.ok) return;
+        var data = await r.json();
+
+        var log = Array.isArray(data.log) ? data.log : [];
+        // Only render new entries
+        for (var i = _lastLogLen; i < log.length; i++) {
+          goalLogLine(log[i]);
+        }
+        _lastLogLen = log.length;
+
+        updateGoalBadge(data.status, data.steps_done, data.max_steps);
+
+        // Stop polling if terminal state
+        if (data.status !== 'running') {
+          stopGoalPoll();
+          document.getElementById('goal-cancel-btn').style.display = 'none';
+          // Show "new goal" button
+          var btn = document.createElement('button');
+          btn.textContent = '← Nuevo objetivo';
+          btn.style.cssText = 'margin:12px 20px;background:#0c1225;border:1px solid rgba(0,243,255,0.25);color:#00f3ff;border-radius:8px;padding:8px 16px;font-size:0.82rem;cursor:pointer;';
+          btn.addEventListener('click', function() { _lastLogLen = 0; showGoalForm(); });
+          var logEl = document.getElementById('goal-log');
+          logEl.parentNode.insertBefore(btn, logEl.nextSibling);
+        }
+      } catch(e) {
+        console.warn('[pollGoalStatus]', e.message);
+      }
+    }
+
+    function startGoalPoll(sessionId) {
+      _lastLogLen = 0;
+      _goalPollTimer = setInterval(function() { pollGoalStatus(sessionId); }, 2500);
+    }
+
+    function stopGoalPoll() {
+      if (_goalPollTimer) { clearInterval(_goalPollTimer); _goalPollTimer = null; }
+    }
+
+    async function startGoal() {
+      var goal      = (document.getElementById('goal-input').value || '').trim();
+      var target    = document.getElementById('goal-target').value;
+      var maxSteps  = parseInt(document.getElementById('goal-maxsteps').value, 10) || 20;
+
+      if (!goal) { document.getElementById('goal-input').focus(); return; }
+
+      var startBtn = document.getElementById('goal-start');
+      startBtn.disabled = true;
+      startBtn.textContent = '⏳ Iniciando…';
+
+      try {
+        var r = await fetch('/api/goal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': getStoredPwd() },
+          body: JSON.stringify({ goal, target, max_steps: maxSteps })
+        });
+        var data = await r.json();
+        if (!r.ok || !data.id) throw new Error(data.error || 'No se pudo iniciar');
+
+        _goalSessionId = data.id;
+        document.getElementById('goal-log').innerHTML = '';
+        showGoalProgress();
+        updateGoalBadge('running', 0, maxSteps);
+        document.getElementById('goal-cancel-btn').style.display = '';
+        startGoalPoll(data.id);
+        appendOutput('🎯 ' + ts() + ' — /goal iniciado', 'Sesión: ' + data.id + '\nObjetivo: ' + goal, false);
+      } catch(e) {
+        alert('Error al iniciar goal: ' + e.message);
+      } finally {
+        startBtn.disabled = false;
+        startBtn.textContent = '🚀 INICIAR AGENTE AUTÓNOMO';
+      }
+    }
+
+    async function cancelGoal() {
+      if (!_goalSessionId) return;
+      if (!confirm('¿Cancelar la sesión activa?')) return;
+      try {
+        await fetch('/api/goal/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': getStoredPwd() },
+          body: JSON.stringify({ id: _goalSessionId })
+        });
+      } catch(e) {
+        console.warn('[cancelGoal]', e.message);
+      }
+    }
+
+    // Kept for backward compatibility (btn-goal click)
+    function sendGoal() { openGoalPanel(); }
 
     /* ══════════════════════════════════════════
      HEARTBEAT — estado PC1/PC2
@@ -561,7 +787,17 @@
     ══════════════════════════════════════════ */
     function bindEvents() {
     document.getElementById('btn-run').addEventListener('click', runCode);
-    document.getElementById('btn-goal').addEventListener('click', sendGoal);
+    document.getElementById('btn-goal').addEventListener('click', openGoalPanel);
+    document.getElementById('goal-close').addEventListener('click', closeGoalPanel);
+    document.getElementById('goal-start').addEventListener('click', startGoal);
+    document.getElementById('goal-cancel-btn').addEventListener('click', cancelGoal);
+    document.getElementById('goal-input').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); startGoal(); }
+    });
+    // Close overlay on background click
+    document.getElementById('goal-overlay').addEventListener('click', function(e) {
+      if (e.target === this) closeGoalPanel();
+    });
     document.getElementById('btn-clear-out').addEventListener('click', function() {
       document.getElementById('output').innerHTML = '';
       setOutStatus('listo', '');
