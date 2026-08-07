@@ -125,6 +125,85 @@
     let pendingRun   = false;
 
     /* ══════════════════════════════════════════
+     DIFF — "Aplicar en Editor" feature
+    ══════════════════════════════════════════ */
+    function extractCodeBlock(text) {
+      var m = text.match(/```(?:[a-zA-Z]*)\n?([\s\S]*?)```/);
+      return m ? m[1].trim() : null;
+    }
+
+    function detectFilename(text) {
+      var m = text.match(/(?:archivo|file|modif\w*|actualiz\w*|\ben\b)\s+["'`]?([a-zA-Z0-9_\-]+\.[a-zA-Z]{2,5})["'`]?/i);
+      if (m) return m[1];
+      var l = text.match(/```([a-zA-Z]+)/);
+      var langMap = { javascript:'script.js', js:'script.js', typescript:'script.ts', ts:'script.ts',
+                      python:'script.py', py:'script.py', css:'style.css', html:'index.html',
+                      bash:'script.sh', sh:'script.sh', json:'config.json' };
+      if (l && langMap[l[1]]) return langMap[l[1]];
+      return 'editor';
+    }
+
+    function showDiffToast(msg, ok) {
+      var toast = document.getElementById('diff-toast');
+      if (!toast) return;
+      toast.textContent = msg;
+      toast.style.background = ok ? '#052e16' : '#1a0000';
+      toast.style.borderColor = ok ? '#166534' : '#7f1d1d';
+      toast.style.color       = ok ? '#86efac' : '#fca5a5';
+      toast.style.display  = 'block';
+      toast.style.opacity  = '1';
+      clearTimeout(toast._timer);
+      toast._timer = setTimeout(function() {
+        toast.style.opacity = '0';
+        setTimeout(function() { toast.style.display = 'none'; }, 320);
+      }, 6000);
+    }
+
+    async function applyToEditor(newCode, filename) {
+      if (!monacoEditor) { showDiffToast('Editor no disponible', false); return; }
+      var before = monacoEditor.getValue();
+      if (before === newCode) { showDiffToast('Sin cambios — el codigo es identico al editor actual', false); return; }
+      monacoEditor.setValue(newCode);
+
+      var beforeLines = before.split('\n');
+      var afterLines  = newCode.split('\n');
+      var added   = afterLines.filter(function(l){ return !beforeLines.includes(l); }).length;
+      var removed = beforeLines.filter(function(l){ return !afterLines.includes(l); }).length;
+
+      showDiffToast('Archivo: ' + filename + ' - ' + removed + ' eliminadas / +' + added + ' agregadas - diff enviado al Dashboard', true);
+
+      try {
+        await fetch('/api/report-diff', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': getStoredPwd() },
+          body: JSON.stringify({ filename: filename, before: before, after: newCode })
+        });
+      } catch(e) {
+        console.warn('[applyToEditor] report-diff failed:', e.message);
+      }
+    }
+
+    function addApplyButton(container, text) {
+      var code = extractCodeBlock(text);
+      if (!code) return;
+      var filename = detectFilename(text);
+      var btn = document.createElement('button');
+      btn.style.cssText = 'margin-top:6px;padding:5px 14px;background:#052e16;border:1px solid #166534;color:#86efac;border-radius:6px;font-size:11px;cursor:pointer;font-family:\'Fira Code\',monospace;width:100%;text-align:left;transition:background 0.2s;';
+      btn.textContent = '\u{1F4E5} Aplicar en Editor \u2014 ' + filename;
+      btn.onmouseenter = function(){ btn.style.background='#14532d'; };
+      btn.onmouseleave = function(){ btn.style.background='#052e16'; };
+      btn.addEventListener('click', function() {
+        void applyToEditor(code, filename);
+        btn.textContent = '\u2705 Aplicado \u2014 ver diff en Dashboard AGY PC1';
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
+      });
+      container.appendChild(btn);
+    }
+
+
+
+    /* ══════════════════════════════════════════
      UTILS
     ══════════════════════════════════════════ */
     function ts() {
@@ -197,6 +276,7 @@
     function finalizeThinking(wrap, bubble, text) {
     bubble.className = 'msg-bubble';
     bubble.textContent = text;
+    addApplyButton(wrap, text);
     const meta = document.createElement('div');
     meta.className = 'msg-meta';
     meta.textContent = ts();
@@ -221,6 +301,7 @@
     const block = document.createElement('div');
     block.className = 'out-block' + (isError ? ' out-error' : '');
     block.innerHTML = '<div class="out-meta">' + label + '</div><div class="out-content">' + escHtml(content) + '</div>';
+    addApplyButton(block, content);
     out.appendChild(block);
     out.scrollTop = out.scrollHeight;
     }
@@ -552,5 +633,7 @@
     })();
     </script>
 
+
+<div id="diff-toast" style="display:none;position:fixed;bottom:24px;right:24px;z-index:9000;padding:10px 16px;border-radius:8px;border:1px solid;font-size:12px;font-family:'Fira Code',monospace;max-width:400px;transition:opacity 0.3s ease;line-height:1.4;word-break:break-word;"></div>
     </body>
     </html>
