@@ -94,4 +94,18 @@ app.post('/api/report-diff', requirePwd, async (req, res) => {
   }
 });
 
+
+// Poll for pending reverts queued by the Dashboard — AGY-IDE applies them to Monaco
+app.get('/api/revert-pending', requirePwd, async (_req, res) => {
+  try {
+    const r = await fetch(`${REPLIT_API}/api/antigravity/file-revert-pending`, {
+      headers: { 'x-antigravity-key': AGY_KEY }
+    });
+    res.json(await r.json());
+  } catch (e) {
+    console.error('[/api/revert-pending]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, () => console.log(`AGY-IDE ▶  puerto ${PORT}`));
