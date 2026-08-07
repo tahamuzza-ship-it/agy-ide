@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS goal_sessions (
   goal_text   TEXT NOT NULL,
   target      TEXT NOT NULL DEFAULT 'PC1',
   status      TEXT NOT NULL DEFAULT 'running',
-    -- valores posibles: running | done | blocked | cancelled | error
+    -- valores posibles: running | done | blocked | cancelled | interrupted | error
   steps_done  INTEGER NOT NULL DEFAULT 0,
   max_steps   INTEGER NOT NULL DEFAULT 50,
   retries     INTEGER NOT NULL DEFAULT 0,

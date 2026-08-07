@@ -15,9 +15,10 @@ if (!AGY_IDE_PWD) { console.error('FATAL: AGY_IDE_PASSWORD env var not set'); pr
 const SUPABASE_URL = process.env.SUPABASE_URL;
 /* Use service role key — anon key must never access goal_sessions */
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
-const GEMINI_KEY   = process.env.GEMINI_API_KEY;
-const TG_TOKEN     = process.env.TELEGRAM_BOT_TOKEN;
-const TG_CHAT_ID   = process.env.TELEGRAM_LEAD_ARCHITECT_CHAT_ID;
+const GEMINI_KEY          = process.env.GEMINI_API_KEY;
+const TG_TOKEN            = process.env.TELEGRAM_BOT_TOKEN;
+const TG_CHAT_ID          = process.env.TELEGRAM_LEAD_ARCHITECT_CHAT_ID;
+const TG_WEBHOOK_SECRET   = process.env.TELEGRAM_WEBHOOK_SECRET; // optional but recommended
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -55,11 +56,12 @@ async function sbInsert(table, data) {
   if (!r.ok) throw new Error(`Supabase insert ${table}: ${await r.text()}`);
 }
 async function sbPatch(table, id, data) {
-  await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
     body: JSON.stringify(data)
   });
+  if (!r.ok) throw new Error(`Supabase patch ${table} (${id}): ${await r.text()}`);
 }
 async function sbGet(table, id) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}&select=*`, {
@@ -410,18 +412,28 @@ app.post('/api/goal/cancel', requirePwd, async (req, res) => {
 });
 
 /* POST /api/telegram-webhook — recibe comandos de @Codearquitect_bot
-   Soporta: /goal cancel <session_id>
+   Soporta: /goal cancel <session_id>  |  /goal status <session_id>
+   Seguridad: valida X-Telegram-Bot-Api-Secret-Token si TELEGRAM_WEBHOOK_SECRET está configurado
 */
 app.post('/api/telegram-webhook', async (req, res) => {
   res.sendStatus(200); // responder rápido a Telegram
   try {
+    /* ── Webhook secret validation (recommended by Telegram) ── */
+    if (TG_WEBHOOK_SECRET) {
+      const headerSecret = req.headers['x-telegram-bot-api-secret-token'];
+      if (headerSecret !== TG_WEBHOOK_SECRET) {
+        console.warn('[telegram-webhook] rejected: invalid secret token');
+        return; // silently drop — already sent 200 to avoid Telegram retries
+      }
+    }
+
     const msg = req.body?.message;
     if (!msg || !msg.text) return;
 
     const text = msg.text.trim();
     const chatId = msg.chat?.id;
 
-    /* Solo aceptar comandos del Lead Architect */
+    /* Solo aceptar comandos del Lead Architect — doble guardia: secret + chat_id */
     if (String(chatId) !== String(TG_CHAT_ID)) return;
 
     /* /goal cancel <session_id> */
@@ -474,4 +486,39 @@ app.post('/api/telegram-webhook', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log(`AGY-IDE ▶  puerto ${PORT} | /goal mode ACTIVO`));
+/* ══════════════════════════════════════════
+   STARTUP — reconcile interrupted sessions
+   Any session left in status='running' from a previous process must be
+   marked 'interrupted' immediately; we cannot safely resume mid-step.
+══════════════════════════════════════════ */
+async function reconcileInterruptedSessions() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/goal_sessions?status=eq.running&select=id,goal_text`,
+      { headers: sbHeaders() }
+    );
+    if (!r.ok) { console.warn('[startup] could not query goal_sessions:', await r.text()); return; }
+    const rows = await r.json();
+    if (!Array.isArray(rows) || rows.length === 0) return;
+    for (const row of rows) {
+      try {
+        await sbPatch('goal_sessions', row.id, {
+          status: 'interrupted',
+          result: 'Servidor reiniciado mientras la sesión estaba activa. Reinicia el objetivo manualmente.'
+        });
+        console.log(`[startup] session ${row.id} marked interrupted`);
+      } catch (e) {
+        console.error(`[startup] failed to mark ${row.id} interrupted:`, e.message);
+      }
+    }
+    console.log(`[startup] ${rows.length} interrupted session(s) reconciled`);
+  } catch (e) {
+    console.error('[startup-reconcile]', e.message);
+  }
+}
+
+app.listen(PORT, async () => {
+  console.log(`AGY-IDE ▶  puerto ${PORT} | /goal mode ACTIVO`);
+  await reconcileInterruptedSessions();
+});
