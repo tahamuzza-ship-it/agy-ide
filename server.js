@@ -1,5 +1,6 @@
 const express = require('express');
 const path    = require('path');
+const crypto  = require('crypto');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -129,7 +130,7 @@ async function pollAGY(id, maxMs = 120000, sessionId = null) {
 /* ══════════════════════════════════════════════════════════════
    GOAL LOOP — auto-healer + Supabase logging + Telegram report
 ══════════════════════════════════════════════════════════════ */
-async function runGoalLoop(sessionId, goalText, target, maxSteps) {
+async function runGoalLoop(sessionId, dispatchToken, goalText, target, maxSteps) {
 
   /* append an entry to the session log array in Supabase */
   async function addLog(entry) {
@@ -216,15 +217,18 @@ Responde SOLO con el comando corregido, sin explicaciones.`;
         await addLog({ type: 'step', step: si + 1, total: steps.length, msg: currentInstruction });
 
         try {
-          /* ── Validate active session before sending confirmed:true ──
-             confirmed:true is ONLY sent when we have verified the session
-             is running in Supabase — it is never a global bypass.        */
+          /* ── Dispatch with session-bound unforgeable token ──
+             confirmed:true + goal_session_id + dispatch_token are all
+             validated together at the Antigravity endpoint. The token is
+             server-generated at session creation and never exposed to the
+             client, making it impossible to reuse for arbitrary commands. */
           const prefixed = target === 'ANY' ? currentInstruction : `[${target}] ${currentInstruction}`;
           const sent = await replitPost('/api/antigravity/send', {
-            instruction: prefixed,
+            instruction:    prefixed,
             target,
-            confirmed: true,            // ← authorized by verified running session
-            goal_session_id: sessionId  // ← tied to this specific session
+            confirmed:      true,          // ← authorized by active session
+            goal_session_id: sessionId,    // ← specific session
+            dispatch_token:  dispatchToken // ← unforgeable per-session secret
           });
 
           if (!sent || !sent.id) throw new Error(sent?.error || 'Sin ID de tarea');
@@ -370,23 +374,25 @@ app.post('/api/goal', requirePwd, async (req, res) => {
     if (!goal || !goal.trim()) return res.status(400).json({ error: 'goal requerido' });
     if (!SUPABASE_URL || !SUPABASE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
 
-    const sessionId = `goal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const sessionId    = `goal_${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
+    const dispatchToken = crypto.randomBytes(32).toString('hex'); // unforgeable per-session secret
 
     await sbInsert('goal_sessions', {
-      id:        sessionId,
-      goal_text: goal.trim(),
-      target:    target,
-      status:    'running',
-      steps_done: 0,
-      max_steps:  Number(max_steps) || 50,
-      retries:    0,
-      log:        [],
-      result:     null,
-      created_at: new Date().toISOString()
+      id:             sessionId,
+      goal_text:      goal.trim(),
+      target:         target,
+      status:         'running',
+      steps_done:     0,
+      max_steps:      Number(max_steps) || 50,
+      retries:        0,
+      log:            [],
+      result:         null,
+      dispatch_token: dispatchToken,
+      created_at:     new Date().toISOString()
     });
 
     /* Fire-and-forget: async loop, does NOT block the response */
-    runGoalLoop(sessionId, goal.trim(), target, Number(max_steps) || 50).catch(e =>
+    runGoalLoop(sessionId, dispatchToken, goal.trim(), target, Number(max_steps) || 50).catch(e =>
       console.error('[goal-loop fatal]', e.message)
     );
 
@@ -450,23 +456,21 @@ app.post('/api/telegram-webhook', async (req, res) => {
     /* Solo aceptar comandos del Lead Architect — doble guardia: secret + chat_id */
     if (String(chatId) !== String(TG_CHAT_ID)) return;
 
+    /* Helper: send a Telegram reply */
+    const tgReply = async (txt) => {
+      await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: txt, parse_mode: 'HTML' })
+      });
+    };
+
     /* /goal cancel <session_id> */
     const cancelMatch = text.match(/^\/goal\s+cancel\s+(\S+)/i);
     if (cancelMatch) {
       const sid = cancelMatch[1];
-      await sbPatch('goal_sessions', sid, {
-        status: 'cancelled',
-        result: 'Cancelado vía Telegram'
-      });
-      await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: `✅ Goal <code>${sid}</code> cancelado.`,
-          parse_mode: 'HTML'
-        })
-      });
+      await sbPatch('goal_sessions', sid, { status: 'cancelled', result: 'Cancelado vía Telegram' });
+      await tgReply(`✅ Goal <code>${sid}</code> cancelado.`);
       return;
     }
 
@@ -475,25 +479,52 @@ app.post('/api/telegram-webhook', async (req, res) => {
     if (statusMatch) {
       const sid = statusMatch[1];
       const session = await sbGet('goal_sessions', sid);
-      if (!session) {
-        await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, text: `❌ Sesión <code>${sid}</code> no encontrada.`, parse_mode: 'HTML' })
-        });
-        return;
-      }
+      if (!session) { await tgReply(`❌ Sesión <code>${sid}</code> no encontrada.`); return; }
       const log = Array.isArray(session.log) ? session.log : [];
       const lastEntries = log.slice(-3).map(e => `• ${e.type}: ${(e.msg || '').slice(0, 80)}`).join('\n');
-      await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: `📊 <b>Goal Status</b>\n<b>ID:</b> <code>${sid}</code>\n<b>Estado:</b> ${session.status}\n<b>Pasos:</b> ${session.steps_done}/${session.max_steps}\n\n${lastEntries || '(sin log aún)'}`,
-          parse_mode: 'HTML'
-        })
-      });
+      await tgReply(
+        `📊 <b>Goal Status</b>\n<b>ID:</b> <code>${sid}</code>\n` +
+        `<b>Estado:</b> ${session.status}\n<b>Pasos:</b> ${session.steps_done}/${session.max_steps}\n\n` +
+        `${lastEntries || '(sin log aún)'}`
+      );
+      return;
+    }
+
+    /* /goal <objective> — start a new autonomous session from Telegram
+       Usage: /goal Crear un script que liste todos los archivos .js del proyecto
+       Optional flags: target=PC2 max=30 (e.g. /goal target=PC2 max=10 <objective>)    */
+    const goalMatch = text.match(/^\/goal\s+([\s\S]+)/i);
+    if (goalMatch && SUPABASE_URL && SUPABASE_KEY) {
+      let rawGoal = goalMatch[1].trim();
+      // Parse optional flags: target=PC1|PC2|ANY and max=N
+      let target    = 'PC1';
+      let maxSteps  = 20;
+      rawGoal = rawGoal.replace(/\btarget=(PC1|PC2|ANY)\b/i, (_, t) => { target = t.toUpperCase(); return ''; });
+      rawGoal = rawGoal.replace(/\bmax=(\d+)\b/i, (_, n)  => { maxSteps = Math.min(50, Math.max(1, parseInt(n, 10))); return ''; });
+      const goal = rawGoal.trim();
+      if (!goal) { await tgReply('❌ Objetivo vacío. Uso: <code>/goal [target=PC1] [max=20] Tu objetivo aquí</code>'); return; }
+
+      await tgReply(`⏳ Iniciando sesión autónoma...\n<b>Objetivo:</b> ${goal.slice(0, 200)}\n<b>Target:</b> ${target} | <b>Pasos máx:</b> ${maxSteps}`);
+
+      try {
+        const sessionId     = `goal_${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
+        const dispatchToken = crypto.randomBytes(32).toString('hex');
+        await sbInsert('goal_sessions', {
+          id: sessionId, goal_text: goal, target, status: 'running',
+          steps_done: 0, max_steps: maxSteps, retries: 0, log: [],
+          result: null, dispatch_token: dispatchToken, created_at: new Date().toISOString()
+        });
+        runGoalLoop(sessionId, dispatchToken, goal, target, maxSteps).catch(e =>
+          console.error('[goal-loop-tg fatal]', e.message)
+        );
+        await tgReply(
+          `✅ Sesión iniciada\n<b>ID:</b> <code>${sessionId}</code>\n` +
+          `Recibirás notificación al terminar o si hay bloqueo.\n` +
+          `Para cancelar: <code>/goal cancel ${sessionId}</code>`
+        );
+      } catch (e) {
+        await tgReply(`❌ Error iniciando sesión: ${e.message.slice(0, 200)}`);
+      }
     }
   } catch (e) {
     console.error('[telegram-webhook]', e.message);

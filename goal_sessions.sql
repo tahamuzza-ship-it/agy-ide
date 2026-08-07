@@ -12,9 +12,10 @@ CREATE TABLE IF NOT EXISTS goal_sessions (
   steps_done  INTEGER NOT NULL DEFAULT 0,
   max_steps   INTEGER NOT NULL DEFAULT 50,
   retries     INTEGER NOT NULL DEFAULT 0,
-  log         JSONB NOT NULL DEFAULT '[]'::jsonb,
-  result      TEXT,
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  log            JSONB NOT NULL DEFAULT '[]'::jsonb,
+  result         TEXT,
+  dispatch_token TEXT,  -- server-generated secret; required alongside goal_session_id for confirmed:true dispatch
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Índice para buscar sesiones activas rápidamente
