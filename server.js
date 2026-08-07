@@ -99,11 +99,25 @@ async function tgSend(msg) {
   }).catch(e => console.error('[tgSend]', e.message));
 }
 
-/* ── helpers — AGY poll ── */
-async function pollAGY(id, maxMs = 120000) {
+/* ── helpers — AGY poll ──
+   sessionId: if provided, checks for cancellation every iteration so a
+   cancel during an active command is detected within the next poll cycle
+   (~4s) without waiting for the command itself to finish.              */
+async function pollAGY(id, maxMs = 120000, sessionId = null) {
   const start = Date.now();
   while (Date.now() - start < maxMs) {
     await new Promise(r => setTimeout(r, 4000));
+
+    // Cancellation check during poll — resolves within one cycle (~4s)
+    if (sessionId && SUPABASE_URL && SUPABASE_KEY) {
+      try {
+        const session = await sbGet('goal_sessions', sessionId);
+        if (session && session.status !== 'running') {
+          return { status: 'error', result: 'Sesión cancelada durante la ejecución del paso' };
+        }
+      } catch {} // network error → keep polling
+    }
+
     try {
       const d = await replitGet(`/api/antigravity/status/${id}`);
       if (d.status === 'done' || d.status === 'error') return d;
@@ -215,7 +229,7 @@ Responde SOLO con el comando corregido, sin explicaciones.`;
 
           if (!sent || !sent.id) throw new Error(sent?.error || 'Sin ID de tarea');
 
-          const result = await pollAGY(sent.id, 120000);
+          const result = await pollAGY(sent.id, 120000, sessionId);
 
           if (result.status === 'error') {
             lastError = result.result || 'Error desconocido';
