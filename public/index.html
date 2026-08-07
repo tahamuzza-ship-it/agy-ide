@@ -532,6 +532,30 @@
     });
     }
 
+
+    /* ══════════════════════════════════════════
+     REVERT POLLING — Dashboard puede restaurar el editor
+    ══════════════════════════════════════════ */
+    async function checkPendingReverts() {
+      try {
+        var r = await fetch('/api/revert-pending', {
+          headers: { 'x-agyide-pwd': getStoredPwd() }
+        });
+        if (!r.ok) return;
+        var data = await r.json();
+        var reverts = (data && data.reverts) ? data.reverts : [];
+        for (var i = 0; i < reverts.length; i++) {
+          var rev = reverts[i];
+          if (monacoEditor && typeof rev.before === 'string') {
+            monacoEditor.setValue(rev.before);
+            showDiffToast('\u21a9\ufe0f ' + rev.filename + ' \u2014 revertido desde el Dashboard. El editor fue restaurado.', true);
+          }
+        }
+      } catch(e) {
+        // silently ignore network errors
+      }
+    }
+
     /* ══════════════════════════════════════════
      EVENTOS
     ══════════════════════════════════════════ */
@@ -628,6 +652,7 @@
     initMonaco();
     checkHeartbeat();
     setInterval(checkHeartbeat, 12000);
+    setInterval(checkPendingReverts, 5000);
     });
 
     })();
