@@ -76,4 +76,22 @@ app.get('/api/status/:id', requirePwd, async (req, res) => {
   }
 });
 
+
+// Reportar diff de archivo al Dashboard (proxy to Replit API server)
+app.post('/api/report-diff', requirePwd, async (req, res) => {
+  try {
+    const { filename, before, after } = req.body;
+    const data = await replitPost('/api/antigravity/file-diff', {
+      filename: filename || 'editor',
+      before:   before  || '',
+      after:    after   || '',
+      source:   'agyide'
+    });
+    res.json(data);
+  } catch (e) {
+    console.error('[/api/report-diff]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PORT, () => console.log(`AGY-IDE ▶  puerto ${PORT}`));
