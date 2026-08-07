@@ -5,11 +5,16 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 const REPLIT_API  = 'https://automate-make.replit.app';
-const AGY_KEY     = process.env.ANTIGRAVITY_KEY || 'ag-sgn-2026-roberto';
-const AGY_IDE_PWD = process.env.AGY_IDE_PASSWORD || 'YO_SOY_LA_TORMENTA';
+
+/* ── Required env vars — server refuses to start if missing ── */
+const AGY_KEY     = process.env.ANTIGRAVITY_KEY;
+const AGY_IDE_PWD = process.env.AGY_IDE_PASSWORD;
+if (!AGY_KEY)     { console.error('FATAL: ANTIGRAVITY_KEY env var not set'); process.exit(1); }
+if (!AGY_IDE_PWD) { console.error('FATAL: AGY_IDE_PASSWORD env var not set'); process.exit(1); }
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY;
+/* Use service role key — anon key must never access goal_sessions */
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 const GEMINI_KEY   = process.env.GEMINI_API_KEY;
 const TG_TOKEN     = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT_ID   = process.env.TELEGRAM_LEAD_ARCHITECT_CHAT_ID;
@@ -171,6 +176,13 @@ Responde SOLO con un JSON array de strings, sin texto extra:
       let success = false;
 
       for (let attempt = 0; attempt < 3; attempt++) {
+        /* ── Cancellation guard before EVERY dispatch and retry ── */
+        const sessionState = await sbGet('goal_sessions', sessionId);
+        if (!sessionState || sessionState.status !== 'running') {
+          await addLog({ type: 'cancelled', msg: 'Sesión detenida (cancelada o terminada externamente)' });
+          return; // exit runGoalLoop entirely
+        }
+
         /* Auto-Healer: regenerate instruction if this is a retry */
         if (attempt > 0) {
           await addLog({ type: 'healer', msg: `Auto-Healer intento ${attempt + 1}...`, prevError: lastError });
@@ -188,13 +200,15 @@ Responde SOLO con el comando corregido, sin explicaciones.`;
         await addLog({ type: 'step', step: si + 1, total: steps.length, msg: currentInstruction });
 
         try {
-          /* Send to AGY — confirmed:true is tied to goal_session_id (not a global flag) */
+          /* ── Validate active session before sending confirmed:true ──
+             confirmed:true is ONLY sent when we have verified the session
+             is running in Supabase — it is never a global bypass.        */
           const prefixed = target === 'ANY' ? currentInstruction : `[${target}] ${currentInstruction}`;
           const sent = await replitPost('/api/antigravity/send', {
             instruction: prefixed,
             target,
-            confirmed: true,           // ← autorización de sesión, NO flag global
-            goal_session_id: sessionId  // ← atado a esta sesión específica
+            confirmed: true,            // ← authorized by verified running session
+            goal_session_id: sessionId  // ← tied to this specific session
           });
 
           if (!sent || !sent.id) throw new Error(sent?.error || 'Sin ID de tarea');

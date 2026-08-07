@@ -21,10 +21,22 @@ CREATE TABLE IF NOT EXISTS goal_sessions (
 CREATE INDEX IF NOT EXISTS goal_sessions_status_idx
   ON goal_sessions (status, created_at DESC);
 
--- Habilitar RLS
+-- ── RLS: SOLO service_role puede leer/escribir ──────────────
 ALTER TABLE goal_sessions ENABLE ROW LEVEL SECURITY;
 
--- Política: solo el service role puede leer/escribir
-CREATE POLICY "service_role_only" ON goal_sessions
+-- Eliminar políticas abiertas si existen
+DROP POLICY IF EXISTS "service_role_only" ON goal_sessions;
+
+-- Revocar acceso a roles públicos
+REVOKE ALL ON goal_sessions FROM anon;
+REVOKE ALL ON goal_sessions FROM authenticated;
+
+-- Conceder acceso únicamente al service_role (usado por el servidor)
+GRANT ALL ON goal_sessions TO service_role;
+
+-- Política explícita para service_role (capa adicional de auditoría)
+CREATE POLICY "service_role_full_access" ON goal_sessions
+  AS PERMISSIVE
+  TO service_role
   USING (true)
   WITH CHECK (true);
