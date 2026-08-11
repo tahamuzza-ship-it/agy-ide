@@ -380,10 +380,11 @@ app.get('/api/revert-pending', requirePwd, async (_req, res) => {
     const r = await fetch(`${REPLIT_API}/api/antigravity/file-revert-pending`, {
       headers: { 'x-antigravity-key': AGY_KEY }
     });
-    res.json(await r.json());
+    const text = await r.text();
+    try { res.json(JSON.parse(text)); } catch(_) { res.json([]); }
   } catch (e) {
     console.error('[/api/revert-pending]', e.message);
-    res.status(500).json({ error: e.message });
+    res.json([]);
   }
 });
 
