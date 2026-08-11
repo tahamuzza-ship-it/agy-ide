@@ -974,7 +974,7 @@
           },
           {
             desc: "🐧 PC2 Linux — LENTO y BONITO. Imprime filas de 0s y 1s cada 0.25 segundos. Se ve como la película Matrix. Pégalo en la terminal SSH de PC2 o en la terminal web (ttyd). Para cuando quieras con Ctrl+C.",
-            cmd:  "while true; do python3 -c \"import random;print(' '.join(random.choices('01',k=60)))\"; sleep 0.25; done"
+            cmd:  "while true; do python3 -c \"import random;print('\\033[32m' + ' '.join(random.choices('01',k=60)) + '\\033[0m')\"; sleep 0.25; done"
           },
           {
             desc: "🪟 PC1 Windows PowerShell — LENTO. Filas de 0s y 1s en color verde brillante, cada 250ms. Solo funciona en PowerShell de PC1 (NO en bash de Linux). Cierra con Ctrl+C.",
