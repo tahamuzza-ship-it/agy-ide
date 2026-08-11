@@ -982,7 +982,7 @@
           },
           {
             desc: "🐧 PC2 Linux — RÁPIDO (más Matrix). Genera ruido binario real del sistema a alta velocidad. Más agresivo visualmente. Pégalo en bash de PC2. Para con Ctrl+C.",
-            cmd:  "cat /dev/urandom | tr -dc '01 ' | fold -w 60 | awk '{print; system(\"sleep 0.12\");}'"
+            cmd:  "cat /dev/urandom | tr -dc '01 ' | fold -w 60 | while IFS= read -r line; do printf '\\033[32m%s\\033[0m\\n' \"$line\"; sleep 0.12; done"
           },
         ]},
       { cat: "🔐 SSH — Tomar control de otra máquina por red",
