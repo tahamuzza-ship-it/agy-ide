@@ -966,88 +966,150 @@
     <script>
     /* ── PANEL COMANDOS ───────────────────────────────────────────── */
     var CMDS = [
-      { cat: "🟩 Matrix — Código binario estilo Matrix",
+      { cat: "🟩 Matrix — Código binario cayendo lento (efecto visual)",
         items: [
-          { desc: "🐧 PC2 Linux (bash) — one-liner limpio, funciona directo al pegar.",
-            cmd:  "while true; do python3 -c \"import random;print(' '.join(random.choices('01',k=60)))\"; sleep 0.25; done" },
-          { desc: "🐧 PC2 Linux (bash) — versión ultra rápida con urandom, más Matrix.",
-            cmd:  "cat /dev/urandom | tr -dc '01 ' | fold -w 60 | awk '{print; system(\"sleep 0.12\");}'" },
-          { desc: "🪟 PC1 Windows PowerShell ÚNICO — NO pegar en Linux. Solo en PowerShell de PC1.",
-            cmd:  "while($true){Write-Host ([string]::Join(' ',(1..50|%{Get-Random -Max 2}))) -ForegroundColor Green;Start-Sleep -Milliseconds 250}" },
-          { desc: "⛔ Parar cualquier animación en cualquier terminal.",
-            cmd:  "Ctrl+C" },
+          {
+            desc: "🐧 PC2 Linux — LENTO y BONITO. Imprime filas de 0s y 1s cada 0.25 segundos. Se ve como la película Matrix. Pégalo en la terminal SSH de PC2 o en la terminal web (ttyd). Para cuando quieras con Ctrl+C.",
+            cmd:  "while true; do python3 -c \"import random;print(' '.join(random.choices('01',k=60)))\"; sleep 0.25; done"
+          },
+          {
+            desc: "🪟 PC1 Windows PowerShell — LENTO. Filas de 0s y 1s en color verde brillante, cada 250ms. Solo funciona en PowerShell de PC1 (NO en bash de Linux). Cierra con Ctrl+C.",
+            cmd:  "while($true){Write-Host ([string]::Join(' ',(1..50|%{Get-Random -Max 2}))) -ForegroundColor Green;Start-Sleep -Milliseconds 250}"
+          },
+          {
+            desc: "🐧 PC2 Linux — RÁPIDO (más Matrix). Genera ruido binario real del sistema a alta velocidad. Más agresivo visualmente. Pégalo en bash de PC2.",
+            cmd:  "cat /dev/urandom | tr -dc '01 ' | fold -w 60 | awk '{print; system(\"sleep 0.12\");}'"
+          },
+          {
+            desc: "⛔ Parar cualquier animación. Funciona en TODOS los terminales — Linux, Windows, tmux, ttyd.",
+            cmd:  "Ctrl+C"
+          },
         ]},
-      { cat: "🔐 SSH — Conectar a otra máquina",
+      { cat: "🔐 SSH — Tomar control de otra máquina por red",
         items: [
-          { desc: "PC1 → PC2 por Tailscale. Escribe en PowerShell de PC1. Controlas PC2 desde PC1.",
-            cmd:  "ssh roberto@100.117.238.83" },
-          { desc: "PC1 → PC2 red local (mismo WiFi, más rápido que Tailscale).",
-            cmd:  "ssh roberto@192.168.1.14" },
-          { desc: "Teléfono o PC2 → PC1 por Tailscale. Controlas Windows desde fuera.",
-            cmd:  "ssh Roberto1@100.113.7.92" },
-          { desc: "Probar si PC2 responde SSH. Devuelve OK si está online.",
-            cmd:  "ssh -o ConnectTimeout=5 roberto@100.117.238.83 echo OK" },
+          {
+            desc: "PC1 → PC2 por Tailscale (funciona desde cualquier red del mundo, no solo el WiFi de casa). Escribe esto en PowerShell de PC1. Al conectar, todo lo que escribas corre en PC2.",
+            cmd:  "ssh roberto@100.117.238.83"
+          },
+          {
+            desc: "PC1 → PC2 por red local (mismo WiFi de casa). Más rápido que Tailscale porque no sale a internet. Úsalo cuando estés en casa.",
+            cmd:  "ssh roberto@192.168.1.14"
+          },
+          {
+            desc: "Teléfono o PC2 → tomar control de PC1 Windows desde fuera. Escríbelo en Termius (teléfono) o en la terminal de PC2.",
+            cmd:  "ssh Roberto1@100.113.7.92"
+          },
+          {
+            desc: "Probar si PC2 responde SSH antes de conectarte. Devuelve 'OK' en menos de 5 segundos si está online. Si no responde, PC2 está apagado o Tailscale caído.",
+            cmd:  "ssh -o ConnectTimeout=5 roberto@100.117.238.83 echo OK"
+          },
         ]},
-      { cat: "🖥️ tmux — Terminal sincronizada PC1 y PC2",
+      { cat: "🖥️ tmux — Dos pantallas viendo y escribiendo lo mismo en tiempo real",
         items: [
-          { desc: "PASO 1 — Crea sesión en PC2. Pégalo en la terminal SSH de PC2.",
-            cmd:  "tmux new-session -s compartida" },
-          { desc: "PASO 2 — Únete desde PC1. Ambas pantallas muestran lo mismo en tiempo real.",
-            cmd:  "ssh roberto@100.117.238.83 -t tmux attach-session -t compartida" },
-          { desc: "Ver sesiones tmux activas en PC2.",
-            cmd:  "ssh roberto@100.117.238.83 tmux ls" },
-          { desc: "Salir de tmux sin matarla (sigue viva en fondo). Primero Ctrl+B, luego D.",
-            cmd:  "Ctrl+B  luego  D" },
-          { desc: "Matar la sesión compartida desde PC1.",
-            cmd:  "ssh roberto@100.117.238.83 tmux kill-session -t compartida" },
+          {
+            desc: "PASO 1 — Crear la sesión en PC2. Pégalo en la terminal SSH de PC2. Esto abre una sesión que queda viva aunque te desconectes.",
+            cmd:  "tmux new-session -s compartida"
+          },
+          {
+            desc: "PASO 2 — Unirse desde PC1 (o teléfono). Escríbelo en PowerShell de PC1. Ambas pantallas quedan sincronizadas: lo que escribes en una aparece en la otra en tiempo real.",
+            cmd:  "ssh roberto@100.117.238.83 -t tmux attach-session -t compartida"
+          },
+          {
+            desc: "Ver qué sesiones tmux están abiertas en PC2 (útil para saber si la sesión compartida está activa).",
+            cmd:  "ssh roberto@100.117.238.83 tmux ls"
+          },
+          {
+            desc: "Salir de tmux SIN matarla. La sesión sigue viva en PC2 aunque cierres la ventana. Atajo de teclado: primero Ctrl+B, suelta, luego presiona D.",
+            cmd:  "Ctrl+B  →  D"
+          },
+          {
+            desc: "Matar la sesión compartida desde PC1. Úsalo cuando ya no la necesites.",
+            cmd:  "ssh roberto@100.117.238.83 tmux kill-session -t compartida"
+          },
         ]},
-      { cat: "🌐 Tailscale — VPN entre dispositivos",
+      { cat: "🌐 Tailscale — VPN privada que une tus dispositivos en una sola red",
         items: [
-          { desc: "Ver todos tus dispositivos con sus IPs Tailscale.",
-            cmd:  "tailscale status" },
-          { desc: "Ver tu IP Tailscale en el dispositivo donde lo corres.",
-            cmd:  "tailscale ip -4" },
-          { desc: "Verificar conexión con PC2 por Tailscale.",
-            cmd:  "tailscale ping 100.117.238.83" },
-          { desc: "Verificar conexión con PC1 por Tailscale.",
-            cmd:  "tailscale ping 100.113.7.92" },
-          { desc: "Reconectar Tailscale en PC2 Linux si se cayó.",
-            cmd:  "sudo tailscale up" },
+          {
+            desc: "Ver todos los dispositivos conectados a tu red Tailscale con sus IPs. Funciona en PC1, PC2 o teléfono.",
+            cmd:  "tailscale status"
+          },
+          {
+            desc: "Ver tu propia IP Tailscale en el dispositivo donde lo corres. Cada dispositivo tiene la suya fija.",
+            cmd:  "tailscale ip -4"
+          },
+          {
+            desc: "Probar si PC2 responde por Tailscale (como un ping). Si hay respuesta, puedes conectarte por SSH desde cualquier red.",
+            cmd:  "tailscale ping 100.117.238.83"
+          },
+          {
+            desc: "Probar si PC1 responde por Tailscale. Útil desde el teléfono para saber si PC1 está encendido antes de conectarte.",
+            cmd:  "tailscale ping 100.113.7.92"
+          },
+          {
+            desc: "Reconectar Tailscale en PC2 Linux si se desconectó. Corre esto en la terminal de PC2.",
+            cmd:  "sudo tailscale up"
+          },
         ]},
-      { cat: "🔧 Terminal web — GoTTY y ttyd",
+      { cat: "🔧 Terminal web (GoTTY / ttyd) — terminal en el navegador del teléfono",
         items: [
-          { desc: "Reiniciar ttyd en PC2 (bash en el navegador). Corre en SSH de PC2.",
-            cmd:  "pkill ttyd 2>/dev/null; nohup ttyd -p 7681 -t fontSize=15 bash > /tmp/ttyd.log 2>&1 &" },
-          { desc: "Abrir terminal web de PC2 en el navegador (Tailscale activo).",
-            cmd:  "http://100.117.238.83:7681" },
-          { desc: "Abrir terminal web de PC1 en el navegador (Tailscale activo).",
-            cmd:  "http://100.113.7.92:7681" },
-          { desc: "Verificar que ttyd está vivo en PC2.",
-            cmd:  "ssh roberto@100.117.238.83 pgrep -a ttyd" },
+          {
+            desc: "Reiniciar ttyd en PC2. Pégalo en SSH de PC2. Después de esto, abre la URL de abajo desde el teléfono (con Tailscale activo) y tendrás terminal bash de PC2 en el navegador.",
+            cmd:  "pkill ttyd 2>/dev/null; nohup ttyd -p 7681 -t fontSize=15 bash > /tmp/ttyd.log 2>&1 &"
+          },
+          {
+            desc: "Abrir terminal web de PC2 en el navegador del teléfono. Requiere Tailscale activo en el teléfono. Pégalo en la barra de direcciones.",
+            cmd:  "http://100.117.238.83:7681"
+          },
+          {
+            desc: "Abrir terminal web de PC1 (Windows GoTTY) en el navegador. Requiere Tailscale activo y que el botón PUENTE PC1 haya corrido antes.",
+            cmd:  "http://100.113.7.92:7681"
+          },
+          {
+            desc: "Verificar que ttyd está corriendo en PC2 (sin entrar a PC2). Devuelve el PID del proceso si está activo.",
+            cmd:  "ssh roberto@100.117.238.83 pgrep -a ttyd"
+          },
         ]},
-      { cat: "📊 Estado del ecosistema — un solo comando",
+      { cat: "📊 Estado del ecosistema — ver PC2 desde PC1 con un solo comando",
         items: [
-          { desc: "Uptime + RAM libre + disco de PC2 desde PC1. Responde en segundos.",
-            cmd:  "ssh roberto@100.117.238.83 'uptime && free -h && df -h /'" },
-          { desc: "Ver procesos de AGY/Node corriendo en PC2.",
-            cmd:  "ssh roberto@100.117.238.83 'ps aux | grep node | grep -v grep'" },
-          { desc: "Ver últimas 30 líneas del log del ag-listener en PC2.",
-            cmd:  "ssh roberto@100.117.238.83 'tail -30 ~/ag-listener.log'" },
-          { desc: "Reiniciar ag-listener en PC2 sin ir físicamente a PC2.",
-            cmd:  "ssh roberto@100.117.238.83 'pkill -f ag-listener; nohup node ~/ag-listener.js > ~/ag-listener.log 2>&1 &'" },
+          {
+            desc: "Ver uptime (cuánto lleva encendido) + RAM libre + espacio en disco de PC2. Todo en una sola línea desde PC1. Responde en segundos.",
+            cmd:  "ssh roberto@100.117.238.83 'uptime && free -h && df -h /'"
+          },
+          {
+            desc: "Ver si el ag-listener (proceso de misiones AGY) está corriendo en PC2. Si no aparece nada, el listener está caído.",
+            cmd:  "ssh roberto@100.117.238.83 'ps aux | grep node | grep -v grep'"
+          },
+          {
+            desc: "Ver las últimas 30 líneas del log del ag-listener en PC2. Útil para saber qué misión ejecutó AGY y si hubo errores.",
+            cmd:  "ssh roberto@100.117.238.83 'tail -30 ~/ag-listener.log'"
+          },
+          {
+            desc: "Reiniciar el ag-listener en PC2 sin ir físicamente a PC2. Úsalo cuando PC2 dejó de responder misiones.",
+            cmd:  "ssh roberto@100.117.238.83 'pkill -f ag-listener; nohup node ~/ag-listener.js > ~/ag-listener.log 2>&1 &'"
+          },
         ]},
-      { cat: "🪟 PowerShell — Comandos útiles en PC1",
+      { cat: "🪟 PowerShell — Comandos de diagnóstico en PC1 Windows",
         items: [
-          { desc: "Ver todas las IPs de PC1 (local, Tailscale, etc.).",
-            cmd:  "ipconfig | findstr IPv4" },
-          { desc: "Ver IP Tailscale de PC1.",
-            cmd:  "tailscale ip -4" },
-          { desc: "Verificar que el SSH Server está activo en PC1.",
-            cmd:  "Get-Service sshd | Select-Object Name,Status" },
-          { desc: "Iniciar SSH Server en PC1 si está apagado.",
-            cmd:  "Start-Service sshd" },
-          { desc: "Ver procesos Node.js corriendo en PC1.",
-            cmd:  "Get-Process node | Select-Object Id,CPU,WorkingSet" },
+          {
+            desc: "Ver todas las IPs de PC1: la local (192.168.x.x para WiFi de casa) y la Tailscale (100.x.x.x para red privada global).",
+            cmd:  "ipconfig | findstr IPv4"
+          },
+          {
+            desc: "Ver solo la IP Tailscale de PC1. Úsala para conectarte desde el teléfono o PC2 desde cualquier red.",
+            cmd:  "tailscale ip -4"
+          },
+          {
+            desc: "Verificar que el servidor SSH está activo en PC1. Si dice 'Stopped', no podrás conectarte por SSH.",
+            cmd:  "Get-Service sshd | Select-Object Name,Status"
+          },
+          {
+            desc: "Iniciar el servidor SSH en PC1 si está apagado. Necesario para que el teléfono o PC2 puedan conectarse.",
+            cmd:  "Start-Service sshd"
+          },
+          {
+            desc: "Ver los procesos Node.js corriendo en PC1 (ag-listener, etc.) con su consumo de CPU y memoria.",
+            cmd:  "Get-Process node | Select-Object Id,CPU,WorkingSet"
+          },
         ]},
     ];
 
