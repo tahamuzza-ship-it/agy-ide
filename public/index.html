@@ -813,7 +813,7 @@
       if (btn) { btn.textContent = '⏳ Activando...'; btn.disabled = true; }
       const instruccion = isPC2
         ? 'pkill ttyd 2>/dev/null; nohup ttyd -p 7681 -t fontSize=15 bash > /tmp/ttyd.log 2>&1 & sleep 1 && echo TTYD_OK'
-        : 'powershell -Command "Get-Service sshd | Select-Object Name,Status | Format-List; Write-Host PUENTE_PC1_OK"';
+        : 'powershell -Command "$dest=\"$env:USERPROFILE\\gotty.exe\"; if(-not(Test-Path $dest)){$z=\"$env:TEMP\\gotty.zip\"; Invoke-WebRequest \"https://github.com/sorenisanerd/gotty/releases/download/v1.5.0/gotty_v1.5.0_windows_amd64.zip\" -OutFile $z; Expand-Archive $z -DestinationPath $env:USERPROFILE -Force}; Stop-Process -Name gotty -Force -ErrorAction SilentlyContinue; Start-Sleep 1; $p=Start-Process $dest \"-p 7681 --permit-write powershell\" -WindowStyle Hidden -PassThru; Start-Sleep 2; if(-not $p.HasExited){\"GOTTY_PC1_OK\"}else{\"ERROR\"}"';
       const authToken = localStorage.getItem('agyide_token') || sessionStorage.getItem('agyide_token') || '';
       const out = document.getElementById('output');
       try {
@@ -831,8 +831,9 @@
             setTimeout(() => window.open('http://100.117.238.83:7681', '_blank'), 1500);
           } else {
             out.innerHTML += '<div style="color:#4080ff;font-weight:700;margin:6px 0;">🔵 PUENTE PC1 ACTIVADO</div>';
-            out.innerHTML += '<div style="color:#8c9cb2;font-size:0.82rem;">📱 Termius → <code style="color:#00f3ff;">ssh Roberto1@100.113.7.92</code> → PowerShell directo</div>';
+            out.innerHTML += '<div style="color:#8c9cb2;font-size:0.82rem;">Terminal web lista en PC1 — abriendo en nueva pestaña...</div>';
             out.scrollTop = out.scrollHeight;
+            setTimeout(() => window.open('http://100.113.7.92:7681', '_blank'), 1500);
           }
         }
         if (data.error) console.error('[PUENTE]', data.error);
