@@ -826,10 +826,19 @@
         const data = await res.json();
         if (out) {
           if (isPC2) {
-            out.innerHTML += '<div style="color:#ff4060;font-weight:700;margin:6px 0;">🔴 PUENTE PC2 ACTIVADO</div>';
-            out.innerHTML += '<div style="color:#8c9cb2;font-size:0.82rem;">Terminal web lista en PC2 — abriendo en nueva pestaña...</div>';
+            out.innerHTML += '<div style="color:#ff4060;font-weight:700;margin:6px 0;">🔴 PUENTE PC2 ACTIVADO — reiniciando ttyd...</div>';
+            out.innerHTML += '<div style="color:#8c9cb2;font-size:0.82rem;">Espera 10 segundos mientras ttyd arranca en PC2...</div>';
             out.scrollTop = out.scrollHeight;
-            setTimeout(() => window.open('http://100.121.53.89:7681', '_blank'), 1500);
+            let secsPC2 = 10;
+            const countPC2 = document.createElement('div');
+            countPC2.style.cssText = 'color:#ff4060;font-size:0.8rem;margin:4px 0;';
+            countPC2.textContent = '⏳ ' + secsPC2 + 's...';
+            out.appendChild(countPC2);
+            const ivPC2 = setInterval(() => {
+              secsPC2--;
+              if (secsPC2 > 0) { countPC2.textContent = '⏳ ' + secsPC2 + 's...'; }
+              else { clearInterval(ivPC2); countPC2.textContent = '🔴 Abriendo terminal PC2...'; window.open('http://100.121.53.89:7681', '_blank'); }
+            }, 1000);
           } else {
             out.innerHTML += '<div style="color:#4080ff;font-weight:700;margin:6px 0;">🔵 PUENTE PC1 ACTIVADO — AGY instalando terminal...</div>';
             out.innerHTML += '<div style="color:#8c9cb2;font-size:0.82rem;">AGY descarga e inicia GoTTY en PC1. Abriendo en ~90 segundos...</div>';
