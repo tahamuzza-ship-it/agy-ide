@@ -814,7 +814,7 @@
       if (btn) { btn.textContent = '⏳ Activando...'; btn.disabled = true; }
       const instruccion = isPC2
         ? 'pkill ttyd 2>/dev/null; nohup ttyd -p 7681 -t fontSize=15 bash > /tmp/ttyd.log 2>&1 & sleep 1 && echo TTYD_OK'
-        : 'Descarga GoTTY para Windows desde esta URL exacta: https://github.com/sorenisanerd/gotty/releases/download/v1.5.0/gotty_v1.5.0_windows_amd64.zip — guarda el zip en C:\\Users\\Roberto1\\gotty.zip, descomprímelo en C:\\Users\\Roberto1\\ y ejecuta gotty.exe con los argumentos: --port 7681 --permit-write powershell — en modo background sin ventana visible. Confirma con GOTTY_PC1_OK cuando el proceso esté corriendo.';
+        : 'EJECUTAR powershell -ExecutionPolicy Bypass -Command "if(!(Test-Path ($env:USERPROFILE+\'\\gotty.exe\'))){Invoke-WebRequest -Uri \'https://github.com/sorenisanerd/gotty/releases/download/v1.5.0/gotty_v1.5.0_windows_amd64.zip\' -OutFile ($env:USERPROFILE+\'\\gotty.zip\');Expand-Archive -Path ($env:USERPROFILE+\'\\gotty.zip\') -DestinationPath $env:USERPROFILE -Force};Get-Process gotty -ErrorAction SilentlyContinue | Stop-Process -Force;Start-Process -FilePath ($env:USERPROFILE+\'\\gotty.exe\') -ArgumentList \'--port 7681 --permit-write powershell\' -WindowStyle Hidden;Write-Host GOTTY_PC1_OK"';
       const authToken = localStorage.getItem('agyide_token') || sessionStorage.getItem('agyide_token') || '';
       const out = document.getElementById('output');
       try {
