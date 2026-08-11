@@ -966,51 +966,143 @@
 
     <script>
     const COMANDOS_LIST = [
-      { cat: "🔐 SSH — Control remoto", items: [
-        { desc: "Conectar a PC2 desde PC1 (red local)", cmd: "ssh roberto@192.168.1.14" },
-        { desc: "Conectar a PC2 vía Tailscale (cualquier red)", cmd: "ssh roberto@100.117.238.83" },
-        { desc: "Conectar a PC1 desde teléfono vía Tailscale", cmd: "ssh Roberto1@100.113.7.92" },
-        { desc: "Conectar a PC2 con usuario específico y puerto", cmd: "ssh -p 22 roberto@100.117.238.83" },
+      { cat: "🟩 Matrix — Código binario estilo Matrix", items: [
+        {
+          desc: "🐧 PC2 Linux — 0s y 1s cayendo lento en verde. Pega en la terminal de PC2 (bash/SSH).",
+          cmd: "python3 -c \"import time,random\nwhile True:\n    print(' '.join(random.choices('01',k=50)),flush=True)\n    time.sleep(0.25)\""
+        },
+        {
+          desc: "🪟 PC1 Windows — Binario verde lento. Pega en PowerShell de PC1.",
+          cmd: "while($true){Write-Host ([string]::Join(' ',(1..50|%{Get-Random -Max 2}))) -ForegroundColor Green;Start-Sleep -Milliseconds 250}"
+        },
+        {
+          desc: "🐧 PC2 Linux — Versión ultra rápida (más Matrix). Pega en bash de PC2.",
+          cmd: "cat /dev/urandom | tr -dc '01 \n' | fold -w 60 | while IFS= read -r line; do echo \"$line\"; sleep 0.1; done"
+        },
+        {
+          desc: "⛔ Parar cualquier animación en ambas terminales.",
+          cmd: "Ctrl+C"
+        },
       ]},
-      { cat: "🖥️ tmux — Terminal compartida", items: [
-        { desc: "Crear sesión tmux llamada 'compartida' en PC2", cmd: "tmux new-session -s compartida" },
-        { desc: "Conectarse a la sesión compartida (desde PC1 o teléfono)", cmd: "tmux attach-session -t compartida" },
-        { desc: "Ver todas las sesiones tmux activas", cmd: "tmux ls" },
-        { desc: "Salir de tmux sin cerrarla (queda viva en fondo)", cmd: "Ctrl+B, luego D" },
-        { desc: "Matar sesión tmux compartida", cmd: "tmux kill-session -t compartida" },
+      { cat: "🔐 SSH — Conectar a otra máquina", items: [
+        {
+          desc: "PC1 → PC2 por Tailscale. Escribe en PowerShell de PC1. Controlas PC2 desde PC1.",
+          cmd: "ssh roberto@100.117.238.83"
+        },
+        {
+          desc: "PC1 → PC2 red local (mismo WiFi, más rápido que Tailscale).",
+          cmd: "ssh roberto@192.168.1.14"
+        },
+        {
+          desc: "Teléfono o PC2 → PC1 por Tailscale. Controlas Windows desde fuera.",
+          cmd: "ssh Roberto1@100.113.7.92"
+        },
+        {
+          desc: "Probar si PC2 responde SSH. Devuelve 'OK' si está online.",
+          cmd: "ssh -o ConnectTimeout=5 roberto@100.117.238.83 echo OK"
+        },
       ]},
-      { cat: "🌐 Tailscale — VPN privada", items: [
-        { desc: "Ver estado y dispositivos conectados", cmd: "tailscale status" },
-        { desc: "Ver tu IP Tailscale en este dispositivo", cmd: "tailscale ip -4" },
-        { desc: "Conectar con auth key (Linux headless)", cmd: "sudo tailscale up --authkey=tskey-auth-..." },
-        { desc: "Desconectar Tailscale temporalmente", cmd: "sudo tailscale down" },
-        { desc: "Ping a PC2 por Tailscale (prueba de conectividad)", cmd: "tailscale ping 100.117.238.83" },
+      { cat: "🖥️ tmux — Terminal sincronizada PC1 y PC2", items: [
+        {
+          desc: "PASO 1 — Crea sesión en PC2. Pégalo en la terminal SSH de PC2. La sesión queda abierta.",
+          cmd: "tmux new-session -s compartida"
+        },
+        {
+          desc: "PASO 2 — Únete desde PC1. Ambas pantallas muestran lo mismo en tiempo real.",
+          cmd: "ssh roberto@100.117.238.83 -t tmux attach-session -t compartida"
+        },
+        {
+          desc: "Ver sesiones tmux activas en PC2.",
+          cmd: "ssh roberto@100.117.238.83 tmux ls"
+        },
+        {
+          desc: "Salir de tmux sin matarla (sigue viva en fondo). Primero Ctrl+B, luego D.",
+          cmd: "Ctrl+B  luego  D"
+        },
+        {
+          desc: "Matar la sesión compartida desde PC1.",
+          cmd: "ssh roberto@100.117.238.83 tmux kill-session -t compartida"
+        },
       ]},
-      { cat: "🔧 GoTTY / ttyd — Terminal web", items: [
-        { desc: "Iniciar terminal web de PC2 en puerto 7681 (Linux)", cmd: "nohup ttyd -p 7681 -t fontSize=15 bash &" },
-        { desc: "Iniciar terminal web de PC1 en puerto 7681 (Windows)", cmd: ".\gotty.exe --port 7681 --permit-write powershell" },
-        { desc: "Ver si ttyd está corriendo en PC2", cmd: "pgrep -a ttyd" },
-        { desc: "Matar ttyd en PC2", cmd: "pkill ttyd" },
-        { desc: "Abrir terminal PC2 desde navegador (Tailscale)", cmd: "http://100.117.238.83:7681" },
-        { desc: "Abrir terminal PC1 desde navegador (Tailscale)", cmd: "http://100.113.7.92:7681" },
+      { cat: "🌐 Tailscale — VPN entre dispositivos", items: [
+        {
+          desc: "Ver todos tus dispositivos con sus IPs Tailscale.",
+          cmd: "tailscale status"
+        },
+        {
+          desc: "Ver tu IP Tailscale en el dispositivo donde lo corres.",
+          cmd: "tailscale ip -4"
+        },
+        {
+          desc: "Verificar conexión con PC2 por Tailscale (como ping).",
+          cmd: "tailscale ping 100.117.238.83"
+        },
+        {
+          desc: "Verificar conexión con PC1 por Tailscale.",
+          cmd: "tailscale ping 100.113.7.92"
+        },
+        {
+          desc: "Reconectar Tailscale en PC2 Linux si se cayó.",
+          cmd: "sudo tailscale up"
+        },
       ]},
-      { cat: "📊 Informe Maestro — AGY remoto", items: [
-        { desc: "Pedir informe maestro completo a AGY (en chat AGY-IDE)", cmd: "INFORME MAESTRO" },
-        { desc: "Ver estado de PC2 desde PC1 vía SSH", cmd: "ssh roberto@100.117.238.83 uptime && free -h && df -h" },
-        { desc: "Ver procesos activos en PC2", cmd: "ssh roberto@100.117.238.83 ps aux | grep -E 'agt|node|python' | head -10" },
-        { desc: "Ver últimas 50 líneas de log de AGY en PC2", cmd: "ssh roberto@100.117.238.83 tail -50 ~/ag-listener.log" },
+      { cat: "🔧 Terminal web — GoTTY y ttyd", items: [
+        {
+          desc: "Reiniciar ttyd en PC2 (terminal bash en el navegador). Corre en SSH de PC2.",
+          cmd: "pkill ttyd 2>/dev/null; nohup ttyd -p 7681 -t fontSize=15 bash > /tmp/ttyd.log 2>&1 &"
+        },
+        {
+          desc: "Abrir terminal web de PC2 en el navegador (necesitas Tailscale activo).",
+          cmd: "http://100.117.238.83:7681"
+        },
+        {
+          desc: "Abrir terminal web de PC1 en el navegador (GoTTY, Tailscale activo).",
+          cmd: "http://100.113.7.92:7681"
+        },
+        {
+          desc: "Verificar que ttyd está vivo en PC2.",
+          cmd: "ssh roberto@100.117.238.83 pgrep -a ttyd"
+        },
       ]},
-      { cat: "🟩 Matrix — Código binario lento", items: [
-        { desc: "Animación binaria estilo Matrix (lenta, decorativa)", cmd: "while true; do echo -n "$(dd if=/dev/urandom bs=1 count=1 2>/dev/null | xxd -b | awk '{print $2}') "; sleep 0.15; done" },
-        { desc: "Matrix con color verde (Linux bash)", cmd: "python3 -c "import time,random,os;cols=int(os.get_terminal_size().columns);\n[print(' '.join([random.choice('01') for _ in range(cols)]),flush=True) or time.sleep(0.2) for _ in iter(int,1)]"" },
-        { desc: "Detener cualquier animación", cmd: "Ctrl+C" },
+      { cat: "📊 Estado del ecosistema — Un solo comando", items: [
+        {
+          desc: "Ver uptime + RAM libre + disco de PC2 desde PC1. Responde en segundos.",
+          cmd: "ssh roberto@100.117.238.83 'uptime && free -h && df -h /'"
+        },
+        {
+          desc: "Ver qué procesos de AGY/Node están corriendo en PC2.",
+          cmd: "ssh roberto@100.117.238.83 'ps aux | grep -E \"node|python|agt\" | grep -v grep'"
+        },
+        {
+          desc: "Ver últimas 30 líneas del log del ag-listener en PC2.",
+          cmd: "ssh roberto@100.117.238.83 'tail -30 ~/ag-listener.log'"
+        },
+        {
+          desc: "Reiniciar ag-listener en PC2 sin ir físicamente a PC2.",
+          cmd: "ssh roberto@100.117.238.83 'pkill -f ag-listener; nohup node ~/ag-listener.js > ~/ag-listener.log 2>&1 &'"
+        },
       ]},
-      { cat: "🪟 Windows PowerShell útiles", items: [
-        { desc: "Ver IP local de PC1 (busca 192.168...)", cmd: "ipconfig | findstr IPv4" },
-        { desc: "Ver IP Tailscale de PC1", cmd: "tailscale ip -4" },
-        { desc: "Iniciar SSH server en PC1 (si está detenido)", cmd: "Start-Service sshd" },
-        { desc: "Ver estado del SSH server en PC1", cmd: "Get-Service sshd | Select Name,Status" },
-        { desc: "Abrir PowerShell como administrador (run from cmd)", cmd: "powershell -Command "Start-Process powershell -Verb RunAs"" },
+      { cat: "🪟 PowerShell — Comandos útiles en PC1", items: [
+        {
+          desc: "Ver todas las IPs de PC1 (local, Tailscale, etc.).",
+          cmd: "ipconfig | findstr IPv4"
+        },
+        {
+          desc: "Ver IP Tailscale de PC1.",
+          cmd: "tailscale ip -4"
+        },
+        {
+          desc: "Verificar que el SSH Server está activo en PC1.",
+          cmd: "Get-Service sshd | Select-Object Name,Status"
+        },
+        {
+          desc: "Iniciar SSH Server en PC1 si está apagado.",
+          cmd: "Start-Service sshd"
+        },
+        {
+          desc: "Ver procesos Node.js corriendo en PC1 (ag-listener, etc.).",
+          cmd: "Get-Process node | Select-Object Id,CPU,WorkingSet"
+        },
       ]},
     ];
 
