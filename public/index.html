@@ -837,7 +837,10 @@
             const ivPC2 = setInterval(() => {
               secsPC2--;
               if (secsPC2 > 0) { countPC2.textContent = '⏳ ' + secsPC2 + 's...'; }
-              else { clearInterval(ivPC2); countPC2.textContent = '🔴 Abriendo terminal PC2...'; window.open('http://100.121.53.89:7681', '_blank'); }
+              else {
+                clearInterval(ivPC2);
+                countPC2.innerHTML = '<a href="http://100.121.53.89:7681" target="_blank" style="display:inline-block;padding:8px 16px;background:#cc0020;color:#fff;border-radius:6px;font-weight:700;text-decoration:none;font-size:0.85rem;">🔴 ABRIR TERMINAL PC2 →</a>';
+              }
             }, 1000);
           } else {
             out.innerHTML += '<div style="color:#4080ff;font-weight:700;margin:6px 0;">🔵 PUENTE PC1 ACTIVADO — AGY instalando terminal...</div>';
@@ -851,7 +854,10 @@
             const iv = setInterval(() => {
               secs--;
               if (secs > 0) { countEl.textContent = '⏳ ' + secs + 's restantes...'; }
-              else { clearInterval(iv); countEl.textContent = '🔵 Abriendo terminal PC1...'; window.open('http://100.113.7.92:7681', '_blank'); }
+              else {
+                clearInterval(iv);
+                countEl.innerHTML = '<a href="http://100.113.7.92:7681" target="_blank" style="display:inline-block;padding:8px 16px;background:#0055cc;color:#fff;border-radius:6px;font-weight:700;text-decoration:none;font-size:0.85rem;">🔵 ABRIR TERMINAL PC1 →</a>';
+              }
             }, 1000);
           }
         }
