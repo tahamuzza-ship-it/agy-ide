@@ -957,196 +957,158 @@
     <!-- PANEL COMANDOS -->
     <div id="comandos-panel" style="display:none;position:fixed;top:0;right:0;width:360px;height:100vh;background:#0a0f1e;border-left:2px solid rgba(34,197,94,0.4);z-index:9999;overflow-y:auto;padding:16px;box-sizing:border-box;font-family:monospace;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <h3 style="color:#22c55e;margin:0;font-size:0.95rem;letter-spacing:0.05em;">📋 COMANDOS — Terminal & Red</h3>
-        <button onclick="toggleComandos()" style="background:none;border:none;color:#fff;font-size:1.3rem;cursor:pointer;">✕</button>
+        <h3 style="color:#22c55e;margin:0;font-size:0.95rem;letter-spacing:0.05em;">📋 COMANDOS — Terminal &amp; Red</h3>
+        <button id="btn-cerrar-comandos" style="background:none;border:none;color:#fff;font-size:1.3rem;cursor:pointer;">✕</button>
       </div>
-
       <div id="cmd-list"></div>
     </div>
 
     <script>
-    const COMANDOS_LIST = [
-      { cat: "🟩 Matrix — Código binario estilo Matrix", items: [
-        {
-          desc: "🐧 PC2 Linux — 0s y 1s cayendo lento en verde. Pega en la terminal de PC2 (bash/SSH).",
-          cmd: "python3 -c \"import time,random\nwhile True:\n    print(' '.join(random.choices('01',k=50)),flush=True)\n    time.sleep(0.25)\""
-        },
-        {
-          desc: "🪟 PC1 Windows — Binario verde lento. Pega en PowerShell de PC1.",
-          cmd: "while($true){Write-Host ([string]::Join(' ',(1..50|%{Get-Random -Max 2}))) -ForegroundColor Green;Start-Sleep -Milliseconds 250}"
-        },
-        {
-          desc: "🐧 PC2 Linux — Versión ultra rápida (más Matrix). Pega en bash de PC2.",
-          cmd: "cat /dev/urandom | tr -dc '01 \n' | fold -w 60 | while IFS= read -r line; do echo \"$line\"; sleep 0.1; done"
-        },
-        {
-          desc: "⛔ Parar cualquier animación en ambas terminales.",
-          cmd: "Ctrl+C"
-        },
-      ]},
-      { cat: "🔐 SSH — Conectar a otra máquina", items: [
-        {
-          desc: "PC1 → PC2 por Tailscale. Escribe en PowerShell de PC1. Controlas PC2 desde PC1.",
-          cmd: "ssh roberto@100.117.238.83"
-        },
-        {
-          desc: "PC1 → PC2 red local (mismo WiFi, más rápido que Tailscale).",
-          cmd: "ssh roberto@192.168.1.14"
-        },
-        {
-          desc: "Teléfono o PC2 → PC1 por Tailscale. Controlas Windows desde fuera.",
-          cmd: "ssh Roberto1@100.113.7.92"
-        },
-        {
-          desc: "Probar si PC2 responde SSH. Devuelve 'OK' si está online.",
-          cmd: "ssh -o ConnectTimeout=5 roberto@100.117.238.83 echo OK"
-        },
-      ]},
-      { cat: "🖥️ tmux — Terminal sincronizada PC1 y PC2", items: [
-        {
-          desc: "PASO 1 — Crea sesión en PC2. Pégalo en la terminal SSH de PC2. La sesión queda abierta.",
-          cmd: "tmux new-session -s compartida"
-        },
-        {
-          desc: "PASO 2 — Únete desde PC1. Ambas pantallas muestran lo mismo en tiempo real.",
-          cmd: "ssh roberto@100.117.238.83 -t tmux attach-session -t compartida"
-        },
-        {
-          desc: "Ver sesiones tmux activas en PC2.",
-          cmd: "ssh roberto@100.117.238.83 tmux ls"
-        },
-        {
-          desc: "Salir de tmux sin matarla (sigue viva en fondo). Primero Ctrl+B, luego D.",
-          cmd: "Ctrl+B  luego  D"
-        },
-        {
-          desc: "Matar la sesión compartida desde PC1.",
-          cmd: "ssh roberto@100.117.238.83 tmux kill-session -t compartida"
-        },
-      ]},
-      { cat: "🌐 Tailscale — VPN entre dispositivos", items: [
-        {
-          desc: "Ver todos tus dispositivos con sus IPs Tailscale.",
-          cmd: "tailscale status"
-        },
-        {
-          desc: "Ver tu IP Tailscale en el dispositivo donde lo corres.",
-          cmd: "tailscale ip -4"
-        },
-        {
-          desc: "Verificar conexión con PC2 por Tailscale (como ping).",
-          cmd: "tailscale ping 100.117.238.83"
-        },
-        {
-          desc: "Verificar conexión con PC1 por Tailscale.",
-          cmd: "tailscale ping 100.113.7.92"
-        },
-        {
-          desc: "Reconectar Tailscale en PC2 Linux si se cayó.",
-          cmd: "sudo tailscale up"
-        },
-      ]},
-      { cat: "🔧 Terminal web — GoTTY y ttyd", items: [
-        {
-          desc: "Reiniciar ttyd en PC2 (terminal bash en el navegador). Corre en SSH de PC2.",
-          cmd: "pkill ttyd 2>/dev/null; nohup ttyd -p 7681 -t fontSize=15 bash > /tmp/ttyd.log 2>&1 &"
-        },
-        {
-          desc: "Abrir terminal web de PC2 en el navegador (necesitas Tailscale activo).",
-          cmd: "http://100.117.238.83:7681"
-        },
-        {
-          desc: "Abrir terminal web de PC1 en el navegador (GoTTY, Tailscale activo).",
-          cmd: "http://100.113.7.92:7681"
-        },
-        {
-          desc: "Verificar que ttyd está vivo en PC2.",
-          cmd: "ssh roberto@100.117.238.83 pgrep -a ttyd"
-        },
-      ]},
-      { cat: "📊 Estado del ecosistema — Un solo comando", items: [
-        {
-          desc: "Ver uptime + RAM libre + disco de PC2 desde PC1. Responde en segundos.",
-          cmd: "ssh roberto@100.117.238.83 'uptime && free -h && df -h /'"
-        },
-        {
-          desc: "Ver qué procesos de AGY/Node están corriendo en PC2.",
-          cmd: "ssh roberto@100.117.238.83 'ps aux | grep -E \"node|python|agt\" | grep -v grep'"
-        },
-        {
-          desc: "Ver últimas 30 líneas del log del ag-listener en PC2.",
-          cmd: "ssh roberto@100.117.238.83 'tail -30 ~/ag-listener.log'"
-        },
-        {
-          desc: "Reiniciar ag-listener en PC2 sin ir físicamente a PC2.",
-          cmd: "ssh roberto@100.117.238.83 'pkill -f ag-listener; nohup node ~/ag-listener.js > ~/ag-listener.log 2>&1 &'"
-        },
-      ]},
-      { cat: "🪟 PowerShell — Comandos útiles en PC1", items: [
-        {
-          desc: "Ver todas las IPs de PC1 (local, Tailscale, etc.).",
-          cmd: "ipconfig | findstr IPv4"
-        },
-        {
-          desc: "Ver IP Tailscale de PC1.",
-          cmd: "tailscale ip -4"
-        },
-        {
-          desc: "Verificar que el SSH Server está activo en PC1.",
-          cmd: "Get-Service sshd | Select-Object Name,Status"
-        },
-        {
-          desc: "Iniciar SSH Server en PC1 si está apagado.",
-          cmd: "Start-Service sshd"
-        },
-        {
-          desc: "Ver procesos Node.js corriendo en PC1 (ag-listener, etc.).",
-          cmd: "Get-Process node | Select-Object Id,CPU,WorkingSet"
-        },
-      ]},
+    /* ── PANEL COMANDOS ───────────────────────────────────────────── */
+    var CMDS = [
+      { cat: "🟩 Matrix — Código binario estilo Matrix",
+        items: [
+          { desc: "🐧 PC2 Linux — 0s y 1s cayendo lento (bash). Pega en terminal de PC2.",
+            cmd:  "python3 -c 'import time,random\nwhile True:\n    print(\" \".join(random.choices(\"01\",k=50)),flush=True)\n    time.sleep(0.25)'" },
+          { desc: "🪟 PC1 Windows PowerShell — Binario verde lento. Pega en PowerShell de PC1.",
+            cmd:  "while($true){Write-Host ([string]::Join(' ',(1..50|%{Get-Random -Max 2}))) -ForegroundColor Green;Start-Sleep -Milliseconds 250}" },
+          { desc: "🐧 PC2 Linux — Versión ultra rápida con urandom (muy Matrix). Pega en bash.",
+            cmd:  "cat /dev/urandom | tr -dc '01 \n' | fold -w 60 | while IFS= read -r line; do echo \"$line\"; sleep 0.1; done" },
+          { desc: "⛔ Parar cualquier animación.",
+            cmd:  "Ctrl+C" },
+        ]},
+      { cat: "🔐 SSH — Conectar a otra máquina",
+        items: [
+          { desc: "PC1 → PC2 por Tailscale. Escribe en PowerShell de PC1. Controlas PC2 desde PC1.",
+            cmd:  "ssh roberto@100.117.238.83" },
+          { desc: "PC1 → PC2 red local (mismo WiFi, más rápido que Tailscale).",
+            cmd:  "ssh roberto@192.168.1.14" },
+          { desc: "Teléfono o PC2 → PC1 por Tailscale. Controlas Windows desde fuera.",
+            cmd:  "ssh Roberto1@100.113.7.92" },
+          { desc: "Probar si PC2 responde SSH. Devuelve OK si está online.",
+            cmd:  "ssh -o ConnectTimeout=5 roberto@100.117.238.83 echo OK" },
+        ]},
+      { cat: "🖥️ tmux — Terminal sincronizada PC1 y PC2",
+        items: [
+          { desc: "PASO 1 — Crea sesión en PC2. Pégalo en la terminal SSH de PC2.",
+            cmd:  "tmux new-session -s compartida" },
+          { desc: "PASO 2 — Únete desde PC1. Ambas pantallas muestran lo mismo en tiempo real.",
+            cmd:  "ssh roberto@100.117.238.83 -t tmux attach-session -t compartida" },
+          { desc: "Ver sesiones tmux activas en PC2.",
+            cmd:  "ssh roberto@100.117.238.83 tmux ls" },
+          { desc: "Salir de tmux sin matarla (sigue viva en fondo). Primero Ctrl+B, luego D.",
+            cmd:  "Ctrl+B  luego  D" },
+          { desc: "Matar la sesión compartida desde PC1.",
+            cmd:  "ssh roberto@100.117.238.83 tmux kill-session -t compartida" },
+        ]},
+      { cat: "🌐 Tailscale — VPN entre dispositivos",
+        items: [
+          { desc: "Ver todos tus dispositivos con sus IPs Tailscale.",
+            cmd:  "tailscale status" },
+          { desc: "Ver tu IP Tailscale en el dispositivo donde lo corres.",
+            cmd:  "tailscale ip -4" },
+          { desc: "Verificar conexión con PC2 por Tailscale.",
+            cmd:  "tailscale ping 100.117.238.83" },
+          { desc: "Verificar conexión con PC1 por Tailscale.",
+            cmd:  "tailscale ping 100.113.7.92" },
+          { desc: "Reconectar Tailscale en PC2 Linux si se cayó.",
+            cmd:  "sudo tailscale up" },
+        ]},
+      { cat: "🔧 Terminal web — GoTTY y ttyd",
+        items: [
+          { desc: "Reiniciar ttyd en PC2 (bash en el navegador). Corre en SSH de PC2.",
+            cmd:  "pkill ttyd 2>/dev/null; nohup ttyd -p 7681 -t fontSize=15 bash > /tmp/ttyd.log 2>&1 &" },
+          { desc: "Abrir terminal web de PC2 en el navegador (Tailscale activo).",
+            cmd:  "http://100.117.238.83:7681" },
+          { desc: "Abrir terminal web de PC1 en el navegador (Tailscale activo).",
+            cmd:  "http://100.113.7.92:7681" },
+          { desc: "Verificar que ttyd está vivo en PC2.",
+            cmd:  "ssh roberto@100.117.238.83 pgrep -a ttyd" },
+        ]},
+      { cat: "📊 Estado del ecosistema — un solo comando",
+        items: [
+          { desc: "Uptime + RAM libre + disco de PC2 desde PC1. Responde en segundos.",
+            cmd:  "ssh roberto@100.117.238.83 'uptime && free -h && df -h /'" },
+          { desc: "Ver procesos de AGY/Node corriendo en PC2.",
+            cmd:  "ssh roberto@100.117.238.83 'ps aux | grep node | grep -v grep'" },
+          { desc: "Ver últimas 30 líneas del log del ag-listener en PC2.",
+            cmd:  "ssh roberto@100.117.238.83 'tail -30 ~/ag-listener.log'" },
+          { desc: "Reiniciar ag-listener en PC2 sin ir físicamente a PC2.",
+            cmd:  "ssh roberto@100.117.238.83 'pkill -f ag-listener; nohup node ~/ag-listener.js > ~/ag-listener.log 2>&1 &'" },
+        ]},
+      { cat: "🪟 PowerShell — Comandos útiles en PC1",
+        items: [
+          { desc: "Ver todas las IPs de PC1 (local, Tailscale, etc.).",
+            cmd:  "ipconfig | findstr IPv4" },
+          { desc: "Ver IP Tailscale de PC1.",
+            cmd:  "tailscale ip -4" },
+          { desc: "Verificar que el SSH Server está activo en PC1.",
+            cmd:  "Get-Service sshd | Select-Object Name,Status" },
+          { desc: "Iniciar SSH Server en PC1 si está apagado.",
+            cmd:  "Start-Service sshd" },
+          { desc: "Ver procesos Node.js corriendo en PC1.",
+            cmd:  "Get-Process node | Select-Object Id,CPU,WorkingSet" },
+        ]},
     ];
 
+    /* Flat array for index-based copy */
+    var _flatCmds = [];
+    CMDS.forEach(function(cat){ cat.items.forEach(function(it){ _flatCmds.push(it.cmd); }); });
+
     function toggleComandos() {
-      const p = document.getElementById('comandos-panel');
+      var p = document.getElementById('comandos-panel');
       if (!p) return;
-      const open = p.style.display !== 'none';
-      p.style.display = open ? 'none' : 'block';
-      if (!open) renderComandos();
+      var isOpen = p.style.display !== 'none';
+      p.style.display = isOpen ? 'none' : 'block';
+      if (!isOpen) renderComandos();
     }
 
     function renderComandos() {
-      const list = document.getElementById('cmd-list');
+      var list = document.getElementById('cmd-list');
       if (!list) return;
-      list.innerHTML = COMANDOS_LIST.map(cat => `
-        <div style="margin-bottom:18px;">
-          <div style="color:#22c55e;font-weight:700;font-size:0.78rem;letter-spacing:0.08em;margin-bottom:8px;border-bottom:1px solid rgba(34,197,94,0.2);padding-bottom:4px;">${cat.cat}</div>
-          ${cat.items.map((item,idx) => `
-            <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:10px;margin-bottom:8px;">
-              <div style="color:#8c9cb2;font-size:0.7rem;margin-bottom:6px;line-height:1.4;">${item.desc}</div>
-              <div style="display:flex;align-items:center;gap:6px;">
-                <code style="flex:1;background:#0d1117;color:#00f3ff;padding:6px 8px;border-radius:5px;font-size:0.7rem;word-break:break-all;border:1px solid rgba(0,243,255,0.15);">${item.cmd}</code>
-                <button onclick="copiarCmd(this,'${item.cmd.replace(/'/g,"\'")}')" style="flex-shrink:0;padding:5px 8px;background:rgba(34,197,94,0.12);color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:5px;font-size:0.65rem;cursor:pointer;white-space:nowrap;">📋 Copiar</button>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      `).join('');
+      var html = '';
+      var idx = 0;
+      CMDS.forEach(function(cat) {
+        html += '<div style="margin-bottom:18px;">';
+        html += '<div style="color:#22c55e;font-weight:700;font-size:0.78rem;letter-spacing:0.08em;margin-bottom:8px;border-bottom:1px solid rgba(34,197,94,0.2);padding-bottom:4px;">' + cat.cat + '</div>';
+        cat.items.forEach(function(item) {
+          var safeCmd = item.cmd.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          html += '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:10px;margin-bottom:8px;">';
+          html += '<div style="color:#8c9cb2;font-size:0.7rem;margin-bottom:6px;line-height:1.4;">' + item.desc + '</div>';
+          html += '<div style="display:flex;align-items:center;gap:6px;">';
+          html += '<code style="flex:1;background:#0d1117;color:#00f3ff;padding:6px 8px;border-radius:5px;font-size:0.68rem;word-break:break-all;border:1px solid rgba(0,243,255,0.15);white-space:pre-wrap;">' + safeCmd + '</code>';
+          html += '<button data-ci="' + idx + '" style="flex-shrink:0;padding:5px 8px;background:rgba(34,197,94,0.12);color:#22c55e;border:1px solid rgba(34,197,94,0.3);border-radius:5px;font-size:0.65rem;cursor:pointer;white-space:nowrap;">📋 Copiar</button>';
+          html += '</div></div>';
+          idx++;
+        });
+        html += '</div>';
+      });
+      list.innerHTML = html;
     }
 
-    function copiarCmd(btn, cmd) {
-      navigator.clipboard.writeText(cmd).then(() => {
-        const orig = btn.textContent;
+    /* Event delegation — avoids putting commands in onclick strings */
+    document.addEventListener('click', function(e) {
+      var btn = e.target.closest('button[data-ci]');
+      if (!btn) return;
+      var ci = parseInt(btn.getAttribute('data-ci'), 10);
+      var cmd = _flatCmds[ci];
+      if (!cmd) return;
+      navigator.clipboard.writeText(cmd).then(function() {
         btn.textContent = '✅ Copiado';
-        btn.style.color = '#22c55e';
-        setTimeout(() => { btn.textContent = orig; }, 1500);
-      }).catch(() => {
-        const ta = document.createElement('textarea');
+        setTimeout(function(){ btn.textContent = '📋 Copiar'; }, 1500);
+      }).catch(function() {
+        var ta = document.createElement('textarea');
         ta.value = cmd; ta.style.position='fixed'; ta.style.opacity='0';
         document.body.appendChild(ta); ta.select(); document.execCommand('copy');
         document.body.removeChild(ta);
-        btn.textContent = '✅'; setTimeout(() => { btn.textContent = '📋 Copiar'; }, 1500);
+        btn.textContent = '✅'; setTimeout(function(){ btn.textContent = '📋 Copiar'; }, 1500);
       });
-    }
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+      var cerrar = document.getElementById('btn-cerrar-comandos');
+      if (cerrar) cerrar.addEventListener('click', toggleComandos);
+    });
     </script>
 
 </body>
