@@ -460,10 +460,7 @@ app.post('/api/goal/cancel', requirePwd, async (req, res) => {
    Soporta: /goal cancel <id>  |  /goal status <id>  |  /goal <objetivo>
    Seguridad: TELEGRAM_WEBHOOK_SECRET es OBLIGATORIO; ruta no se registra si falta
 */
-if (!TG_WEBHOOK_SECRET) {
-  console.warn('AVISO: TELEGRAM_WEBHOOK_SECRET no configurado — ruta /api/telegram-webhook deshabilitada.');
-  console.warn('Configura TELEGRAM_WEBHOOK_SECRET en Railway si necesitas recibir mensajes de Telegram.');
-} else {
+if (TG_WEBHOOK_SECRET) {
 
 app.post('/api/telegram-webhook', async (req, res) => {
   res.sendStatus(200); // responder rápido a Telegram
