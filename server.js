@@ -461,8 +461,8 @@ app.post('/api/goal/cancel', requirePwd, async (req, res) => {
    Seguridad: TELEGRAM_WEBHOOK_SECRET es OBLIGATORIO; ruta no se registra si falta
 */
 if (!TG_WEBHOOK_SECRET) {
-  console.error('FATAL: TELEGRAM_WEBHOOK_SECRET no configurado — ruta /api/telegram-webhook deshabilitada por seguridad.');
-  console.error('Configura TELEGRAM_WEBHOOK_SECRET en Railway y registra el webhook con ese secret_token.');
+  console.warn('AVISO: TELEGRAM_WEBHOOK_SECRET no configurado — ruta /api/telegram-webhook deshabilitada.');
+  console.warn('Configura TELEGRAM_WEBHOOK_SECRET en Railway si necesitas recibir mensajes de Telegram.');
 } else {
 
 app.post('/api/telegram-webhook', async (req, res) => {
