@@ -829,7 +829,7 @@
             out.innerHTML += '<div style="color:#ff4060;font-weight:700;margin:6px 0;">🔴 PUENTE PC2 ACTIVADO</div>';
             out.innerHTML += '<div style="color:#8c9cb2;font-size:0.82rem;">Terminal web lista en PC2 — abriendo en nueva pestaña...</div>';
             out.scrollTop = out.scrollHeight;
-            setTimeout(() => window.open('http://100.117.238.83:7681', '_blank'), 1500);
+            setTimeout(() => window.open('http://100.121.53.89:7681', '_blank'), 1500);
           } else {
             out.innerHTML += '<div style="color:#4080ff;font-weight:700;margin:6px 0;">🔵 PUENTE PC1 ACTIVADO — AGY instalando terminal...</div>';
             out.innerHTML += '<div style="color:#8c9cb2;font-size:0.82rem;">AGY descarga e inicia GoTTY en PC1. Abriendo en ~90 segundos...</div>';
@@ -989,7 +989,7 @@
         items: [
           {
             desc: "PC1 → PC2 por Tailscale (funciona desde cualquier red del mundo, no solo el WiFi de casa). Escribe esto en PowerShell de PC1. Al conectar, todo lo que escribas corre en PC2.",
-            cmd:  "ssh roberto@100.117.238.83"
+            cmd:  "ssh roberto@100.121.53.89"
           },
           {
             desc: "PC1 → PC2 por red local (mismo WiFi de casa). Más rápido que Tailscale porque no sale a internet. Úsalo cuando estés en casa.",
@@ -1001,7 +1001,7 @@
           },
           {
             desc: "Probar si PC2 responde SSH antes de conectarte. Devuelve 'OK' en menos de 5 segundos si está online. Si no responde, PC2 está apagado o Tailscale caído.",
-            cmd:  "ssh -o ConnectTimeout=5 roberto@100.117.238.83 echo OK"
+            cmd:  "ssh -o ConnectTimeout=5 roberto@100.121.53.89 echo OK"
           },
         ]},
       { cat: "🖥️ tmux — Dos pantallas viendo y escribiendo lo mismo en tiempo real",
@@ -1012,11 +1012,11 @@
           },
           {
             desc: "PASO 2 — Unirse desde PC1 (o teléfono). Escríbelo en PowerShell de PC1. Ambas pantallas quedan sincronizadas: lo que escribes en una aparece en la otra en tiempo real.",
-            cmd:  "ssh roberto@100.117.238.83 -t tmux attach-session -t compartida"
+            cmd:  "ssh roberto@100.121.53.89 -t tmux attach-session -t compartida"
           },
           {
             desc: "Ver qué sesiones tmux están abiertas en PC2 (útil para saber si la sesión compartida está activa).",
-            cmd:  "ssh roberto@100.117.238.83 tmux ls"
+            cmd:  "ssh roberto@100.121.53.89 tmux ls"
           },
           {
             desc: "Salir de tmux SIN matarla. La sesión sigue viva en PC2 aunque cierres la ventana. Atajo de teclado: primero Ctrl+B, suelta, luego presiona D.",
@@ -1024,7 +1024,7 @@
           },
           {
             desc: "Matar la sesión compartida desde PC1. Úsalo cuando ya no la necesites.",
-            cmd:  "ssh roberto@100.117.238.83 tmux kill-session -t compartida"
+            cmd:  "ssh roberto@100.121.53.89 tmux kill-session -t compartida"
           },
         ]},
       { cat: "🌐 Tailscale — VPN privada que une tus dispositivos en una sola red",
@@ -1039,7 +1039,7 @@
           },
           {
             desc: "Probar si PC2 responde por Tailscale (como un ping). Si hay respuesta, puedes conectarte por SSH desde cualquier red.",
-            cmd:  "tailscale ping 100.117.238.83"
+            cmd:  "tailscale ping 100.121.53.89"
           },
           {
             desc: "Probar si PC1 responde por Tailscale. Útil desde el teléfono para saber si PC1 está encendido antes de conectarte.",
@@ -1058,7 +1058,7 @@
           },
           {
             desc: "Abrir terminal web de PC2 en el navegador del teléfono. Requiere Tailscale activo en el teléfono. Pégalo en la barra de direcciones.",
-            cmd:  "http://100.117.238.83:7681"
+            cmd:  "http://100.121.53.89:7681"
           },
           {
             desc: "Abrir terminal web de PC1 (Windows GoTTY) en el navegador. Requiere Tailscale activo y que el botón PUENTE PC1 haya corrido antes.",
@@ -1066,26 +1066,26 @@
           },
           {
             desc: "Verificar que ttyd está corriendo en PC2 (sin entrar a PC2). Devuelve el PID del proceso si está activo.",
-            cmd:  "ssh roberto@100.117.238.83 pgrep -a ttyd"
+            cmd:  "ssh roberto@100.121.53.89 pgrep -a ttyd"
           },
         ]},
       { cat: "📊 Estado del ecosistema — ver PC2 desde PC1 con un solo comando",
         items: [
           {
             desc: "Ver uptime (cuánto lleva encendido) + RAM libre + espacio en disco de PC2. Todo en una sola línea desde PC1. Responde en segundos.",
-            cmd:  "ssh roberto@100.117.238.83 'uptime && free -h && df -h /'"
+            cmd:  "ssh roberto@100.121.53.89 'uptime && free -h && df -h /'"
           },
           {
             desc: "Ver si el ag-listener (proceso de misiones AGY) está corriendo en PC2. Si no aparece nada, el listener está caído.",
-            cmd:  "ssh roberto@100.117.238.83 'ps aux | grep node | grep -v grep'"
+            cmd:  "ssh roberto@100.121.53.89 'ps aux | grep node | grep -v grep'"
           },
           {
             desc: "Ver las últimas 30 líneas del log del ag-listener en PC2. Útil para saber qué misión ejecutó AGY y si hubo errores.",
-            cmd:  "ssh roberto@100.117.238.83 'tail -30 ~/ag-listener.log'"
+            cmd:  "ssh roberto@100.121.53.89 'tail -30 ~/ag-listener.log'"
           },
           {
             desc: "Reiniciar el ag-listener en PC2 sin ir físicamente a PC2. Úsalo cuando PC2 dejó de responder misiones.",
-            cmd:  "ssh roberto@100.117.238.83 'pkill -f ag-listener; nohup node ~/ag-listener.js > ~/ag-listener.log 2>&1 &'"
+            cmd:  "ssh roberto@100.121.53.89 'pkill -f ag-listener; nohup node ~/ag-listener.js > ~/ag-listener.log 2>&1 &'"
           },
         ]},
       { cat: "🪟 PowerShell — Comandos de diagnóstico en PC1 Windows",
