@@ -56,6 +56,7 @@
         <button class="hbtn hbtn-goal" id="btn-goal">/goal</button>
         <button class="hbtn hbtn-clr"  id="btn-clear-out">🗑 Output</button>
         <button class="hbtn hbtn-clr"  id="btn-clear-chat">🗑 Chat</button>
+        <button class="hbtn" id="btn-puente" title="SSH·tmux PUENTE — Abre sesión tmux compartida en PC2. Conecta desde Termius con: tmux attach-session -t compartida" style="background:linear-gradient(135deg,#5a0010,#cc0020);color:#fff;border:none;font-weight:700;">🔴 SSH·tmux PUENTE</button>
         <a href="https://cibercode-ide-production.up.railway.app/editor.html?project=mi-primer-proyecto" target="_blank"
            style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:linear-gradient(135deg,#001a0a,#003320);border:1px solid rgba(0,255,120,0.45);border-radius:6px;color:#00ff78;font-size:0.7rem;font-weight:700;letter-spacing:0.06em;transition:all 0.2s;"
            title="Abrir CiberCode — Agente generador de apps">
@@ -802,6 +803,40 @@
     // Close overlay on background click
     document.getElementById('goal-overlay').addEventListener('click', function(e) {
       if (e.target === this) closeGoalPanel();
+    });
+    document.getElementById('btn-puente').addEventListener('click', async function() {
+      const btn = document.getElementById('btn-puente');
+      btn.textContent = '⏳ Activando...';
+      btn.disabled = true;
+      const instruccion = [
+        'export DISPLAY=:0',
+        'export XAUTHORITY=$HOME/.Xauthority',
+        'xhost +local:',
+        'tmux has-session -t compartida 2>/dev/null && echo "[PUENTE] Sesion ya activa" || (gnome-terminal -- tmux new-session -s compartida & echo "[PUENTE] Sesion creada")'
+      ].join(' && ');
+      try {
+        const token = localStorage.getItem('agyide_token') || sessionStorage.getItem('agyide_token') || '';
+        const res = await fetch('/api/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-agyide-token': token },
+          body: JSON.stringify({ target: 'PC2', instruction: instruccion })
+        });
+        const data = await res.json();
+        const out = document.getElementById('output');
+        if (out) {
+          out.innerHTML += '<div style="color:#ff4060;font-weight:700;margin:6px 0;">🔴 SSH·tmux PUENTE ACTIVADO</div>';
+          out.innerHTML += '<div style="color:#8c9cb2;font-size:0.82rem;">Sesión tmux \'compartida\' abierta en la pantalla de PC2.</div>';
+          out.innerHTML += '<div style="color:#8c9cb2;font-size:0.82rem;">📱 Desde Termius: <code style="color:#00f3ff;">ssh roberto@192.168.1.14</code> → <code style="color:#00f3ff;">tmux attach-session -t compartida</code></div>';
+          out.scrollTop = out.scrollHeight;
+        }
+        if (data.error) console.error('[PUENTE]', data.error);
+      } catch(e) {
+        const out = document.getElementById('output');
+        if (out) out.innerHTML += '<div style="color:#ff4060;">❌ Error PUENTE: ' + e.message + '</div>';
+      } finally {
+        btn.textContent = '🔴 SSH·tmux PUENTE';
+        btn.disabled = false;
+      }
     });
     document.getElementById('btn-clear-out').addEventListener('click', function() {
       document.getElementById('output').innerHTML = '';
