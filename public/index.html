@@ -969,6 +969,10 @@
       { cat: "🟩 Matrix — Código binario cayendo lento (efecto visual)",
         items: [
           {
+            desc: "⛅ CANCELAR — Para CUALQUIER cosa que esté corriendo en la terminal. Funciona en TODOS los terminales: Linux, Windows PowerShell, tmux, ttyd, cualquiera. NOTA: es como el botón CANCELAR de cualquier programa — si algo se colgó o quieres parar, presiona esto.",
+            cmd:  "Ctrl+C"
+          },
+          {
             desc: "🐧 PC2 Linux — LENTO y BONITO. Imprime filas de 0s y 1s cada 0.25 segundos. Se ve como la película Matrix. Pégalo en la terminal SSH de PC2 o en la terminal web (ttyd). Para cuando quieras con Ctrl+C.",
             cmd:  "while true; do python3 -c \"import random;print(' '.join(random.choices('01',k=60)))\"; sleep 0.25; done"
           },
@@ -977,12 +981,8 @@
             cmd:  "while($true){Write-Host ([string]::Join(' ',(1..50|%{Get-Random -Max 2}))) -ForegroundColor Green;Start-Sleep -Milliseconds 250}"
           },
           {
-            desc: "🐧 PC2 Linux — RÁPIDO (más Matrix). Genera ruido binario real del sistema a alta velocidad. Más agresivo visualmente. Pégalo en bash de PC2.",
+            desc: "🐧 PC2 Linux — RÁPIDO (más Matrix). Genera ruido binario real del sistema a alta velocidad. Más agresivo visualmente. Pégalo en bash de PC2. Para con Ctrl+C.",
             cmd:  "cat /dev/urandom | tr -dc '01 ' | fold -w 60 | awk '{print; system(\"sleep 0.12\");}'"
-          },
-          {
-            desc: "⛔ Parar cualquier animación. Funciona en TODOS los terminales — Linux, Windows, tmux, ttyd.",
-            cmd:  "Ctrl+C"
           },
         ]},
       { cat: "🔐 SSH — Tomar control de otra máquina por red",
