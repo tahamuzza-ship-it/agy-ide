@@ -812,9 +812,7 @@
       const btn = document.getElementById(btnId);
       if (btn) { btn.textContent = '⏳ Activando...'; btn.disabled = true; }
       const instruccion = isPC2
-        ? ['export DISPLAY=:0','export XAUTHORITY=$HOME/.Xauthority','xhost +local:',
-           'tmux has-session -t compartida 2>/dev/null && echo "[PUENTE] Sesion ya activa" || (gnome-terminal -- tmux new-session -s compartida & echo "[PUENTE] Sesion creada")'
-          ].join(' && ')
+        ? 'pkill ttyd 2>/dev/null; nohup ttyd -p 7681 -t fontSize=15 bash > /tmp/ttyd.log 2>&1 & sleep 1 && echo TTYD_OK'
         : 'powershell -Command "Get-Service sshd | Select-Object Name,Status | Format-List; Write-Host PUENTE_PC1_OK"';
       const authToken = localStorage.getItem('agyide_token') || sessionStorage.getItem('agyide_token') || '';
       const out = document.getElementById('output');
@@ -828,14 +826,14 @@
         if (out) {
           if (isPC2) {
             out.innerHTML += '<div style="color:#ff4060;font-weight:700;margin:6px 0;">🔴 PUENTE PC2 ACTIVADO</div>';
-            out.innerHTML += '<div style="color:#8c9cb2;font-size:0.82rem;">Sesión tmux \'compartida\' lista en pantalla de PC2.</div>';
-            out.innerHTML += '<div style="color:#8c9cb2;font-size:0.82rem;">📱 Termius → <code style="color:#00f3ff;">ssh roberto@192.168.1.14</code> → <code style="color:#00f3ff;">tmux attach-session -t compartida</code></div>';
+            out.innerHTML += '<div style="color:#8c9cb2;font-size:0.82rem;">Terminal web lista en PC2 — abriendo en nueva pestaña...</div>';
+            out.scrollTop = out.scrollHeight;
+            setTimeout(() => window.open('http://100.117.238.83:7681', '_blank'), 1500);
           } else {
             out.innerHTML += '<div style="color:#4080ff;font-weight:700;margin:6px 0;">🔵 PUENTE PC1 ACTIVADO</div>';
-            out.innerHTML += '<div style="color:#8c9cb2;font-size:0.82rem;">SSH confirmado en PC1 Windows.</div>';
-            out.innerHTML += '<div style="color:#8c9cb2;font-size:0.82rem;">📱 Termius → <code style="color:#00f3ff;">ssh Roberto1@192.168.1.2</code> → PowerShell directo</div>';
+            out.innerHTML += '<div style="color:#8c9cb2;font-size:0.82rem;">📱 Termius → <code style="color:#00f3ff;">ssh Roberto1@100.113.7.92</code> → PowerShell directo</div>';
+            out.scrollTop = out.scrollHeight;
           }
-          out.scrollTop = out.scrollHeight;
         }
         if (data.error) console.error('[PUENTE]', data.error);
       } catch(e) {
