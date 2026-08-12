@@ -1130,7 +1130,9 @@
       } catch(e) {}
     }
 
-    function startNewChat() {
+    async function startNewChat() {
+      // guardar el chat actual antes de abrir uno nuevo
+      await autoSaveChat();
       try {
         var sid = 'agyide_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
         sessionStorage.setItem('agyide_session_id', sid);
