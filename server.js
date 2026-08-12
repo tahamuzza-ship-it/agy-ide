@@ -592,6 +592,62 @@ async function reconcileInterruptedSessions() {
   }
 }
 
+
+/* ══════════════════════════════════════════════════════════
+   /api/chats — persistencia de sesiones de chat AGY-IDE
+   Usa la misma tabla cibercode_chats con project='agy-ide'
+══════════════════════════════════════════════════════════ */
+async function sbQuery(table, params) {
+  const qs = Object.entries(params).map(([k,v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${qs}&select=*`, { headers: sbHeaders() });
+  const data = await r.json();
+  return Array.isArray(data) ? data : [];
+}
+
+app.get('/api/chats', async (req, res) => {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return res.json([]);
+  try {
+    const project = req.query.project || 'agy-ide';
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/cibercode_chats?project=eq.${encodeURIComponent(project)}&order=updated_at.desc&limit=30&select=*`,
+      { headers: sbHeaders() }
+    );
+    const data = await r.json();
+    res.json(Array.isArray(data) ? data : []);
+  } catch (e) { res.json([]); }
+});
+
+app.post('/api/chats', async (req, res) => {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return res.json({ ok: false });
+  const { session_id, project = 'agy-ide', messages, title } = req.body || {};
+  if (!session_id || !messages) return res.status(400).json({ error: 'session_id y messages requeridos' });
+  try {
+    const rows = await sbQuery('cibercode_chats', { 'session_id': `eq.${session_id}`, 'project': `eq.${project}` });
+    if (rows.length > 0) {
+      await sbPatch('cibercode_chats', rows[0].id, { messages, title, updated_at: new Date().toISOString() });
+    } else {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/cibercode_chats`, {
+        method: 'POST',
+        headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ session_id, project, messages, title, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      });
+      if (!r.ok) throw new Error(await r.text());
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/chats/:sid', async (req, res) => {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return res.json({ ok: false });
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/cibercode_chats?session_id=eq.${encodeURIComponent(req.params.sid)}&project=eq.agy-ide`,
+      { method: 'DELETE', headers: sbHeaders() }
+    );
+    res.json({ ok: r.ok });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.listen(PORT, async () => {
   console.log(`AGY-IDE ▶  puerto ${PORT} | /goal mode ACTIVO`);
   await reconcileInterruptedSessions();
