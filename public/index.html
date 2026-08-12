@@ -73,6 +73,7 @@
         <button class="hbtn" id="btn-puente-pc2" title="PUENTE PC2 — tmux en PC2. Termius: ssh roberto@192.168.1.14" style="background:linear-gradient(135deg,#5a0010,#cc0020);color:#fff;border:none;font-weight:700;">🔴 PUENTE PC2</button>
         <button class="hbtn" id="btn-puente-pc1" title="PUENTE PC1 — SSH Windows. Termius: ssh Roberto1@192.168.1.2" style="background:linear-gradient(135deg,#003a7f,#0055cc);color:#fff;border:none;font-weight:700;">🔵 PUENTE PC1</button>
         <button class="hbtn" id="btn-comandos" onclick="toggleComandos()" style="background:linear-gradient(135deg,#1a4731,#22c55e);color:#fff;border:none;font-weight:700;">📋 COMANDOS</button>
+        <button class="hbtn" id="btn-files" onclick="openFilesPanel()" style="background:linear-gradient(135deg,#0a1f3a,#1a4700);color:#86efac;border:1px solid rgba(134,239,172,0.4);font-weight:700;">📁 ARCHIVOS</button>
         <button class="hbtn" id="btn-chats" onclick="openChatsModal()" style="background:linear-gradient(135deg,#0a1f3a,#0055cc);color:#00f3ff;border:1px solid rgba(0,243,255,0.4);font-weight:700;">💬 CHATS</button>
         <a href="https://cibercode-ide-production.up.railway.app/editor.html?project=mi-primer-proyecto" target="_blank"
            style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:linear-gradient(135deg,#001a0a,#003320);border:1px solid rgba(0,255,120,0.45);border-radius:6px;color:#00ff78;font-size:0.7rem;font-weight:700;letter-spacing:0.06em;transition:all 0.2s;"
@@ -208,6 +209,33 @@
     </nav>
 
     </div><!-- /app -->
+<!-- ARCHIVOS MODAL -->
+<div id="files-modal" style="display:none;position:fixed;inset:0;background:rgba(4,8,20,0.92);z-index:9000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
+  <div style="width:min(580px,96vw);background:#0c1225;border:1px solid rgba(134,239,172,0.2);border-radius:16px;box-shadow:0 0 60px rgba(134,239,172,0.05);overflow:hidden;display:flex;flex-direction:column;max-height:88vh;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid rgba(134,239,172,0.12);background:#080f1f;">
+      <span style="font-family:'Orbitron',monospace;font-size:0.95rem;font-weight:900;color:#86efac;">📁 ARCHIVOS DEL PROYECTO</span>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="promptNewFile()" style="padding:5px 12px;background:#052e16;border:1px solid #166534;color:#86efac;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;">+ NUEVO</button>
+        <button onclick="saveCurrentFile()" style="padding:5px 12px;background:#1e3a5f;border:1px solid #2563eb;color:#90caf9;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;">💾 GUARDAR</button>
+        <button onclick="closeFilesPanel()" style="background:none;border:none;color:#8c9cb2;font-size:1.2rem;cursor:pointer;padding:4px 8px;">✕</button>
+      </div>
+    </div>
+    <!-- Nuevo archivo inline -->
+    <div id="new-file-row" style="display:none;padding:10px 16px;border-bottom:1px solid rgba(134,239,172,0.1);background:#060d1a;gap:8px;align-items:center;flex-wrap:wrap;">
+      <input id="new-file-input" type="text" placeholder="nombre.py  /  script.js  /  index.html" style="flex:1;padding:7px 10px;background:#0c1a2e;border:1px solid rgba(134,239,172,0.3);border-radius:6px;color:#e0e8ff;font-size:0.8rem;min-width:180px;outline:none;" />
+      <button onclick="confirmNewFile()" style="padding:7px 14px;background:#166534;color:#86efac;border:none;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;">Crear</button>
+      <button onclick="cancelNewFile()" style="padding:7px 10px;background:none;border:1px solid #374151;color:#8c9cb2;border-radius:6px;font-size:0.75rem;cursor:pointer;">Cancelar</button>
+    </div>
+    <div id="files-modal-list" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:6px;">
+      <div style="color:#526075;font-size:0.8rem;text-align:center;padding:20px;">Cargando archivos...</div>
+    </div>
+    <div style="padding:10px 16px;border-top:1px solid rgba(134,239,172,0.08);font-size:0.7rem;color:#526075;background:#060d1a;">
+      Archivos guardados en el navegador · .py .js .ts .html .css .json .sh .md soportados
+    </div>
+  </div>
+</div>
+<!-- /ARCHIVOS MODAL -->
+
 <!-- CHATS MODAL -->
 <div id="chats-modal" style="display:none;position:fixed;inset:0;background:rgba(4,8,20,0.92);z-index:9000;align-items:center;justify-content:center;backdrop-filter:blur(4px);">
   <div style="width:min(560px,96vw);background:#0c1225;border:1px solid rgba(0,243,255,0.2);border-radius:16px;box-shadow:0 0 60px rgba(0,243,255,0.08);overflow:hidden;display:flex;flex-direction:column;max-height:85vh;">
@@ -455,6 +483,7 @@
     ══════════════════════════════════════════ */
     async function runCode() {
     if (pendingRun) return;
+    saveCurrentFile && typeof saveCurrentFile === 'function' && saveCurrentFile();
     const code = monacoEditor ? monacoEditor.getValue() : '';
     if (!code.trim()) return;
 
@@ -999,6 +1028,225 @@
     });
 
 
+
+    /* ══════════════════════════════════════════
+     GESTOR DE ARCHIVOS — localStorage + Monaco
+    ══════════════════════════════════════════ */
+    var FILES_KEY = 'agyide_files_v1';
+    var _activeFile = 'script.js';
+
+    var EXT_LANG = {
+      js:'javascript', ts:'typescript', py:'python', html:'html', css:'css',
+      json:'json', md:'markdown', sh:'shell', bash:'shell', sql:'sql',
+      txt:'plaintext', xml:'xml', yaml:'yaml', yml:'yaml', rs:'rust',
+      go:'go', rb:'ruby', php:'php', java:'java', cpp:'cpp', c:'c'
+    };
+
+    var EXT_ICON = {
+      py:'🐍', js:'📜', ts:'📘', html:'🌐', css:'🎨', json:'📋',
+      md:'📝', sh:'⚙', sql:'🗄', txt:'📄'
+    };
+
+    function _extLang(filename) {
+      var ext = (filename.split('.').pop() || '').toLowerCase();
+      return EXT_LANG[ext] || 'plaintext';
+    }
+
+    function _extIcon(filename) {
+      var ext = (filename.split('.').pop() || '').toLowerCase();
+      return EXT_ICON[ext] || '📄';
+    }
+
+    function _loadVirtualFiles() {
+      try { return JSON.parse(localStorage.getItem(FILES_KEY) || '{}'); } catch(e) { return {}; }
+    }
+
+    function _saveVirtualFiles(files) {
+      try { localStorage.setItem(FILES_KEY, JSON.stringify(files)); } catch(e) {}
+    }
+
+    function saveCurrentFile() {
+      if (!monacoEditor) return;
+      var files = _loadVirtualFiles();
+      files[_activeFile] = monacoEditor.getValue();
+      _saveVirtualFiles(files);
+      renderFileList();
+      showDiffToast('💾 ' + _activeFile + ' guardado', true);
+    }
+
+    function openFilesPanel() {
+      var m = document.getElementById('files-modal');
+      m.style.display = 'flex';
+      m.style.alignItems = 'center';
+      m.style.justifyContent = 'center';
+      renderFileList();
+    }
+
+    function closeFilesPanel() {
+      document.getElementById('files-modal').style.display = 'none';
+      document.getElementById('new-file-row').style.display = 'none';
+    }
+
+    function promptNewFile() {
+      var row = document.getElementById('new-file-row');
+      row.style.display = 'flex';
+      var inp = document.getElementById('new-file-input');
+      inp.value = '';
+      setTimeout(function() { inp.focus(); }, 60);
+    }
+
+    function cancelNewFile() {
+      document.getElementById('new-file-row').style.display = 'none';
+    }
+
+    function confirmNewFile() {
+      var inp = document.getElementById('new-file-input');
+      var name = (inp.value || '').trim();
+      if (!name) return;
+      if (!name.includes('.')) { showDiffToast('Incluye extensión: script.py, index.html…', false); return; }
+      var files = _loadVirtualFiles();
+      if (files[name]) { showDiffToast('Ya existe ' + name, false); return; }
+      var defaults = {
+        py: '# ' + name + '
+
+print("Hola desde Python!")
+',
+        js: '// ' + name + '
+
+console.log("Hola desde JS!");
+',
+        ts: '// ' + name + '
+
+const msg: string = "Hola desde TypeScript!";
+console.log(msg);
+',
+        html: '<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><title>' + name + '</title></head>
+<body>
+  <h1>Hola</h1>
+</body>
+</html>
+',
+        css: '/* ' + name + ' */
+body { margin: 0; font-family: sans-serif; }
+',
+        sh: '#!/bin/bash
+# ' + name + '
+
+echo "Hola desde bash"
+'
+      };
+      var ext = name.split('.').pop().toLowerCase();
+      files[name] = defaults[ext] || '# ' + name + '
+';
+      _saveVirtualFiles(files);
+      document.getElementById('new-file-row').style.display = 'none';
+      loadVirtualFile(name);
+    }
+
+    function loadVirtualFile(filename) {
+      var files = _loadVirtualFiles();
+      if (!files[filename] && filename !== 'script.js') return;
+      // Guardar el archivo actual primero
+      if (monacoEditor) {
+        var cur = _loadVirtualFiles();
+        cur[_activeFile] = monacoEditor.getValue();
+        _saveVirtualFiles(cur);
+      }
+      _activeFile = filename;
+      var content = files[filename] || '';
+      if (monacoEditor) {
+        monacoEditor.setValue(content);
+        var lang = _extLang(filename);
+        monaco.editor.setModelLanguage(monacoEditor.getModel(), lang);
+        // actualizar badge de lenguaje
+        var badge = document.getElementById('editor-lang');
+        if (badge) badge.textContent = lang;
+      }
+      renderFileList();
+      closeFilesPanel();
+    }
+
+    function deleteVirtualFile(filename) {
+      if (!confirm('¿Borrar ' + filename + '?')) return;
+      var files = _loadVirtualFiles();
+      delete files[filename];
+      _saveVirtualFiles(files);
+      if (_activeFile === filename) {
+        var remaining = Object.keys(files);
+        if (remaining.length > 0) loadVirtualFile(remaining[0]);
+        else { _activeFile = 'script.js'; if (monacoEditor) monacoEditor.setValue(''); }
+      }
+      renderFileList();
+    }
+
+    function renderFileList() {
+      var list = document.getElementById('files-modal-list');
+      var files = _loadVirtualFiles();
+      var names = Object.keys(files);
+      if (names.length === 0) {
+        list.innerHTML = '<div style="color:#526075;font-size:0.8rem;text-align:center;padding:20px;">Sin archivos. Presiona + NUEVO para crear uno.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      names.forEach(function(name) {
+        var isActive = name === _activeFile;
+        var card = document.createElement('div');
+        card.style.cssText = 'background:' + (isActive ? 'rgba(134,239,172,0.07)' : 'rgba(255,255,255,0.02)') + ';border:1px solid ' + (isActive ? 'rgba(134,239,172,0.3)' : 'rgba(255,255,255,0.06)') + ';border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;';
+        var icon = document.createElement('span');
+        icon.style.cssText = 'font-size:1.1rem;flex-shrink:0;';
+        icon.textContent = _extIcon(name);
+        var info = document.createElement('div');
+        info.style.cssText = 'flex:1;min-width:0;';
+        var fname = document.createElement('div');
+        fname.style.cssText = 'color:' + (isActive ? '#86efac' : '#e0e8ff') + ';font-size:0.82rem;font-weight:' + (isActive ? '700' : '500') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        fname.textContent = (isActive ? '▶ ' : '') + name;
+        var finfo = document.createElement('div');
+        finfo.style.cssText = 'color:#526075;font-size:0.68rem;margin-top:2px;';
+        var lineCount = (files[name] || '').split('
+').length;
+        finfo.textContent = _extLang(name) + ' · ' + lineCount + ' líneas · ' + (Math.ceil((files[name]||'').length / 1024 * 10) / 10) + ' KB';
+        info.appendChild(fname);
+        info.appendChild(finfo);
+        var btns = document.createElement('div');
+        btns.style.cssText = 'display:flex;gap:4px;flex-shrink:0;';
+        if (!isActive) {
+          var btnOpen = document.createElement('button');
+          btnOpen.style.cssText = 'padding:5px 10px;background:#1e3a5f;color:#90caf9;border:none;border-radius:6px;font-size:0.7rem;cursor:pointer;font-weight:600;';
+          btnOpen.textContent = '▶ Abrir';
+          (function(n) { btnOpen.onclick = function(e) { e.stopPropagation(); loadVirtualFile(n); }; })(name);
+          btns.appendChild(btnOpen);
+        }
+        var btnDel = document.createElement('button');
+        btnDel.style.cssText = 'padding:5px 8px;background:rgba(255,50,50,0.1);color:#f87171;border:1px solid rgba(255,50,50,0.2);border-radius:6px;font-size:0.7rem;cursor:pointer;';
+        btnDel.textContent = '🗑';
+        (function(n) { btnDel.onclick = function(e) { e.stopPropagation(); deleteVirtualFile(n); }; })(name);
+        btns.appendChild(btnDel);
+        (function(n) { card.onclick = function() { if (n !== _activeFile) loadVirtualFile(n); }; })(name);
+        card.appendChild(icon);
+        card.appendChild(info);
+        card.appendChild(btns);
+        list.appendChild(card);
+      });
+    }
+
+    /* tecla Enter en input nuevo archivo */
+    window.addEventListener('DOMContentLoaded', function() {
+      var inp = document.getElementById('new-file-input');
+      if (inp) inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') confirmNewFile(); if (e.key === 'Escape') cancelNewFile(); });
+    });
+
+    /* exponer al scope global */
+    window.openFilesPanel  = openFilesPanel;
+    window.closeFilesPanel = closeFilesPanel;
+    window.saveCurrentFile = saveCurrentFile;
+    window.promptNewFile   = promptNewFile;
+    window.confirmNewFile  = confirmNewFile;
+    window.cancelNewFile   = cancelNewFile;
+    window.loadVirtualFile = loadVirtualFile;
+    window.deleteVirtualFile = deleteVirtualFile;
+
     /* ══════════════════════════════════════════
      CHAT PERSISTENCE — Guardar/Cargar en Supabase
     ══════════════════════════════════════════ */
@@ -1437,6 +1685,225 @@
           }
         }
       });
+
+
+    /* ══════════════════════════════════════════
+     GESTOR DE ARCHIVOS — localStorage + Monaco
+    ══════════════════════════════════════════ */
+    var FILES_KEY = 'agyide_files_v1';
+    var _activeFile = 'script.js';
+
+    var EXT_LANG = {
+      js:'javascript', ts:'typescript', py:'python', html:'html', css:'css',
+      json:'json', md:'markdown', sh:'shell', bash:'shell', sql:'sql',
+      txt:'plaintext', xml:'xml', yaml:'yaml', yml:'yaml', rs:'rust',
+      go:'go', rb:'ruby', php:'php', java:'java', cpp:'cpp', c:'c'
+    };
+
+    var EXT_ICON = {
+      py:'🐍', js:'📜', ts:'📘', html:'🌐', css:'🎨', json:'📋',
+      md:'📝', sh:'⚙', sql:'🗄', txt:'📄'
+    };
+
+    function _extLang(filename) {
+      var ext = (filename.split('.').pop() || '').toLowerCase();
+      return EXT_LANG[ext] || 'plaintext';
+    }
+
+    function _extIcon(filename) {
+      var ext = (filename.split('.').pop() || '').toLowerCase();
+      return EXT_ICON[ext] || '📄';
+    }
+
+    function _loadVirtualFiles() {
+      try { return JSON.parse(localStorage.getItem(FILES_KEY) || '{}'); } catch(e) { return {}; }
+    }
+
+    function _saveVirtualFiles(files) {
+      try { localStorage.setItem(FILES_KEY, JSON.stringify(files)); } catch(e) {}
+    }
+
+    function saveCurrentFile() {
+      if (!monacoEditor) return;
+      var files = _loadVirtualFiles();
+      files[_activeFile] = monacoEditor.getValue();
+      _saveVirtualFiles(files);
+      renderFileList();
+      showDiffToast('💾 ' + _activeFile + ' guardado', true);
+    }
+
+    function openFilesPanel() {
+      var m = document.getElementById('files-modal');
+      m.style.display = 'flex';
+      m.style.alignItems = 'center';
+      m.style.justifyContent = 'center';
+      renderFileList();
+    }
+
+    function closeFilesPanel() {
+      document.getElementById('files-modal').style.display = 'none';
+      document.getElementById('new-file-row').style.display = 'none';
+    }
+
+    function promptNewFile() {
+      var row = document.getElementById('new-file-row');
+      row.style.display = 'flex';
+      var inp = document.getElementById('new-file-input');
+      inp.value = '';
+      setTimeout(function() { inp.focus(); }, 60);
+    }
+
+    function cancelNewFile() {
+      document.getElementById('new-file-row').style.display = 'none';
+    }
+
+    function confirmNewFile() {
+      var inp = document.getElementById('new-file-input');
+      var name = (inp.value || '').trim();
+      if (!name) return;
+      if (!name.includes('.')) { showDiffToast('Incluye extensión: script.py, index.html…', false); return; }
+      var files = _loadVirtualFiles();
+      if (files[name]) { showDiffToast('Ya existe ' + name, false); return; }
+      var defaults = {
+        py: '# ' + name + '
+
+print("Hola desde Python!")
+',
+        js: '// ' + name + '
+
+console.log("Hola desde JS!");
+',
+        ts: '// ' + name + '
+
+const msg: string = "Hola desde TypeScript!";
+console.log(msg);
+',
+        html: '<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><title>' + name + '</title></head>
+<body>
+  <h1>Hola</h1>
+</body>
+</html>
+',
+        css: '/* ' + name + ' */
+body { margin: 0; font-family: sans-serif; }
+',
+        sh: '#!/bin/bash
+# ' + name + '
+
+echo "Hola desde bash"
+'
+      };
+      var ext = name.split('.').pop().toLowerCase();
+      files[name] = defaults[ext] || '# ' + name + '
+';
+      _saveVirtualFiles(files);
+      document.getElementById('new-file-row').style.display = 'none';
+      loadVirtualFile(name);
+    }
+
+    function loadVirtualFile(filename) {
+      var files = _loadVirtualFiles();
+      if (!files[filename] && filename !== 'script.js') return;
+      // Guardar el archivo actual primero
+      if (monacoEditor) {
+        var cur = _loadVirtualFiles();
+        cur[_activeFile] = monacoEditor.getValue();
+        _saveVirtualFiles(cur);
+      }
+      _activeFile = filename;
+      var content = files[filename] || '';
+      if (monacoEditor) {
+        monacoEditor.setValue(content);
+        var lang = _extLang(filename);
+        monaco.editor.setModelLanguage(monacoEditor.getModel(), lang);
+        // actualizar badge de lenguaje
+        var badge = document.getElementById('editor-lang');
+        if (badge) badge.textContent = lang;
+      }
+      renderFileList();
+      closeFilesPanel();
+    }
+
+    function deleteVirtualFile(filename) {
+      if (!confirm('¿Borrar ' + filename + '?')) return;
+      var files = _loadVirtualFiles();
+      delete files[filename];
+      _saveVirtualFiles(files);
+      if (_activeFile === filename) {
+        var remaining = Object.keys(files);
+        if (remaining.length > 0) loadVirtualFile(remaining[0]);
+        else { _activeFile = 'script.js'; if (monacoEditor) monacoEditor.setValue(''); }
+      }
+      renderFileList();
+    }
+
+    function renderFileList() {
+      var list = document.getElementById('files-modal-list');
+      var files = _loadVirtualFiles();
+      var names = Object.keys(files);
+      if (names.length === 0) {
+        list.innerHTML = '<div style="color:#526075;font-size:0.8rem;text-align:center;padding:20px;">Sin archivos. Presiona + NUEVO para crear uno.</div>';
+        return;
+      }
+      list.innerHTML = '';
+      names.forEach(function(name) {
+        var isActive = name === _activeFile;
+        var card = document.createElement('div');
+        card.style.cssText = 'background:' + (isActive ? 'rgba(134,239,172,0.07)' : 'rgba(255,255,255,0.02)') + ';border:1px solid ' + (isActive ? 'rgba(134,239,172,0.3)' : 'rgba(255,255,255,0.06)') + ';border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;';
+        var icon = document.createElement('span');
+        icon.style.cssText = 'font-size:1.1rem;flex-shrink:0;';
+        icon.textContent = _extIcon(name);
+        var info = document.createElement('div');
+        info.style.cssText = 'flex:1;min-width:0;';
+        var fname = document.createElement('div');
+        fname.style.cssText = 'color:' + (isActive ? '#86efac' : '#e0e8ff') + ';font-size:0.82rem;font-weight:' + (isActive ? '700' : '500') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        fname.textContent = (isActive ? '▶ ' : '') + name;
+        var finfo = document.createElement('div');
+        finfo.style.cssText = 'color:#526075;font-size:0.68rem;margin-top:2px;';
+        var lineCount = (files[name] || '').split('
+').length;
+        finfo.textContent = _extLang(name) + ' · ' + lineCount + ' líneas · ' + (Math.ceil((files[name]||'').length / 1024 * 10) / 10) + ' KB';
+        info.appendChild(fname);
+        info.appendChild(finfo);
+        var btns = document.createElement('div');
+        btns.style.cssText = 'display:flex;gap:4px;flex-shrink:0;';
+        if (!isActive) {
+          var btnOpen = document.createElement('button');
+          btnOpen.style.cssText = 'padding:5px 10px;background:#1e3a5f;color:#90caf9;border:none;border-radius:6px;font-size:0.7rem;cursor:pointer;font-weight:600;';
+          btnOpen.textContent = '▶ Abrir';
+          (function(n) { btnOpen.onclick = function(e) { e.stopPropagation(); loadVirtualFile(n); }; })(name);
+          btns.appendChild(btnOpen);
+        }
+        var btnDel = document.createElement('button');
+        btnDel.style.cssText = 'padding:5px 8px;background:rgba(255,50,50,0.1);color:#f87171;border:1px solid rgba(255,50,50,0.2);border-radius:6px;font-size:0.7rem;cursor:pointer;';
+        btnDel.textContent = '🗑';
+        (function(n) { btnDel.onclick = function(e) { e.stopPropagation(); deleteVirtualFile(n); }; })(name);
+        btns.appendChild(btnDel);
+        (function(n) { card.onclick = function() { if (n !== _activeFile) loadVirtualFile(n); }; })(name);
+        card.appendChild(icon);
+        card.appendChild(info);
+        card.appendChild(btns);
+        list.appendChild(card);
+      });
+    }
+
+    /* tecla Enter en input nuevo archivo */
+    window.addEventListener('DOMContentLoaded', function() {
+      var inp = document.getElementById('new-file-input');
+      if (inp) inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') confirmNewFile(); if (e.key === 'Escape') cancelNewFile(); });
+    });
+
+    /* exponer al scope global */
+    window.openFilesPanel  = openFilesPanel;
+    window.closeFilesPanel = closeFilesPanel;
+    window.saveCurrentFile = saveCurrentFile;
+    window.promptNewFile   = promptNewFile;
+    window.confirmNewFile  = confirmNewFile;
+    window.cancelNewFile   = cancelNewFile;
+    window.loadVirtualFile = loadVirtualFile;
+    window.deleteVirtualFile = deleteVirtualFile;
 
     /* ══════════════════════════════════════════
      CHAT PERSISTENCE — Guardar/Cargar en Supabase
