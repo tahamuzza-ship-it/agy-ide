@@ -73,8 +73,8 @@
         <button class="hbtn" id="btn-puente-pc2" title="PUENTE PC2 — tmux en PC2. Termius: ssh roberto@192.168.1.14" style="background:linear-gradient(135deg,#5a0010,#cc0020);color:#fff;border:none;font-weight:700;">🔴 PUENTE PC2</button>
         <button class="hbtn" id="btn-puente-pc1" title="PUENTE PC1 — SSH Windows. Termius: ssh Roberto1@192.168.1.2" style="background:linear-gradient(135deg,#003a7f,#0055cc);color:#fff;border:none;font-weight:700;">🔵 PUENTE PC1</button>
         <button class="hbtn" id="btn-comandos" onclick="toggleComandos()" style="background:linear-gradient(135deg,#1a4731,#22c55e);color:#fff;border:none;font-weight:700;">📋 COMANDOS</button>
-        <button class="hbtn" id="btn-files" onclick="openFilesPanel()" style="background:linear-gradient(135deg,#0a1f3a,#1a4700);color:#86efac;border:1px solid rgba(134,239,172,0.4);font-weight:700;">📁 ARCHIVOS</button>
-        <button class="hbtn" id="btn-chats" onclick="openChatsModal()" style="background:linear-gradient(135deg,#0a1f3a,#0055cc);color:#00f3ff;border:1px solid rgba(0,243,255,0.4);font-weight:700;">💬 CHATS</button>
+        <button class="hbtn" id="btn-files" style="background:linear-gradient(135deg,#0a1f3a,#1a4700);color:#86efac;border:1px solid rgba(134,239,172,0.4);font-weight:700;">📁 ARCHIVOS</button>
+        <button class="hbtn" id="btn-chats" style="background:linear-gradient(135deg,#0a1f3a,#0055cc);color:#00f3ff;border:1px solid rgba(0,243,255,0.4);font-weight:700;">💬 CHATS</button>
         <a href="https://cibercode-ide-production.up.railway.app/editor.html?project=mi-primer-proyecto" target="_blank"
            style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:linear-gradient(135deg,#001a0a,#003320);border:1px solid rgba(0,255,120,0.45);border-radius:6px;color:#00ff78;font-size:0.7rem;font-weight:700;letter-spacing:0.06em;transition:all 0.2s;"
            title="Abrir CiberCode — Agente generador de apps">
@@ -960,6 +960,8 @@
     document.querySelectorAll('.mnav-btn').forEach(function(btn) {
       btn.addEventListener('click', function() { switchPanel(btn.dataset.panel); });
     });
+    document.getElementById('btn-files').addEventListener('click', openFilesPanel);
+    document.getElementById('btn-chats').addEventListener('click', openChatsModal);
     }
 
     /* ══════════════════════════════════════════
