@@ -609,7 +609,7 @@ app.get('/api/chats', async (req, res) => {
   try {
     const project = req.query.project || 'agy-ide';
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/cibercode_chats?project=eq.${encodeURIComponent(project)}&order=updated_at.desc&limit=30&select=*`,
+      `${SUPABASE_URL}/rest/v1/cibercode_chats?project=eq.${encodeURIComponent(project)}&order=updated_at.desc&limit=30&select=id,project,title,messages,updated_at`,
       { headers: sbHeaders() }
     );
     const data = await r.json();
@@ -619,17 +619,22 @@ app.get('/api/chats', async (req, res) => {
 
 app.post('/api/chats', async (req, res) => {
   if (!SUPABASE_URL || !SUPABASE_KEY) return res.json({ ok: false });
-  const { session_id, project = 'agy-ide', messages, title } = req.body || {};
-  if (!session_id || !messages) return res.status(400).json({ error: 'session_id y messages requeridos' });
+  const { id, project = 'agy-ide', messages, title } = req.body || {};
+  if (!id || !messages) return res.status(400).json({ error: 'id y messages requeridos' });
   try {
-    const rows = await sbQuery('cibercode_chats', { 'session_id': `eq.${session_id}`, 'project': `eq.${project}` });
-    if (rows.length > 0) {
-      await sbPatch('cibercode_chats', rows[0].id, { messages, title, updated_at: new Date().toISOString() });
+    // verificar si ya existe
+    const check = await fetch(
+      `${SUPABASE_URL}/rest/v1/cibercode_chats?id=eq.${encodeURIComponent(id)}&select=id`,
+      { headers: sbHeaders() }
+    );
+    const existing = await check.json();
+    if (Array.isArray(existing) && existing.length > 0) {
+      await sbPatch('cibercode_chats', id, { messages, title, updated_at: new Date().toISOString() });
     } else {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/cibercode_chats`, {
         method: 'POST',
         headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
-        body: JSON.stringify({ session_id, project, messages, title, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        body: JSON.stringify({ id, project, messages, title, updated_at: new Date().toISOString() })
       });
       if (!r.ok) throw new Error(await r.text());
     }
@@ -637,11 +642,11 @@ app.post('/api/chats', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/chats/:sid', async (req, res) => {
+app.delete('/api/chats/:id', async (req, res) => {
   if (!SUPABASE_URL || !SUPABASE_KEY) return res.json({ ok: false });
   try {
     const r = await fetch(
-      `${SUPABASE_URL}/rest/v1/cibercode_chats?session_id=eq.${encodeURIComponent(req.params.sid)}&project=eq.agy-ide`,
+      `${SUPABASE_URL}/rest/v1/cibercode_chats?id=eq.${encodeURIComponent(req.params.id)}`,
       { method: 'DELETE', headers: sbHeaders() }
     );
     res.json({ ok: r.ok });
