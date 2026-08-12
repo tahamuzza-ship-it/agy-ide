@@ -1046,20 +1046,17 @@
       md:'📝', sh:'⚙', sql:'🗄', txt:'📄'
     };
 
-    function _extLang(filename) {
-      var ext = (filename.split('.').pop() || '').toLowerCase();
+    function _extLang(f) {
+      var ext = (f.split('.').pop() || '').toLowerCase();
       return EXT_LANG[ext] || 'plaintext';
     }
-
-    function _extIcon(filename) {
-      var ext = (filename.split('.').pop() || '').toLowerCase();
+    function _extIcon(f) {
+      var ext = (f.split('.').pop() || '').toLowerCase();
       return EXT_ICON[ext] || '📄';
     }
-
     function _loadVirtualFiles() {
       try { return JSON.parse(localStorage.getItem(FILES_KEY) || '{}'); } catch(e) { return {}; }
     }
-
     function _saveVirtualFiles(files) {
       try { localStorage.setItem(FILES_KEY, JSON.stringify(files)); } catch(e) {}
     }
@@ -1070,7 +1067,7 @@
       files[_activeFile] = monacoEditor.getValue();
       _saveVirtualFiles(files);
       renderFileList();
-      showDiffToast('💾 ' + _activeFile + ' guardado', true);
+      showDiffToast('\u{1F4BE} ' + _activeFile + ' guardado', true);
     }
 
     function openFilesPanel() {
@@ -1080,12 +1077,10 @@
       m.style.justifyContent = 'center';
       renderFileList();
     }
-
     function closeFilesPanel() {
       document.getElementById('files-modal').style.display = 'none';
       document.getElementById('new-file-row').style.display = 'none';
     }
-
     function promptNewFile() {
       var row = document.getElementById('new-file-row');
       row.style.display = 'flex';
@@ -1093,52 +1088,26 @@
       inp.value = '';
       setTimeout(function() { inp.focus(); }, 60);
     }
-
     function cancelNewFile() {
       document.getElementById('new-file-row').style.display = 'none';
     }
-
     function confirmNewFile() {
       var inp = document.getElementById('new-file-input');
       var name = (inp.value || '').trim();
       if (!name) return;
-      if (!name.includes('.')) { showDiffToast('Incluye extensión: script.py, index.html…', false); return; }
+      if (name.indexOf('.') === -1) { showDiffToast('Incluye la extension: script.py, index.html...', false); return; }
       var files = _loadVirtualFiles();
       if (files[name]) { showDiffToast('Ya existe ' + name, false); return; }
-      var defaults = {
-        py: '# ' + name + '
-
-print("Hola desde Python!")
-',
-        js: '// ' + name + '
-
-console.log("Hola desde JS!");
-',
-        ts: '// ' + name + '
-
-const msg: string = "Hola desde TypeScript!";
-console.log(msg);
-',
-        html: '<!DOCTYPE html>
-<html lang="es">
-<head><meta charset="UTF-8"><title>' + name + '</title></head>
-<body>
-  <h1>Hola</h1>
-</body>
-</html>
-',
-        css: '/* ' + name + ' */
-body { margin: 0; font-family: sans-serif; }
-',
-        sh: '#!/bin/bash
-# ' + name + '
-
-echo "Hola desde bash"
-'
-      };
       var ext = name.split('.').pop().toLowerCase();
-      files[name] = defaults[ext] || '# ' + name + '
-';
+      var content = '';
+      if (ext === 'py')   content = '# ' + name + '\n\nprint("Hola desde Python!")\n';
+      else if (ext === 'js')  content = '// ' + name + '\n\nconsole.log("Hola!");\n';
+      else if (ext === 'ts')  content = '// ' + name + '\n\nconsole.log("Hola desde TS!");\n';
+      else if (ext === 'html') content = '<!DOCTYPE html>\n<html lang="es">\n<head><meta charset="UTF-8"><title>' + name + '</title></head>\n<body>\n<h1>Hola</h1>\n</body>\n</html>\n';
+      else if (ext === 'css') content = '/* ' + name + ' */\nbody { margin: 0; }\n';
+      else if (ext === 'sh')  content = '#!/bin/bash\n# ' + name + '\necho "Hola"\n';
+      else content = '# ' + name + '\n';
+      files[name] = content;
       _saveVirtualFiles(files);
       document.getElementById('new-file-row').style.display = 'none';
       loadVirtualFile(name);
@@ -1147,7 +1116,6 @@ echo "Hola desde bash"
     function loadVirtualFile(filename) {
       var files = _loadVirtualFiles();
       if (!files[filename] && filename !== 'script.js') return;
-      // Guardar el archivo actual primero
       if (monacoEditor) {
         var cur = _loadVirtualFiles();
         cur[_activeFile] = monacoEditor.getValue();
@@ -1159,7 +1127,6 @@ echo "Hola desde bash"
         monacoEditor.setValue(content);
         var lang = _extLang(filename);
         monaco.editor.setModelLanguage(monacoEditor.getModel(), lang);
-        // actualizar badge de lenguaje
         var badge = document.getElementById('editor-lang');
         if (badge) badge.textContent = lang;
       }
@@ -1168,7 +1135,7 @@ echo "Hola desde bash"
     }
 
     function deleteVirtualFile(filename) {
-      if (!confirm('¿Borrar ' + filename + '?')) return;
+      if (!confirm('Borrar ' + filename + '?')) return;
       var files = _loadVirtualFiles();
       delete files[filename];
       _saveVirtualFiles(files);
@@ -1182,6 +1149,7 @@ echo "Hola desde bash"
 
     function renderFileList() {
       var list = document.getElementById('files-modal-list');
+      if (!list) return;
       var files = _loadVirtualFiles();
       var names = Object.keys(files);
       if (names.length === 0) {
@@ -1192,20 +1160,19 @@ echo "Hola desde bash"
       names.forEach(function(name) {
         var isActive = name === _activeFile;
         var card = document.createElement('div');
-        card.style.cssText = 'background:' + (isActive ? 'rgba(134,239,172,0.07)' : 'rgba(255,255,255,0.02)') + ';border:1px solid ' + (isActive ? 'rgba(134,239,172,0.3)' : 'rgba(255,255,255,0.06)') + ';border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;';
+        card.style.cssText = 'border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;background:' + (isActive ? 'rgba(134,239,172,0.07)' : 'rgba(255,255,255,0.02)') + ';border:1px solid ' + (isActive ? 'rgba(134,239,172,0.3)' : 'rgba(255,255,255,0.06)') + ';';
         var icon = document.createElement('span');
         icon.style.cssText = 'font-size:1.1rem;flex-shrink:0;';
         icon.textContent = _extIcon(name);
         var info = document.createElement('div');
         info.style.cssText = 'flex:1;min-width:0;';
         var fname = document.createElement('div');
-        fname.style.cssText = 'color:' + (isActive ? '#86efac' : '#e0e8ff') + ';font-size:0.82rem;font-weight:' + (isActive ? '700' : '500') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-        fname.textContent = (isActive ? '▶ ' : '') + name;
+        fname.style.cssText = 'font-size:0.82rem;font-weight:' + (isActive ? '700' : '500') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:' + (isActive ? '#86efac' : '#e0e8ff') + ';';
+        fname.textContent = (isActive ? '\u25B6 ' : '') + name;
         var finfo = document.createElement('div');
         finfo.style.cssText = 'color:#526075;font-size:0.68rem;margin-top:2px;';
-        var lineCount = (files[name] || '').split('
-').length;
-        finfo.textContent = _extLang(name) + ' · ' + lineCount + ' líneas · ' + (Math.ceil((files[name]||'').length / 1024 * 10) / 10) + ' KB';
+        var fc = files[name] || '';
+        finfo.textContent = _extLang(name) + ' \u00B7 ' + fc.split('\n').length + ' lineas';
         info.appendChild(fname);
         info.appendChild(finfo);
         var btns = document.createElement('div');
@@ -1213,13 +1180,13 @@ echo "Hola desde bash"
         if (!isActive) {
           var btnOpen = document.createElement('button');
           btnOpen.style.cssText = 'padding:5px 10px;background:#1e3a5f;color:#90caf9;border:none;border-radius:6px;font-size:0.7rem;cursor:pointer;font-weight:600;';
-          btnOpen.textContent = '▶ Abrir';
+          btnOpen.textContent = '\u25B6 Abrir';
           (function(n) { btnOpen.onclick = function(e) { e.stopPropagation(); loadVirtualFile(n); }; })(name);
           btns.appendChild(btnOpen);
         }
         var btnDel = document.createElement('button');
         btnDel.style.cssText = 'padding:5px 8px;background:rgba(255,50,50,0.1);color:#f87171;border:1px solid rgba(255,50,50,0.2);border-radius:6px;font-size:0.7rem;cursor:pointer;';
-        btnDel.textContent = '🗑';
+        btnDel.textContent = '\u{1F5D1}';
         (function(n) { btnDel.onclick = function(e) { e.stopPropagation(); deleteVirtualFile(n); }; })(name);
         btns.appendChild(btnDel);
         (function(n) { card.onclick = function() { if (n !== _activeFile) loadVirtualFile(n); }; })(name);
@@ -1230,13 +1197,6 @@ echo "Hola desde bash"
       });
     }
 
-    /* tecla Enter en input nuevo archivo */
-    window.addEventListener('DOMContentLoaded', function() {
-      var inp = document.getElementById('new-file-input');
-      if (inp) inp.addEventListener('keydown', function(e) { if (e.key === 'Enter') confirmNewFile(); if (e.key === 'Escape') cancelNewFile(); });
-    });
-
-    /* exponer al scope global */
     window.openFilesPanel   = openFilesPanel;
     window.closeFilesPanel  = closeFilesPanel;
     window.saveCurrentFile  = saveCurrentFile;
@@ -1245,10 +1205,10 @@ echo "Hola desde bash"
     window.cancelNewFile    = cancelNewFile;
     window.loadVirtualFile  = loadVirtualFile;
     window.deleteVirtualFile = deleteVirtualFile;
-    /* exponer al segundo script (COMANDOS + voz) */
     window.sendChat         = sendChat;
     window.toggleComandos   = toggleComandos;
     window._flatCmds        = _flatCmds;
+
 
     /* ══════════════════════════════════════════
      CHAT PERSISTENCE — Guardar/Cargar en Supabase
