@@ -1031,7 +1031,7 @@
         if (msgs.length === 0) return;
         await fetch('/api/chats', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': _getPwd() },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ session_id: _chatSessionId, project: 'agy-ide', messages: msgs, title: _getTitle(msgs) })
         });
       } catch(e) {}
@@ -1053,7 +1053,7 @@
       var list = document.getElementById('chats-modal-list');
       list.innerHTML = '<div style="color:#526075;font-size:0.8rem;text-align:center;padding:20px;">Cargando...</div>';
       try {
-        var r = await fetch('/api/chats?project=agy-ide', { headers: { 'x-agyide-pwd': _getPwd() } });
+        var r = await fetch('/api/chats?project=agy-ide');
         var chats = await r.json();
         if (!Array.isArray(chats) || chats.length === 0) {
           list.innerHTML = '<div style="color:#526075;font-size:0.8rem;text-align:center;padding:20px;">Sin chats guardados</div>';
@@ -1080,7 +1080,10 @@
             btnLoad.style.cssText = 'flex:1;padding:5px 8px;background:#1e3a5f;color:#90caf9;border:none;border-radius:6px;font-size:0.72rem;cursor:pointer;font-weight:600;';
             btnLoad.textContent = '▶ Cargar';
             btnLoad.setAttribute('data-sid', sid);
-            btnLoad.onclick = function() { loadChatSession(this.getAttribute('data-sid'), chat.messages); };
+            btnLoad.setAttribute('data-msgs', JSON.stringify(chat.messages || []));
+            btnLoad.onclick = function() {
+              loadChatSession(this.getAttribute('data-sid'), JSON.parse(this.getAttribute('data-msgs') || '[]'));
+            };
             btns.appendChild(btnLoad);
           }
           var btnDel = document.createElement('button');
@@ -1100,10 +1103,7 @@
     }
 
     function loadChatSession(sid, msgs) {
-      try {
-        sessionStorage.setItem('agyide_session_id', sid);
-        _chatSessionId = sid;
-      } catch(e) {}
+      try { sessionStorage.setItem('agyide_session_id', sid); _chatSessionId = sid; } catch(e) {}
       var container = document.getElementById('chat-messages');
       container.innerHTML = '';
       chatHistory = [];
@@ -1114,8 +1114,7 @@
             var wp = document.createElement('div'); wp.className = 'msg-agt';
             var bbl = document.createElement('div'); bbl.className = 'bubble';
             bbl.textContent = m.content;
-            wp.appendChild(bbl);
-            container.appendChild(wp);
+            wp.appendChild(bbl); container.appendChild(wp);
           }
         });
       }
@@ -1126,7 +1125,7 @@
     async function deleteChatSession(sid) {
       if (!confirm('¿Borrar este chat?')) return;
       try {
-        await fetch('/api/chats/' + encodeURIComponent(sid), { method: 'DELETE', headers: { 'x-agyide-pwd': _getPwd() } });
+        await fetch('/api/chats/' + encodeURIComponent(sid), { method: 'DELETE' });
         renderChatsList();
       } catch(e) {}
     }
@@ -1143,13 +1142,12 @@
       closeChatsModal();
     }
 
-
     /* exponer funciones de chats al scope global */
-    window.openChatsModal   = openChatsModal;
-    window.closeChatsModal  = closeChatsModal;
-    window.startNewChat     = startNewChat;
-    window.renderChatsList  = renderChatsList;
-    window.loadChatSession  = loadChatSession;
+    window.openChatsModal    = openChatsModal;
+    window.closeChatsModal   = closeChatsModal;
+    window.startNewChat      = startNewChat;
+    window.renderChatsList   = renderChatsList;
+    window.loadChatSession   = loadChatSession;
     window.deleteChatSession = deleteChatSession;
 
     })();
