@@ -288,7 +288,7 @@
       try {
         await fetch('/api/report-diff', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': getStoredPwd() },
+          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': _getPwd() },
           body: JSON.stringify({ filename: filename, before: before, after: newCode })
         });
       } catch(e) {
@@ -430,7 +430,7 @@
     async function sendToAGY(instruction, target) {
     const r = await fetch('/api/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': getStoredPwd() },
+      headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': _getPwd() },
       body: JSON.stringify({ instruction, target: target || getPcTarget() })
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -442,7 +442,7 @@
     const start = Date.now();
     while (Date.now() - start < maxMs) {
       await new Promise(res => setTimeout(res, 5000));
-      const r = await fetch('/api/status/' + id, { headers: { 'x-agyide-pwd': getStoredPwd() } });
+      const r = await fetch('/api/status/' + id, { headers: { 'x-agyide-pwd': _getPwd() } });
       if (!r.ok) continue;
       const d = await r.json();
       if (d.status === 'done' || d.status === 'error') return d;
@@ -608,7 +608,7 @@
     async function pollGoalStatus(sessionId) {
       try {
         var r = await fetch('/api/goal/status/' + sessionId, {
-          headers: { 'x-agyide-pwd': getStoredPwd() }
+          headers: { 'x-agyide-pwd': _getPwd() }
         });
         if (!r.ok) return;
         var data = await r.json();
@@ -662,7 +662,7 @@
       try {
         var r = await fetch('/api/goal', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': getStoredPwd() },
+          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': _getPwd() },
           body: JSON.stringify({ goal, target, max_steps: maxSteps })
         });
         var data = await r.json();
@@ -689,7 +689,7 @@
       try {
         await fetch('/api/goal/cancel', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': getStoredPwd() },
+          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': _getPwd() },
           body: JSON.stringify({ id: _goalSessionId })
         });
       } catch(e) {
@@ -807,7 +807,7 @@
     async function checkPendingReverts() {
       try {
         var r = await fetch('/api/revert-pending', {
-          headers: { 'x-agyide-pwd': getStoredPwd() }
+          headers: { 'x-agyide-pwd': _getPwd() }
         });
         if (!r.ok) return;
         var data = await r.json();
@@ -940,7 +940,7 @@
 
 /* ── AUTH GATE ── */
     const AUTH_STORE = 'agyide_auth_v1';
-    function getStoredPwd() { try { return localStorage.getItem(AUTH_STORE) || ''; } catch { return ''; } }
+    function _getPwd() { try { return localStorage.getItem(AUTH_STORE) || ''; } catch { return ''; } }
 
     async function tryLogin(pwd) {
       try {
@@ -974,7 +974,7 @@
       };
       if (btn)   btn.addEventListener('click', doLogin);
       if (input) input.addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
-      const stored = getStoredPwd();
+      const stored = _getPwd();
       if (stored) {
         tryLogin(stored).then(function(ok) {
           if (ok) { gate.style.display = 'none'; }
@@ -1002,6 +1002,8 @@
     /* ══════════════════════════════════════════
      CHAT PERSISTENCE — Guardar/Cargar en Supabase
     ══════════════════════════════════════════ */
+    function _getPwd() { try { return localStorage.getItem('agyide_auth_v1') || ''; } catch(e) { return ''; } }
+
     var _chatSessionId = (function() {
       try {
         var sid = sessionStorage.getItem('agyide_session_id');
@@ -1031,7 +1033,7 @@
         if (msgs.length === 0) return;
         await fetch('/api/chats', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': getStoredPwd() },
+          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': _getPwd() },
           body: JSON.stringify({ session_id: _chatSessionId, project: 'agy-ide', messages: msgs, title: _getTitle(msgs) })
         });
       } catch(e) {}
@@ -1053,7 +1055,7 @@
       var list = document.getElementById('chats-modal-list');
       list.innerHTML = '<div style="color:#526075;font-size:0.8rem;text-align:center;padding:20px;">Cargando...</div>';
       try {
-        var r = await fetch('/api/chats?project=agy-ide', { headers: { 'x-agyide-pwd': getStoredPwd() } });
+        var r = await fetch('/api/chats?project=agy-ide', { headers: { 'x-agyide-pwd': _getPwd() } });
         var chats = await r.json();
         if (!Array.isArray(chats) || chats.length === 0) {
           list.innerHTML = '<div style="color:#526075;font-size:0.8rem;text-align:center;padding:20px;">Sin chats guardados</div>';
@@ -1126,7 +1128,7 @@
     async function deleteChatSession(sid) {
       if (!confirm('¿Borrar este chat?')) return;
       try {
-        await fetch('/api/chats/' + encodeURIComponent(sid), { method: 'DELETE', headers: { 'x-agyide-pwd': getStoredPwd() } });
+        await fetch('/api/chats/' + encodeURIComponent(sid), { method: 'DELETE', headers: { 'x-agyide-pwd': _getPwd() } });
         renderChatsList();
       } catch(e) {}
     }
@@ -1475,7 +1477,7 @@
         if (msgs.length === 0) return;
         await fetch('/api/chats', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': getStoredPwd() },
+          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': _getPwd() },
           body: JSON.stringify({ session_id: _chatSessionId, project: 'agy-ide', messages: msgs, title: _getTitle(msgs) })
         });
       } catch(e) {}
@@ -1497,7 +1499,7 @@
       var list = document.getElementById('chats-modal-list');
       list.innerHTML = '<div style="color:#526075;font-size:0.8rem;text-align:center;padding:20px;">Cargando...</div>';
       try {
-        var r = await fetch('/api/chats?project=agy-ide', { headers: { 'x-agyide-pwd': getStoredPwd() } });
+        var r = await fetch('/api/chats?project=agy-ide', { headers: { 'x-agyide-pwd': _getPwd() } });
         var chats = await r.json();
         if (!Array.isArray(chats) || chats.length === 0) {
           list.innerHTML = '<div style="color:#526075;font-size:0.8rem;text-align:center;padding:20px;">Sin chats guardados</div>';
@@ -1570,7 +1572,7 @@
     async function deleteChatSession(sid) {
       if (!confirm('¿Borrar este chat?')) return;
       try {
-        await fetch('/api/chats/' + encodeURIComponent(sid), { method: 'DELETE', headers: { 'x-agyide-pwd': getStoredPwd() } });
+        await fetch('/api/chats/' + encodeURIComponent(sid), { method: 'DELETE', headers: { 'x-agyide-pwd': _getPwd() } });
         renderChatsList();
       } catch(e) {}
     }
