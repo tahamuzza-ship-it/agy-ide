@@ -215,16 +215,16 @@
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid rgba(134,239,172,0.12);background:#080f1f;">
       <span style="font-family:'Orbitron',monospace;font-size:0.95rem;font-weight:900;color:#86efac;">📁 ARCHIVOS DEL PROYECTO</span>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button onclick="promptNewFile()" style="padding:5px 12px;background:#052e16;border:1px solid #166534;color:#86efac;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;">+ NUEVO</button>
-        <button onclick="saveCurrentFile()" style="padding:5px 12px;background:#1e3a5f;border:1px solid #2563eb;color:#90caf9;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;">💾 GUARDAR</button>
-        <button onclick="closeFilesPanel()" style="background:none;border:none;color:#8c9cb2;font-size:1.2rem;cursor:pointer;padding:4px 8px;">✕</button>
+        <button id="btn-prompt-new-file" style="padding:5px 12px;background:#052e16;border:1px solid #166534;color:#86efac;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;">+ NUEVO</button>
+        <button id="btn-save-file" style="padding:5px 12px;background:#1e3a5f;border:1px solid #2563eb;color:#90caf9;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;">💾 GUARDAR</button>
+        <button id="btn-close-files" style="background:none;border:none;color:#8c9cb2;font-size:1.2rem;cursor:pointer;padding:4px 8px;">✕</button>
       </div>
     </div>
     <!-- Nuevo archivo inline -->
     <div id="new-file-row" style="display:none;padding:10px 16px;border-bottom:1px solid rgba(134,239,172,0.1);background:#060d1a;gap:8px;align-items:center;flex-wrap:wrap;">
       <input id="new-file-input" type="text" placeholder="nombre.py  /  script.js  /  index.html" style="flex:1;padding:7px 10px;background:#0c1a2e;border:1px solid rgba(134,239,172,0.3);border-radius:6px;color:#e0e8ff;font-size:0.8rem;min-width:180px;outline:none;" />
-      <button onclick="confirmNewFile()" style="padding:7px 14px;background:#166534;color:#86efac;border:none;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;">Crear</button>
-      <button onclick="cancelNewFile()" style="padding:7px 10px;background:none;border:1px solid #374151;color:#8c9cb2;border-radius:6px;font-size:0.75rem;cursor:pointer;">Cancelar</button>
+      <button id="btn-confirm-new-file" style="padding:7px 14px;background:#166534;color:#86efac;border:none;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;">Crear</button>
+      <button id="btn-cancel-new-file" style="padding:7px 10px;background:none;border:1px solid #374151;color:#8c9cb2;border-radius:6px;font-size:0.75rem;cursor:pointer;">Cancelar</button>
     </div>
     <div id="files-modal-list" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:6px;">
       <div style="color:#526075;font-size:0.8rem;text-align:center;padding:20px;">Cargando archivos...</div>
@@ -242,8 +242,8 @@
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid rgba(0,243,255,0.12);background:#080f1f;">
       <span style="font-family:'Orbitron',monospace;font-size:0.95rem;font-weight:900;color:#00f3ff;">💬 HISTORIAL DE CHATS</span>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button onclick="startNewChat()" style="padding:5px 12px;background:#052e16;border:1px solid #166534;color:#86efac;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;">+ NUEVO</button>
-        <button onclick="closeChatsModal()" style="background:none;border:none;color:#8c9cb2;font-size:1.2rem;cursor:pointer;padding:4px 8px;">✕</button>
+        <button id="btn-new-chat" style="padding:5px 12px;background:#052e16;border:1px solid #166534;color:#86efac;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;">+ NUEVO</button>
+        <button id="btn-close-chats" style="background:none;border:none;color:#8c9cb2;font-size:1.2rem;cursor:pointer;padding:4px 8px;">✕</button>
       </div>
     </div>
     <div id="chats-modal-list" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px;">
@@ -962,6 +962,20 @@
     });
     document.getElementById('btn-files').addEventListener('click', openFilesPanel);
     document.getElementById('btn-chats').addEventListener('click', openChatsModal);
+    var btnCloseChats = document.getElementById('btn-close-chats');
+    if (btnCloseChats) btnCloseChats.addEventListener('click', closeChatsModal);
+    var btnNewChat = document.getElementById('btn-new-chat');
+    if (btnNewChat) btnNewChat.addEventListener('click', startNewChat);
+    var btnCloseFiles = document.getElementById('btn-close-files');
+    if (btnCloseFiles) btnCloseFiles.addEventListener('click', closeFilesPanel);
+    var btnPromptNew = document.getElementById('btn-prompt-new-file');
+    if (btnPromptNew) btnPromptNew.addEventListener('click', promptNewFile);
+    var btnSave = document.getElementById('btn-save-file');
+    if (btnSave) btnSave.addEventListener('click', saveCurrentFile);
+    var btnCancelNew = document.getElementById('btn-cancel-new-file');
+    if (btnCancelNew) btnCancelNew.addEventListener('click', cancelNewFile);
+    var btnConfirmNew = document.getElementById('btn-confirm-new-file');
+    if (btnConfirmNew) btnConfirmNew.addEventListener('click', confirmNewFile);
     }
 
     /* ══════════════════════════════════════════
