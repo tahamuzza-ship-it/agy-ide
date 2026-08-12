@@ -1032,7 +1032,7 @@
         await fetch('/api/chats', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: _chatSessionId, project: 'agy-ide', messages: msgs, title: _getTitle(msgs) })
+          body: JSON.stringify({ id: _chatSessionId, project: 'agy-ide', messages: msgs, title: _getTitle(msgs) })
         });
       } catch(e) {}
     }
@@ -1056,17 +1056,15 @@
         var r = await fetch('/api/chats?project=agy-ide');
         var chats = await r.json();
         if (!Array.isArray(chats) || chats.length === 0) {
-          list.innerHTML = '<div style="color:#526075;font-size:0.8rem;text-align:center;padding:20px;">Sin chats guardados</div>';
+          list.innerHTML = '<div style="color:#526075;font-size:0.8rem;text-align:center;padding:20px;">Sin chats guardados. Empieza a chatear y aparecerán aquí.</div>';
           return;
         }
         list.innerHTML = '';
         chats.forEach(function(chat) {
-          var sid = chat.session_id || '';
-          var isActive = sid === _chatSessionId;
-          var bg = isActive ? 'rgba(0,243,255,0.06)' : 'rgba(255,255,255,0.02)';
-          var border = isActive ? 'rgba(0,243,255,0.3)' : 'rgba(255,255,255,0.06)';
+          var cid = chat.id || '';
+          var isActive = cid === _chatSessionId;
           var card = document.createElement('div');
-          card.style.cssText = 'background:' + bg + ';border:1px solid ' + border + ';border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;';
+          card.style.cssText = 'background:' + (isActive ? 'rgba(0,243,255,0.06)' : 'rgba(255,255,255,0.02)') + ';border:1px solid ' + (isActive ? 'rgba(0,243,255,0.3)' : 'rgba(255,255,255,0.06)') + ';border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;cursor:pointer;';
           var title = document.createElement('div');
           title.style.cssText = 'color:#e0e8ff;font-size:0.8rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
           title.textContent = (isActive ? '🟢 ' : '') + (chat.title || 'Sin título');
@@ -1079,18 +1077,17 @@
             var btnLoad = document.createElement('button');
             btnLoad.style.cssText = 'flex:1;padding:5px 8px;background:#1e3a5f;color:#90caf9;border:none;border-radius:6px;font-size:0.72rem;cursor:pointer;font-weight:600;';
             btnLoad.textContent = '▶ Cargar';
-            btnLoad.setAttribute('data-sid', sid);
-            btnLoad.setAttribute('data-msgs', JSON.stringify(chat.messages || []));
-            btnLoad.onclick = function() {
-              loadChatSession(this.getAttribute('data-sid'), JSON.parse(this.getAttribute('data-msgs') || '[]'));
-            };
+            (function(id, msgs) {
+              btnLoad.onclick = function(e) { e.stopPropagation(); loadChatSession(id, msgs); };
+            })(cid, chat.messages || []);
             btns.appendChild(btnLoad);
           }
           var btnDel = document.createElement('button');
           btnDel.style.cssText = 'padding:5px 10px;background:rgba(255,50,50,0.1);color:#f87171;border:1px solid rgba(255,50,50,0.25);border-radius:6px;font-size:0.72rem;cursor:pointer;';
           btnDel.textContent = '🗑';
-          btnDel.setAttribute('data-sid', sid);
-          btnDel.onclick = function() { deleteChatSession(this.getAttribute('data-sid')); };
+          (function(id) {
+            btnDel.onclick = function(e) { e.stopPropagation(); deleteChatSession(id); };
+          })(cid);
           btns.appendChild(btnDel);
           card.appendChild(title);
           card.appendChild(fecha);
@@ -1098,12 +1095,12 @@
           list.appendChild(card);
         });
       } catch(e) {
-        list.innerHTML = '<div style="color:#f87171;font-size:0.8rem;text-align:center;padding:20px;">Error cargando: ' + e.message + '</div>';
+        list.innerHTML = '<div style="color:#f87171;font-size:0.8rem;text-align:center;padding:20px;">Error: ' + e.message + '</div>';
       }
     }
 
-    function loadChatSession(sid, msgs) {
-      try { sessionStorage.setItem('agyide_session_id', sid); _chatSessionId = sid; } catch(e) {}
+    function loadChatSession(cid, msgs) {
+      try { sessionStorage.setItem('agyide_session_id', cid); _chatSessionId = cid; } catch(e) {}
       var container = document.getElementById('chat-messages');
       container.innerHTML = '';
       chatHistory = [];
@@ -1122,16 +1119,15 @@
       closeChatsModal();
     }
 
-    async function deleteChatSession(sid) {
+    async function deleteChatSession(cid) {
       if (!confirm('¿Borrar este chat?')) return;
       try {
-        await fetch('/api/chats/' + encodeURIComponent(sid), { method: 'DELETE' });
+        await fetch('/api/chats/' + encodeURIComponent(cid), { method: 'DELETE' });
         renderChatsList();
       } catch(e) {}
     }
 
     async function startNewChat() {
-      // guardar el chat actual antes de abrir uno nuevo
       await autoSaveChat();
       try {
         var sid = 'agyide_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
@@ -1144,7 +1140,6 @@
       closeChatsModal();
     }
 
-    /* exponer funciones de chats al scope global */
     window.openChatsModal    = openChatsModal;
     window.closeChatsModal   = closeChatsModal;
     window.startNewChat      = startNewChat;
