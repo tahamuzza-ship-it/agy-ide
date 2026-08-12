@@ -1598,47 +1598,79 @@
       }
 
       var rec = new SpeechRecognition();
-      rec.lang = 'es-ES';
-      rec.continuous = false;
-      rec.interimResults = false;
+      rec.lang          = 'es-ES';
+      rec.continuous    = true;   // no corta al primer silencio
+      rec.interimResults = true;  // muestra texto mientras hablas
 
-      var listening = false;
+      var listening      = false;
+      var silenceTimer   = null;
+      var accumulated    = '';
+      var SILENCE_MS     = 1800;  // espera 1.8s de silencio antes de enviar
 
       function setListening(v) {
         listening = v;
-        micBtn.style.background   = v ? 'rgba(255,50,50,0.25)' : 'rgba(0,243,255,0.08)';
-        micBtn.style.borderColor  = v ? 'rgba(255,80,80,0.7)'  : 'rgba(0,243,255,0.3)';
-        micBtn.style.color        = v ? '#ff5555' : '#00f3ff';
-        micBtn.textContent        = v ? '🔴' : '🎤';
-        micBtn.title              = v ? 'Escuchando… (clic para cancelar)' : 'Hablar con AGY';
+        micBtn.style.background  = v ? 'rgba(255,50,50,0.25)' : 'rgba(0,243,255,0.08)';
+        micBtn.style.borderColor = v ? 'rgba(255,80,80,0.7)'  : 'rgba(0,243,255,0.3)';
+        micBtn.style.color       = v ? '#ff5555' : '#00f3ff';
+        micBtn.textContent       = v ? '🔴' : '🎤';
+        micBtn.title             = v ? 'Escuchando… clic para cancelar' : 'Hablar con AGY';
+      }
+
+      function doSend() {
+        clearTimeout(silenceTimer);
+        var text = accumulated.trim();
+        accumulated = '';
+        rec.stop();
+        if (!text) return;
+        var inp = document.getElementById('chat-input');
+        if (inp) { inp.value = text; inp.style.height = 'auto'; inp.style.height = inp.scrollHeight + 'px'; }
+        window.sendChat(text);
       }
 
       rec.onresult = function(e) {
-        var transcript = e.results[0][0].transcript.trim();
+        var interim = '';
+        for (var i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) {
+            accumulated += e.results[i][0].transcript;
+          } else {
+            interim += e.results[i][0].transcript;
+          }
+        }
+        // mostrar en tiempo real
         var inp = document.getElementById('chat-input');
-        if (!transcript || !inp) return;
-        inp.value = transcript;
-        // auto-resize textarea
-        inp.style.height = 'auto';
-        inp.style.height = inp.scrollHeight + 'px';
-        // auto-send
-        sendChat(transcript);
+        if (inp) {
+          inp.value = accumulated + interim;
+          inp.style.height = 'auto';
+          inp.style.height = Math.min(inp.scrollHeight, 100) + 'px';
+        }
+        // reiniciar timer de silencio
+        clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(doSend, SILENCE_MS);
       };
 
       rec.onerror = function(e) {
+        if (e.error === 'no-speech') return; // ignorar — sigue escuchando
         console.warn('[voz] error:', e.error);
+        clearTimeout(silenceTimer);
+        accumulated = '';
         setListening(false);
       };
 
       rec.onend = function() {
+        // si habia texto acumulado y no se envio, enviar ahora
+        if (accumulated.trim()) { doSend(); return; }
+        clearTimeout(silenceTimer);
         setListening(false);
       };
 
       micBtn.addEventListener('click', function() {
         if (listening) {
+          clearTimeout(silenceTimer);
+          accumulated = '';
           rec.stop();
           setListening(false);
         } else {
+          accumulated = '';
           try {
             rec.start();
             setListening(true);
