@@ -114,6 +114,7 @@
           <div id="chat-input-wrap">
             <textarea id="chat-input" rows="1" placeholder="Escribe una instrucción para AGY…"></textarea>
             <button id="chat-send">➤</button>
+            <button id="btn-mic" title="Hablar con AGY" style="flex-shrink:0;padding:0 12px;height:38px;background:rgba(0,243,255,0.08);border:1px solid rgba(0,243,255,0.3);border-radius:8px;color:#00f3ff;font-size:1.1rem;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;">🎤</button>
           </div>
         </div>
 
@@ -1201,6 +1202,74 @@
       var cerrar = document.getElementById('btn-cerrar-comandos');
       if (cerrar) cerrar.addEventListener('click', toggleComandos);
     });
+
+    /* ══════════════════════════════════════════
+     VOZ — Web Speech API → AGY
+    ══════════════════════════════════════════ */
+    (function() {
+      var micBtn = document.getElementById('btn-mic');
+      if (!micBtn) return;
+
+      var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        micBtn.title = 'Tu navegador no soporta voz';
+        micBtn.style.opacity = '0.4';
+        micBtn.style.cursor = 'not-allowed';
+        return;
+      }
+
+      var rec = new SpeechRecognition();
+      rec.lang = 'es-ES';
+      rec.continuous = false;
+      rec.interimResults = false;
+
+      var listening = false;
+
+      function setListening(v) {
+        listening = v;
+        micBtn.style.background   = v ? 'rgba(255,50,50,0.25)' : 'rgba(0,243,255,0.08)';
+        micBtn.style.borderColor  = v ? 'rgba(255,80,80,0.7)'  : 'rgba(0,243,255,0.3)';
+        micBtn.style.color        = v ? '#ff5555' : '#00f3ff';
+        micBtn.textContent        = v ? '🔴' : '🎤';
+        micBtn.title              = v ? 'Escuchando… (clic para cancelar)' : 'Hablar con AGY';
+      }
+
+      rec.onresult = function(e) {
+        var transcript = e.results[0][0].transcript.trim();
+        var inp = document.getElementById('chat-input');
+        if (!transcript || !inp) return;
+        inp.value = transcript;
+        // auto-resize textarea
+        inp.style.height = 'auto';
+        inp.style.height = inp.scrollHeight + 'px';
+        // auto-send
+        sendChat(transcript);
+      };
+
+      rec.onerror = function(e) {
+        console.warn('[voz] error:', e.error);
+        setListening(false);
+      };
+
+      rec.onend = function() {
+        setListening(false);
+      };
+
+      micBtn.addEventListener('click', function() {
+        if (listening) {
+          rec.stop();
+          setListening(false);
+        } else {
+          try {
+            rec.start();
+            setListening(true);
+          } catch(ex) {
+            console.warn('[voz]', ex);
+            setListening(false);
+          }
+        }
+      });
+    })();
     </script>
 
 </body>
