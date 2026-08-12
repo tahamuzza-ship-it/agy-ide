@@ -483,7 +483,6 @@
     ══════════════════════════════════════════ */
     async function runCode() {
     if (pendingRun) return;
-    saveCurrentFile && typeof saveCurrentFile === 'function' && saveCurrentFile();
     const code = monacoEditor ? monacoEditor.getValue() : '';
     if (!code.trim()) return;
 
@@ -1238,14 +1237,18 @@ echo "Hola desde bash"
     });
 
     /* exponer al scope global */
-    window.openFilesPanel  = openFilesPanel;
-    window.closeFilesPanel = closeFilesPanel;
-    window.saveCurrentFile = saveCurrentFile;
-    window.promptNewFile   = promptNewFile;
-    window.confirmNewFile  = confirmNewFile;
-    window.cancelNewFile   = cancelNewFile;
-    window.loadVirtualFile = loadVirtualFile;
+    window.openFilesPanel   = openFilesPanel;
+    window.closeFilesPanel  = closeFilesPanel;
+    window.saveCurrentFile  = saveCurrentFile;
+    window.promptNewFile    = promptNewFile;
+    window.confirmNewFile   = confirmNewFile;
+    window.cancelNewFile    = cancelNewFile;
+    window.loadVirtualFile  = loadVirtualFile;
     window.deleteVirtualFile = deleteVirtualFile;
+    /* exponer al segundo script (COMANDOS + voz) */
+    window.sendChat         = sendChat;
+    window.toggleComandos   = toggleComandos;
+    window._flatCmds        = _flatCmds;
 
     /* ══════════════════════════════════════════
      CHAT PERSISTENCE — Guardar/Cargar en Supabase
