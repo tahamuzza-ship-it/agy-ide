@@ -1002,8 +1002,6 @@
     /* ══════════════════════════════════════════
      CHAT PERSISTENCE — Guardar/Cargar en Supabase
     ══════════════════════════════════════════ */
-    function _getPwd() { try { return localStorage.getItem('agyide_auth_v1') || ''; } catch(e) { return ''; } }
-
     var _chatSessionId = (function() {
       try {
         var sid = sessionStorage.getItem('agyide_session_id');
