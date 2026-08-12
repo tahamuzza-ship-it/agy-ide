@@ -1143,6 +1143,15 @@
       closeChatsModal();
     }
 
+
+    /* exponer funciones de chats al scope global */
+    window.openChatsModal   = openChatsModal;
+    window.closeChatsModal  = closeChatsModal;
+    window.startNewChat     = startNewChat;
+    window.renderChatsList  = renderChatsList;
+    window.loadChatSession  = loadChatSession;
+    window.deleteChatSession = deleteChatSession;
+
     })();
     </script>
 
@@ -1577,6 +1586,15 @@
       document.getElementById('chat-messages').innerHTML = '';
       closeChatsModal();
     }
+
+
+    /* exponer funciones de chats al scope global */
+    window.openChatsModal   = openChatsModal;
+    window.closeChatsModal  = closeChatsModal;
+    window.startNewChat     = startNewChat;
+    window.renderChatsList  = renderChatsList;
+    window.loadChatSession  = loadChatSession;
+    window.deleteChatSession = deleteChatSession;
 
     })();
     </script>
