@@ -441,12 +441,17 @@
             if (_filesCache[fileObj.filename] !== undefined) return Promise.resolve(_filesCache[fileObj.filename]);
             return _apiFetchFiles().then(function(all) { return all[fileObj.filename] !== undefined ? all[fileObj.filename] : ''; });
           })().then(function(existing) {
-            var merged = existing ? (String(existing).replace(/\s+$/, '') + '\n\n' + fileObj.content) : fileObj.content;
+            var prev = String(existing || '');
+            var merged = prev ? (prev + (prev.slice(-1) === '\n' ? '\n' : '\n\n') + fileObj.content) : fileObj.content;
             _filesCache[fileObj.filename] = merged;
+            // Si el archivo está abierto en el editor, actualizarlo YA para que el
+            // guardado automático al cambiar de archivo no pise el contenido fusionado
+            if (monacoEditor && _activeFile === fileObj.filename) monacoEditor.setValue(merged);
             return _apiSaveFile(fileObj.filename, merged);
           });
         } else {
           _filesCache[fileObj.filename] = fileObj.content;
+          if (monacoEditor && _activeFile === fileObj.filename) monacoEditor.setValue(fileObj.content);
           savePromise = _apiSaveFile(fileObj.filename, fileObj.content);
         }
         if (_openTabs.indexOf(fileObj.filename) === -1) _openTabs.push(fileObj.filename);
