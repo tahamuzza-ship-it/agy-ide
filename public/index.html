@@ -434,10 +434,24 @@
     box.scrollTop = box.scrollHeight;
     if (parsed.files.length > 0) {
       parsed.files.forEach(function(fileObj) {
-        _filesCache[fileObj.filename] = fileObj.content;
+        var savePromise;
+        if (fileObj.append) {
+          // Añadir al final del contenido existente sin borrar nada
+          savePromise = (function() {
+            if (_filesCache[fileObj.filename] !== undefined) return Promise.resolve(_filesCache[fileObj.filename]);
+            return _apiFetchFiles().then(function(all) { return all[fileObj.filename] !== undefined ? all[fileObj.filename] : ''; });
+          })().then(function(existing) {
+            var merged = existing ? (String(existing).replace(/\s+$/, '') + '\n\n' + fileObj.content) : fileObj.content;
+            _filesCache[fileObj.filename] = merged;
+            return _apiSaveFile(fileObj.filename, merged);
+          });
+        } else {
+          _filesCache[fileObj.filename] = fileObj.content;
+          savePromise = _apiSaveFile(fileObj.filename, fileObj.content);
+        }
         if (_openTabs.indexOf(fileObj.filename) === -1) _openTabs.push(fileObj.filename);
-        _apiSaveFile(fileObj.filename, fileObj.content).then(function() {
-          showDiffToast('\u{1F4C1} ' + fileObj.filename + ' guardado \u2705', true);
+        savePromise.then(function() {
+          showDiffToast('\u{1F4C1} ' + fileObj.filename + (fileObj.append ? ' actualizado (agregado al final)' : ' guardado') + ' \u2705', true);
           loadVirtualFile(fileObj.filename);
         }).catch(function(){});
       });
@@ -539,6 +553,7 @@
     /* Contexto de archivos BAJO DEMANDA: solo se adjunta si el mensaje
        menciona un archivo existente o pide leer/modificar/agregar algo.
        Los mensajes normales viajan solos (sin gasto extra). */
+    var _ctxTruncatedFiles = [];
     async function _buildFileContext(msg) {
       try {
         var low = msg.toLowerCase();
@@ -555,16 +570,23 @@
         if (!wantsRead && mentioned.length === 0) return '';
         var toInclude = mentioned.length ? mentioned : (names.indexOf(_activeFile) !== -1 ? [_activeFile] : names.slice(0, 1));
         var ctx = '\n\n[CONTEXTO DEL PROYECTO — referencia interna, no lo repitas]\nArchivos existentes: ' + (names.join(', ') || '(ninguno)') + '\nArchivo abierto en el editor: ' + _activeFile + '\n';
-        var budget = 6000;
+        // Si solo hay UN archivo, damos mucho más presupuesto para no perder el final
+        var budget = toInclude.length === 1 ? 45000 : 6000;
+        _ctxTruncatedFiles = [];
         toInclude.forEach(function(n) {
           if (budget <= 0) return;
           var c = _filesCache[n] !== undefined ? _filesCache[n] : files[n];
           if (c === undefined) return;
           var chunk = String(c).slice(0, budget);
           budget -= chunk.length;
-          ctx += '\n--- CONTENIDO ACTUAL DE ' + n + ' ---\n' + chunk + (String(c).length > chunk.length ? '\n...(truncado)' : '') + '\n--- FIN DE ' + n + ' ---\n';
+          var truncated = String(c).length > chunk.length;
+          if (truncated) _ctxTruncatedFiles.push(n);
+          ctx += '\n--- CONTENIDO ACTUAL DE ' + n + (truncated ? ' (INCOMPLETO: solo ves los primeros ' + chunk.length + ' de ' + String(c).length + ' caracteres)' : '') + ' ---\n' + chunk + (truncated ? '\n...(truncado)' : '') + '\n--- FIN DE ' + n + ' ---\n';
         });
         ctx += '\nSi el usuario pide modificar o agregar algo a un archivo existente, responde con el archivo COMPLETO actualizado usando [[ARCHIVO:' + (toInclude[0] || 'nombre.ext') + ']] ... [[FIN]] (mismo nombre para sobrescribirlo).';
+        if (_ctxTruncatedFiles.length > 0) {
+          ctx += '\nIMPORTANTE: No viste el archivo completo (' + _ctxTruncatedFiles.join(', ') + '). NUNCA respondas con [[ARCHIVO:...]] para reescribirlo porque perderías el final. Si el usuario quiere AGREGAR contenido al final, usa [[AGREGAR-A:nombre.ext]] ...solo el texto nuevo... [[FIN]] (se añadirá al final sin borrar nada). Si quiere cambiar una parte que no viste, dile que el archivo es muy largo y pídele que te indique el fragmento exacto.';
+        }
         return ctx;
       } catch (e) { return ''; }
     }
@@ -584,6 +606,9 @@
 
     try {
       const fileCtx = await _buildFileContext(msg);
+      if (_ctxTruncatedFiles.length > 0) {
+        showDiffToast('\u26A0 ' + _ctxTruncatedFiles.join(', ') + ' es muy largo: AGY solo leyó el comienzo. Solo podrá AGREGAR al final, no reescribirlo.', false);
+      }
       const sent = await sendToAGY(msg + fileCtx);
       if (!sent.id) throw new Error(sent.error || 'Sin ID');
 
@@ -1175,6 +1200,17 @@
       // Match [[ARCHIVO:name]] ... [[FIN]] — formato shell-safe (sin <> que rompen Windows)
       var files = [];
       var clean = text;
+      // Pass 0: [[AGREGAR-A:name]] ... [[FIN]] — añade al final sin reescribir todo
+      var r0 = /\[\[AGREGAR-A:([^\]\n]+?)\]\]([\s\S]*?)\[\[FIN\]\]/g;
+      var m0;
+      while ((m0 = r0.exec(text)) !== null) {
+        var aname = m0[1].trim();
+        var acontent = m0[2].trim();
+        if (acontent.length > 0) {
+          files.push({ filename: aname, content: acontent, append: true });
+          clean = clean.replace(m0[0], '\u{1F4C1} Contenido agregado al final de: ' + aname + ' \u2705');
+        }
+      }
       // Pass 1: con [[FIN]]
       var r1 = /\[\[ARCHIVO:([^\]\n]+?)\]\]([\s\S]*?)\[\[FIN\]\]/g;  // acepta espacios y acentos en el nombre
       var m;
