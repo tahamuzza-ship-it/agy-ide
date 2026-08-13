@@ -386,15 +386,8 @@ app.post('/api/send', requirePwd, async (req, res) => {
     if (!isExecution && GROQ_KEY) {
       // PLAN B: Groq directo para chat — bypassa agy.exe y cuota Claude
       const groqReply = await callGroq(instruction);
-      const cmdId = 'groq_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
-      if (SUPABASE_URL && SUPABASE_KEY) {
-        await fetch(`${SUPABASE_URL}/rest/v1/antigravity_commands`, {
-          method: 'POST',
-          headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
-          body: JSON.stringify({ id: cmdId, instruction, status: 'done', result: groqReply, updated_at: new Date().toISOString() })
-        });
-      }
-      return res.json({ ok: true, id: cmdId, riskLevel: 0, source: 'groq' });
+      // Devolver directo — sin Supabase, sin polling, respuesta inmediata
+      return res.json({ ok: true, id: 'groq_direct', result: groqReply, riskLevel: 0, source: 'groq' });
     }
 
     // PLAN A: ag-listener en PC (para EJECUTAR o si no hay GROQ_KEY)
