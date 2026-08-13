@@ -1336,26 +1336,27 @@
       var text = ta.value;
       if (!text.trim()) { showDiffToast('Escribe o pega el texto a a\u00F1adir', false); return; }
       var filename = _appendTarget;
-      // obtener el contenido más reciente: editor activo > servidor > cache local
+      // lectura autoritativa del servidor SIEMPRE: nunca asumir vacío ni usar caché,
+      // porque un POST posterior sobrescribiría el contenido real
       var current;
-      if (filename === _activeFile && monacoEditor) {
-        current = monacoEditor.getValue();
-      } else {
-        try {
-          var r = await fetch('/api/files?project=agy-ide');
-          if (!r.ok) throw new Error('HTTP ' + r.status);
-          var arr = await r.json();
-          if (!Array.isArray(arr)) throw new Error('respuesta inv\u00E1lida del servidor');
-          var found = null;
-          arr.forEach(function(f) { if (f.filename === filename) found = f.content || ''; });
-          // exigir lectura satisfactoria del archivo: nunca asumir vacío ni usar caché,
-          // porque un POST posterior sobrescribiría el contenido real
-          if (found === null) throw new Error('el archivo no apareci\u00F3 en la lectura');
-          current = found;
-        } catch(e) {
-          showDiffToast('No se pudo leer ' + filename + '. Revisa la conexi\u00F3n e intenta de nuevo.', false);
-          return; // no cerrar el cuadro: el texto pegado no se pierde
-        }
+      try {
+        var r = await fetch('/api/files?project=agy-ide');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var arr = await r.json();
+        if (!Array.isArray(arr)) throw new Error('respuesta inv\u00E1lida del servidor');
+        var found = null;
+        arr.forEach(function(f) { if (f.filename === filename) found = f.content || ''; });
+        if (found === null) throw new Error('el archivo no apareci\u00F3 en la lectura');
+        current = found;
+      } catch(e) {
+        showDiffToast('No se pudo leer ' + filename + '. Revisa la conexi\u00F3n e intenta de nuevo.', false);
+        return; // no cerrar el cuadro: el texto pegado no se pierde
+      }
+      // si el archivo está abierto con cambios sin guardar, pedir guardar antes de añadir
+      // (evita pisar cambios remotos o locales sin que el usuario lo decida)
+      if (filename === _activeFile && monacoEditor && monacoEditor.getValue() !== current) {
+        showDiffToast('El editor tiene cambios sin guardar en ' + filename + '. Usa \u{1F4BE} GUARDAR primero.', false);
+        return;
       }
       var updated = current + '\n' + text;
       var ok = await _apiSaveFile(filename, updated);
