@@ -390,7 +390,72 @@ function requirePwd(req, res, next) {
    RUTAS EXISTENTES
 ══════════════════════════════════════════ */
 
-app.post('/api/auth', (req, res) => {
+
+    /* ── Voz premium con IA (Gemini TTS) — devuelve WAV; el frontend cae al lector del navegador si falla ── */
+    function pcmToWav(pcmBuf, sampleRate) {
+    const numChannels = 1, bitsPerSample = 16;
+    const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+    const blockAlign = numChannels * bitsPerSample / 8;
+    const header = Buffer.alloc(44);
+    header.write('RIFF', 0);
+    header.writeUInt32LE(36 + pcmBuf.length, 4);
+    header.write('WAVE', 8);
+    header.write('fmt ', 12);
+    header.writeUInt32LE(16, 16);
+    header.writeUInt16LE(1, 20);
+    header.writeUInt16LE(numChannels, 22);
+    header.writeUInt32LE(sampleRate, 24);
+    header.writeUInt32LE(byteRate, 28);
+    header.writeUInt16LE(blockAlign, 32);
+    header.writeUInt16LE(bitsPerSample, 34);
+    header.write('data', 36);
+    header.writeUInt32LE(pcmBuf.length, 40);
+    return Buffer.concat([header, pcmBuf]);
+    }
+
+    app.post('/api/tts', async (req, res) => {
+    try {
+      if (!GEMINI_KEY) return res.status(503).json({ error: 'Sin GEMINI_API_KEY — usar voz del navegador' });
+      const text = req.body && String(req.body.text || '').slice(0, 1200);
+      if (!text || !text.trim()) return res.status(400).json({ error: 'texto requerido' });
+
+      const ttsTimeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('TTS sin respuesta en 20s')), 20000));
+      const ttsCall = fetch(
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=' + GEMINI_KEY,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: text }] }],
+            generationConfig: {
+              responseModalities: ['AUDIO'],
+              speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Leda' } } }
+            }
+          })
+        }
+      );
+      const r = await Promise.race([ttsCall, ttsTimeout]);
+      const d = await r.json();
+      if (!r.ok) throw new Error((d.error && d.error.message) || 'Gemini TTS error ' + r.status);
+      const part = d.candidates && d.candidates[0] && d.candidates[0].content &&
+                   d.candidates[0].content.parts && d.candidates[0].content.parts[0];
+      const inline = part && (part.inlineData || part.inline_data);
+      if (!inline || !inline.data) throw new Error('Gemini TTS no devolvió audio');
+      const mime = inline.mimeType || inline.mime_type || '';
+      const rateMatch = /rate=(\d+)/.exec(mime);
+      const sampleRate = rateMatch ? parseInt(rateMatch[1], 10) : 24000;
+      const wav = pcmToWav(Buffer.from(inline.data, 'base64'), sampleRate);
+      res.set('Content-Type', 'audio/wav');
+      res.set('Cache-Control', 'no-store');
+      res.send(wav);
+    } catch (e) {
+      console.error('[tts] falló:', e.message);
+      res.status(502).json({ error: e.message });
+    }
+    });
+
+    app.post('/api/auth', (req, res) => {
   const pwd = req.body && req.body.pwd;
   res.json({ ok: pwd === AGY_IDE_PWD });
 });
