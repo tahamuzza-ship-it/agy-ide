@@ -6,6 +6,17 @@ const app  = express();
 const PORT = process.env.PORT || 3000;
 
 const REPLIT_API  = 'https://automate-make.replit.app';
+const MEMORY_API  = 'https://workspaceapi-server-production-905a.up.railway.app';
+
+/* ── Fire-and-forget al agente de memoria ── */
+function notifyMemory(type, payload) {
+  const endpoint = type === 'chat' ? '/api/ide/chat' : '/api/ide/file';
+  fetch(MEMORY_API + endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).catch(() => {}); // silencioso — no bloquea la respuesta principal
+}
 
 /* ── Required env vars — server refuses to start if missing ── */
 const AGY_KEY     = process.env.ANTIGRAVITY_KEY;
@@ -644,6 +655,7 @@ app.post('/api/chats', async (req, res) => {
       });
       if (!r.ok) throw new Error(await r.text());
     }
+    notifyMemory('chat', { session_id: id, app: project, title: title || 'Sin título' });
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -710,6 +722,7 @@ app.post('/api/files', async (req, res) => {
       });
       if (!r.ok) throw new Error(await r.text());
     }
+    notifyMemory('file', { session_id: id, app: 'agyide', filename, content: content.slice(0,500) });
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
