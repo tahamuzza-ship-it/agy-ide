@@ -413,10 +413,15 @@ function requirePwd(req, res, next) {
     return Buffer.concat([header, pcmBuf]);
     }
 
-    app.post('/api/tts', async (req, res) => {
+    let _ttsWindowStart = 0, _ttsWindowCount = 0;
+app.post('/api/tts', requirePwd, async (req, res) => {
     try {
       if (!GEMINI_KEY) return res.status(503).json({ error: 'Sin GEMINI_API_KEY — usar voz del navegador' });
-      const text = req.body && String(req.body.text || '').slice(0, 1200);
+      /* límite de uso: máx 10 peticiones por minuto (API de pago/cuota) */
+    const now = Date.now();
+    if (now - _ttsWindowStart > 60000) { _ttsWindowStart = now; _ttsWindowCount = 0; }
+    if (++_ttsWindowCount > 10) return res.status(429).json({ error: 'Demasiadas peticiones de voz — usar voz del navegador' });
+    const text = req.body && String(req.body.text || '').slice(0, 1200);
       if (!text || !text.trim()) return res.status(400).json({ error: 'texto requerido' });
 
       const ttsTimeout = new Promise((_, reject) =>
@@ -427,7 +432,7 @@ function requirePwd(req, res, next) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: text }] }],
+            contents: [{ role: 'user', parts: [{ text: 'Lee en voz alta, con tono natural y amable, exactamente este texto: ' + text }] }],
             generationConfig: {
               responseModalities: ['AUDIO'],
               speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Leda' } } }
