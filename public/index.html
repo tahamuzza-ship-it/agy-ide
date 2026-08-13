@@ -533,6 +533,39 @@
     /* ══════════════════════════════════════════
      CHAT SEND
     ══════════════════════════════════════════ */
+    /* Contexto de archivos BAJO DEMANDA: solo se adjunta si el mensaje
+       menciona un archivo existente o pide leer/modificar/agregar algo.
+       Los mensajes normales viajan solos (sin gasto extra). */
+    async function _buildFileContext(msg) {
+      try {
+        var low = msg.toLowerCase();
+        var wantsRead = /(lee|leer|revisa|mira|abre|analiza|corrige|modifica|edita|agrega|anade|añade|actualiza|completa|contin|mejora|arregla)/.test(low) &&
+                        /(archivo|editor|codigo|código|script|proyecto|manual|abierto)/.test(low);
+        var files = await _apiFetchFiles();
+        if (monacoEditor && _activeFile) { _filesCache[_activeFile] = monacoEditor.getValue(); }
+        Object.keys(_filesCache).forEach(function(n) { if (files[n] === undefined) files[n] = _filesCache[n]; });
+        var names = Object.keys(files);
+        var mentioned = names.filter(function(n) {
+          var base = n.toLowerCase().split('.')[0];
+          return low.indexOf(n.toLowerCase()) !== -1 || (base.length >= 3 && low.indexOf(base) !== -1);
+        });
+        if (!wantsRead && mentioned.length === 0) return '';
+        var toInclude = mentioned.length ? mentioned : (names.indexOf(_activeFile) !== -1 ? [_activeFile] : names.slice(0, 1));
+        var ctx = '\n\n[CONTEXTO DEL PROYECTO — referencia interna, no lo repitas]\nArchivos existentes: ' + (names.join(', ') || '(ninguno)') + '\nArchivo abierto en el editor: ' + _activeFile + '\n';
+        var budget = 6000;
+        toInclude.forEach(function(n) {
+          if (budget <= 0) return;
+          var c = _filesCache[n] !== undefined ? _filesCache[n] : files[n];
+          if (c === undefined) return;
+          var chunk = String(c).slice(0, budget);
+          budget -= chunk.length;
+          ctx += '\n--- CONTENIDO ACTUAL DE ' + n + ' ---\n' + chunk + (String(c).length > chunk.length ? '\n...(truncado)' : '') + '\n--- FIN DE ' + n + ' ---\n';
+        });
+        ctx += '\nSi el usuario pide modificar o agregar algo a un archivo existente, responde con el archivo COMPLETO actualizado usando [[ARCHIVO:' + (toInclude[0] || 'nombre.ext') + ']] ... [[FIN]] (mismo nombre para sobrescribirlo).';
+        return ctx;
+      } catch (e) { return ''; }
+    }
+
     async function sendChat(raw) {
     const msg = raw.trim();
     if (!msg) return;
@@ -547,7 +580,8 @@
     const { wrap, bubble } = appendThinking();
 
     try {
-      const sent = await sendToAGY(msg);
+      const fileCtx = await _buildFileContext(msg);
+      const sent = await sendToAGY(msg + fileCtx);
       if (!sent.id) throw new Error(sent.error || 'Sin ID');
 
       // Resultado directo (IA) o error — nunca ir a pollStatus si ya hay resultado
