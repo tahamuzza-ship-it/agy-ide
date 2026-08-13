@@ -550,9 +550,15 @@
       const sent = await sendToAGY(msg);
       if (!sent.id) throw new Error(sent.error || 'Sin ID');
 
-      const result = await pollStatus(sent.id);
-      finalizeThinking(wrap, bubble, result.result || '(respuesta vacía)');
-      void autoSaveChat();
+      // Groq devuelve resultado directo — sin polling
+      if (sent.source === 'groq' && sent.result) {
+        finalizeThinking(wrap, bubble, sent.result);
+        void autoSaveChat();
+      } else {
+        const result = await pollStatus(sent.id);
+        finalizeThinking(wrap, bubble, result.result || '(respuesta vacía)');
+        void autoSaveChat();
+      }
     } catch (e) {
       finalizeThinking(wrap, bubble, '⚠ Error: ' + e.message);
     } finally {
