@@ -92,6 +92,7 @@
           <span class="icon">📝</span> EDITOR
           <span class="badge" id="editor-lang">javascript</span>
         </div>
+        <div id="file-tabs" style="display:flex;gap:4px;padding:4px 10px;background:#06090f;border-bottom:1px solid rgba(0,243,255,0.07);overflow-x:auto;min-height:34px;align-items:center;flex-shrink:0;scrollbar-width:none;"></div>
         <div id="monaco-container"></div>
       </div>
 
@@ -415,17 +416,29 @@
     }
 
     function finalizeThinking(wrap, bubble, text) {
+    var parsed = _parseFileBlocks(text);
+    var display = parsed.clean;
     bubble.className = 'msg-bubble';
-    bubble.textContent = text;
-    addApplyButton(wrap, text);
+    bubble.textContent = display;
+    addApplyButton(wrap, display);
     const meta = document.createElement('div');
     meta.className = 'msg-meta';
     meta.textContent = ts();
     wrap.appendChild(meta);
-    chatHistory.push({ role: 'agt', text, time: meta.textContent });
+    chatHistory.push({ role: 'agt', text: display, time: meta.textContent });
     saveHistory(chatHistory);
     const box = document.getElementById('chat-messages');
     box.scrollTop = box.scrollHeight;
+    if (parsed.files.length > 0) {
+      parsed.files.forEach(function(fileObj) {
+        _filesCache[fileObj.filename] = fileObj.content;
+        if (_openTabs.indexOf(fileObj.filename) === -1) _openTabs.push(fileObj.filename);
+        _apiSaveFile(fileObj.filename, fileObj.content).then(function() {
+          showDiffToast('\u{1F4C1} ' + fileObj.filename + ' guardado \u2705', true);
+          loadVirtualFile(fileObj.filename);
+        }).catch(function(){});
+      });
+    }
     }
 
     /* ══════════════════════════════════════════
@@ -825,6 +838,13 @@
         monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter,
         runCode
       );
+      _apiFetchFiles().then(function(obj) {
+        Object.keys(obj).forEach(function(f) {
+          if (_openTabs.indexOf(f) === -1) _openTabs.push(f);
+          if (_filesCache[f] === undefined) _filesCache[f] = obj[f];
+        });
+        _renderFileTabs();
+      });
     });
     }
 
@@ -1070,6 +1090,53 @@
       return EXT_ICON[(f.split('.').pop()||'').toLowerCase()] || '📄';
     }
 
+    /* ── Tab bar ── */
+    var _openTabs = [_activeFile];
+
+    function _renderFileTabs() {
+      var bar = document.getElementById('file-tabs');
+      if (!bar) return;
+      bar.innerHTML = '';
+      var seen = {};
+      _openTabs.forEach(function(f) { seen[f] = true; });
+      Object.keys(_filesCache).forEach(function(f) { seen[f] = true; });
+      var files = Object.keys(seen);
+      files.forEach(function(f) {
+        var active = f === _activeFile;
+        var tab = document.createElement('button');
+        tab.title = f;
+        tab.style.cssText = 'flex-shrink:0;padding:3px 10px;border-radius:5px;border:1px solid ' +
+          (active ? 'rgba(0,243,255,0.4)' : 'rgba(255,255,255,0.08)') +
+          ';background:' + (active ? 'rgba(0,243,255,0.1)' : 'rgba(255,255,255,0.03)') +
+          ';color:' + (active ? '#00f3ff' : '#8c9cb2') +
+          ';font-size:0.7rem;font-family:"Fira Code",monospace;cursor:pointer;display:flex;align-items:center;gap:4px;white-space:nowrap;transition:all 0.15s;';
+        var name = document.createElement('span');
+        name.style.cssText = 'max-width:120px;overflow:hidden;text-overflow:ellipsis;display:inline-block;';
+        name.textContent = _extIcon(f) + ' ' + f;
+        tab.appendChild(name);
+        tab.addEventListener('click', function() { loadVirtualFile(f); });
+        bar.appendChild(tab);
+      });
+      var plus = document.createElement('button');
+      plus.title = 'Gestionar archivos';
+      plus.style.cssText = 'flex-shrink:0;padding:3px 9px;border-radius:5px;border:1px solid rgba(134,239,172,0.3);background:rgba(134,239,172,0.05);color:#86efac;font-size:0.8rem;cursor:pointer;transition:all 0.15s;';
+      plus.textContent = '\u{1F4C1}';
+      plus.addEventListener('click', openFilesPanel);
+      bar.appendChild(plus);
+    }
+
+    function _parseFileBlocks(text) {
+      var regex = /<<<ARCHIVO:([\w.\-]+)>>>([\s\S]*?)<<<FIN>>>/g;
+      var files = [];
+      var clean = text;
+      var m;
+      while ((m = regex.exec(text)) !== null) {
+        files.push({ filename: m[1].trim(), content: m[2].trim() });
+        clean = clean.replace(m[0], '\u{1F4C1} Archivo creado: ' + m[1].trim() + ' \u2705');
+      }
+      return { files: files, clean: clean };
+    }
+
     async function _apiFetchFiles() {
       try {
         var r = await fetch('/api/files?project=agy-ide');
@@ -1189,6 +1256,8 @@
         var badge = document.getElementById('editor-lang');
         if (badge) badge.textContent = lang;
       }
+      if (_openTabs.indexOf(filename) === -1) _openTabs.push(filename);
+      _renderFileTabs();
       await renderFileList();
       closeFilesPanel();
     }
