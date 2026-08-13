@@ -38,13 +38,15 @@ const IDE_SYSTEM = 'Eres un asistente de programacion en un IDE online. ' +
   'El sistema detecta estos bloques y los guarda como pestanas en el editor. SIEMPRE cierra con [[FIN]].';
 
 async function callAI(userMsg) {
-  const key = GEMINI_KEY || GROQ_KEY;
-  if (!key) throw new Error('Sin API key de IA configurada');
+  console.log('[callAI] inicio, GEMINI_KEY presente:', !!GEMINI_KEY, 'GROQ_KEY presente:', !!GROQ_KEY);
+  if (!GEMINI_KEY && !GROQ_KEY) throw new Error('Sin API key de IA configurada');
+
+  const aiTimeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('IA sin respuesta en 15s — verifique API key')), 15000));
 
   if (GEMINI_KEY) {
-    // Gemini — funciona desde Railway (mismo que CiberCode)
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+    const geminiCall = fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + GEMINI_KEY,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -54,24 +56,27 @@ async function callAI(userMsg) {
         })
       }
     );
+    const r = await Promise.race([geminiCall, aiTimeout]);
     const d = await r.json();
-    if (!r.ok) throw new Error(d.error?.message || 'Gemini error ' + r.status);
-    return d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '(sin respuesta)';
+    console.log('[callAI] Gemini status:', r.status);
+    if (!r.ok) throw new Error((d.error && d.error.message) || 'Gemini error ' + r.status);
+    return (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts && d.candidates[0].content.parts[0] && d.candidates[0].content.parts[0].text) || '(sin respuesta)';
   }
 
-  // Fallback Groq
-  const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  const groqCall = fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+    headers: { 'Authorization': 'Bearer ' + GROQ_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'llama-3.3-70b-versatile',
       messages: [{ role: 'system', content: IDE_SYSTEM }, { role: 'user', content: userMsg }],
       max_tokens: 4096
     })
   });
+  const r = await Promise.race([groqCall, aiTimeout]);
   const d = await r.json();
-  if (!r.ok) throw new Error(d.error?.message || 'Groq error ' + r.status);
-  return d.choices?.[0]?.message?.content?.trim() || '(sin respuesta)';
+  console.log('[callAI] Groq status:', r.status);
+  if (!r.ok) throw new Error((d.error && d.error.message) || 'Groq error ' + r.status);
+  return (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || '(sin respuesta)';
 }
 const TG_TOKEN            = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT_ID          = process.env.TELEGRAM_LEAD_ARCHITECT_CHAT_ID;
