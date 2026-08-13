@@ -653,6 +653,74 @@ app.delete('/api/chats/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+/* ══════════════════════════════════════════════════════════
+   /api/files — archivos virtuales AGY-IDE en Supabase
+   Reutiliza tabla cibercode_chats: id='agyide_file_'+filename
+══════════════════════════════════════════════════════════ */
+app.get('/api/files', async (req, res) => {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return res.json([]);
+  try {
+    const project = req.query.project || 'agy-ide';
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/cibercode_chats?project=eq.agyide-files-${encodeURIComponent(project)}&order=updated_at.desc&select=id,title,messages,updated_at`,
+      { headers: sbHeaders() }
+    );
+    const data = await r.json();
+    if (!Array.isArray(data)) return res.json([]);
+    const files = data.map(row => ({
+      id:       row.id,
+      filename: row.title || row.id,
+      content:  (Array.isArray(row.messages) && row.messages[0]) ? row.messages[0].content : '',
+      updated_at: row.updated_at
+    }));
+    res.json(files);
+  } catch (e) { res.json([]); }
+});
+
+app.post('/api/files', async (req, res) => {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return res.json({ ok: false });
+  const { filename, content = '', project = 'agy-ide' } = req.body || {};
+  if (!filename) return res.status(400).json({ error: 'filename requerido' });
+  const id      = 'agyide_file_' + project + '_' + filename;
+  const proj    = 'agyide-files-' + project;
+  const payload = { id, project: proj, title: filename,
+    messages: [{ role: 'file', content }],
+    updated_at: new Date().toISOString() };
+  try {
+    const check = await fetch(
+      `${SUPABASE_URL}/rest/v1/cibercode_chats?id=eq.${encodeURIComponent(id)}&select=id`,
+      { headers: sbHeaders() }
+    );
+    const existing = await check.json();
+    if (Array.isArray(existing) && existing.length > 0) {
+      await sbPatch('cibercode_chats', id, {
+        messages: payload.messages, updated_at: payload.updated_at
+      });
+    } else {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/cibercode_chats`, {
+        method: 'POST',
+        headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
+        body: JSON.stringify(payload)
+      });
+      if (!r.ok) throw new Error(await r.text());
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/files/:filename', async (req, res) => {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return res.json({ ok: false });
+  const project = req.query.project || 'agy-ide';
+  const id      = 'agyide_file_' + project + '_' + req.params.filename;
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/cibercode_chats?id=eq.${encodeURIComponent(id)}`,
+      { method: 'DELETE', headers: sbHeaders() }
+    );
+    res.json({ ok: r.ok });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 app.listen(PORT, async () => {
   console.log(`AGY-IDE ▶  puerto ${PORT} | /goal mode ACTIVO`);
   await reconcileInterruptedSessions();
