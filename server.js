@@ -41,12 +41,13 @@ async function callAI(userMsg) {
   console.log('[callAI] inicio, GEMINI_KEY presente:', !!GEMINI_KEY, 'GROQ_KEY presente:', !!GROQ_KEY);
   if (!GEMINI_KEY && !GROQ_KEY) throw new Error('Sin API key de IA configurada');
 
-  const aiTimeout = new Promise((_, reject) =>
+  const aiTimeout = () => new Promise((_, reject) =>
     setTimeout(() => reject(new Error('IA sin respuesta en 15s — verifique API key')), 15000));
 
   if (GEMINI_KEY) {
+    try {
     const geminiCall = fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + GEMINI_KEY,
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + GEMINI_KEY,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -56,11 +57,16 @@ async function callAI(userMsg) {
         })
       }
     );
-    const r = await Promise.race([geminiCall, aiTimeout]);
+    const r = await Promise.race([geminiCall, aiTimeout()]);
     const d = await r.json();
     console.log('[callAI] Gemini status:', r.status);
     if (!r.ok) throw new Error((d.error && d.error.message) || 'Gemini error ' + r.status);
     return (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts && d.candidates[0].content.parts[0] && d.candidates[0].content.parts[0].text) || '(sin respuesta)';
+    } catch (geminiErr) {
+      console.error('[callAI] Gemini falló:', geminiErr.message);
+      if (!GROQ_KEY) throw geminiErr;
+      // Fallback automático a Groq
+    }
   }
 
   const groqCall = fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -72,7 +78,7 @@ async function callAI(userMsg) {
       max_tokens: 4096
     })
   });
-  const r = await Promise.race([groqCall, aiTimeout]);
+  const r = await Promise.race([groqCall, aiTimeout()]);
   const d = await r.json();
   console.log('[callAI] Groq status:', r.status);
   if (!r.ok) throw new Error((d.error && d.error.message) || 'Groq error ' + r.status);
