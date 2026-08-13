@@ -1371,8 +1371,8 @@
     window.loadVirtualFile  = loadVirtualFile;
     window.deleteVirtualFile = deleteVirtualFile;
     window.sendChat         = sendChat;
-    window.toggleComandos   = toggleComandos;
-    window._flatCmds        = _flatCmds;
+    /* toggleComandos y _flatCmds se definen globalmente en el script del panel COMANDOS (más abajo).
+       Referenciarlos aquí lanzaba ReferenceError y mataba el resto de este script (chat, historial). */
    /* ══════════════════════════════════════════
      CHAT PERSISTENCE — Guardar/Cargar en Supabase
     ══════════════════════════════════════════ */
