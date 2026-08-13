@@ -458,14 +458,46 @@
           window.speechSynthesis.speak(u);
         } catch(e) {}
       }
-      function _speak(text, force) {
+      /* Limpieza amistosa: convierte la respuesta en texto natural, como si lo leyera una persona */
+    function _cleanForSpeech(text) {
+      var t = String(text)
+        /* bloques técnicos → frases humanas */
+        .replace(/\[\[ARCHIVO:[\s\S]*?\[\[FIN\]\]/g, ' Te dejé el archivo listo. ')
+        .replace(/```[\s\S]*?```/g, ' Te dejé el código en la pantalla. ')
+        .replace(/https?:\/\/\S+/g, ' el enlace que está en pantalla ')
+        .replace(/[A-Za-z]:\\[^\s,;]+/g, ' la ruta que ves en pantalla ')
+        .replace(/(^|\s)\/(home|usr|var|tmp|etc)\/[^\s,;]+/g, '    function _speak(text, force) { la ruta que ves en pantalla ')
+        .replace(/\S+@\S+\.\S+/g, ' el correo en pantalla ')
+        /* símbolos → palabras */
+        .replace(/%/g, ' por ciento')
+        .replace(/&/g, ' y ')
+        .replace(/\s\+\s/g, ' más ')
+        .replace(/->|→/g, ' a ')
+        /* abreviaturas comunes → habla natural */
+        .replace(/\bp\.?\s?ej\.?/gi, 'por ejemplo')
+        .replace(/\betc\.?/gi, 'etcétera')
+        .replace(/\bok\b/gi, 'listo')
+        /* fuera formato: asteriscos, numerales, listas, tablas, emojis */
+        .replace(/[*_#`~<>|\[\]{}=^]+/g, ' ')
+        .replace(/^\s*[-•▪◦›»]\s+/gm, ' ')
+        .replace(/^\s*\d+[\.\)]\s+/gm, ' ')
+        .replace(/[-—–]{2,}/g, ' ')
+        .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}\u{2700}-\u{27BF}]/gu, ' ')
+        /* respiración natural: saltos de línea → pausas, sin repetir puntuación */
+        .replace(/\n{2,}/g, '. ')
+        .replace(/\n/g, ', ')
+        .replace(/\s*([.,;:!?])\s*\1+/g, '    function _speak(text, force) { ')
+        .replace(/\s+([.,;:!?])/g, '    function _speak(text, force) {')
+        .replace(/([.,;:])\s*\./g, '    function _speak(text, force) { ')
+        .replace(/\s{2,}/g, ' ')
+        .trim()
+        .slice(0, 1200);
+      return t;
+    }
+    function _speak(text, force) {
       if ((!_ttsOn && !force) || !('speechSynthesis' in window)) return;
         // no leer bloques de archivos ni codigo
-        var clean = String(text)
-          .replace(/\[\[ARCHIVO:[\s\S]*?\[\[FIN\]\]/g, ' He creado el archivo. ')
-          .replace(/```[\s\S]*?```/g, ' (codigo en pantalla) ')
-          .replace(/https?:\/\/\S+/g, ' enlace ')
-          .slice(0, 1200);
+        var clean = _cleanForSpeech(text);
         if (!clean.trim()) return;
         _ttsStop();
         // Voz premium con IA (Gemini TTS); si falla, cae al lector del navegador
