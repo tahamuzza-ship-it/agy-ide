@@ -1044,59 +1044,84 @@
 
 
 
-    /* ══════════════════════════════════════════
-     GESTOR DE ARCHIVOS — localStorage + Monaco
+        /* ══════════════════════════════════════════
+     GESTOR DE ARCHIVOS — Supabase + Monaco
     ══════════════════════════════════════════ */
-    var FILES_KEY = 'agyide_files_v1';
     var _activeFile = 'script.js';
+    var _filesCache = {};   // cache local para no perder ediciones en vuelo
 
     var EXT_LANG = {
       js:'javascript', ts:'typescript', py:'python', html:'html', css:'css',
       json:'json', md:'markdown', sh:'shell', bash:'shell', sql:'sql',
       txt:'plaintext', xml:'xml', yaml:'yaml', yml:'yaml', rs:'rust',
-      go:'go', rb:'ruby', php:'php', java:'java', cpp:'cpp', c:'c'
+      go:'go', rb:'ruby', php:'php', java:'java', cpp:'cpp', c:'c',
+      kt:'kotlin', swift:'swift', r:'r', cs:'csharp'
     };
-
     var EXT_ICON = {
       py:'🐍', js:'📜', ts:'📘', html:'🌐', css:'🎨', json:'📋',
-      md:'📝', sh:'⚙', sql:'🗄', txt:'📄'
+      md:'📝', sh:'⚙', sql:'🗄', txt:'📄', java:'☕', rb:'💎',
+      go:'🐹', rs:'🦀', cpp:'⚙', cs:'🔷', kt:'🟣', swift:'🍎'
     };
 
     function _extLang(f) {
-      var ext = (f.split('.').pop() || '').toLowerCase();
-      return EXT_LANG[ext] || 'plaintext';
+      return EXT_LANG[(f.split('.').pop()||'').toLowerCase()] || 'plaintext';
     }
     function _extIcon(f) {
-      var ext = (f.split('.').pop() || '').toLowerCase();
-      return EXT_ICON[ext] || '📄';
-    }
-    function _loadVirtualFiles() {
-      try { return JSON.parse(localStorage.getItem(FILES_KEY) || '{}'); } catch(e) { return {}; }
-    }
-    function _saveVirtualFiles(files) {
-      try { localStorage.setItem(FILES_KEY, JSON.stringify(files)); } catch(e) {}
+      return EXT_ICON[(f.split('.').pop()||'').toLowerCase()] || '📄';
     }
 
-    function saveCurrentFile() {
+    async function _apiFetchFiles() {
+      try {
+        var r = await fetch('/api/files?project=agy-ide');
+        var arr = await r.json();
+        if (!Array.isArray(arr)) return {};
+        var obj = {};
+        arr.forEach(function(f) { obj[f.filename] = f.content || ''; });
+        return obj;
+      } catch(e) { return {}; }
+    }
+
+    async function _apiSaveFile(filename, content) {
+      try {
+        await fetch('/api/files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: filename, content: content, project: 'agy-ide' })
+        });
+      } catch(e) {}
+    }
+
+    async function _apiDeleteFile(filename) {
+      try {
+        await fetch('/api/files/' + encodeURIComponent(filename) + '?project=agy-ide',
+          { method: 'DELETE' });
+      } catch(e) {}
+    }
+
+    async function saveCurrentFile() {
       if (!monacoEditor) return;
-      var files = _loadVirtualFiles();
-      files[_activeFile] = monacoEditor.getValue();
-      _saveVirtualFiles(files);
+      var content = monacoEditor.getValue();
+      _filesCache[_activeFile] = content;
+      await _apiSaveFile(_activeFile, content);
       renderFileList();
       showDiffToast('\u{1F4BE} ' + _activeFile + ' guardado', true);
     }
 
-    function openFilesPanel() {
+    async function openFilesPanel() {
       var m = document.getElementById('files-modal');
       m.style.display = 'flex';
       m.style.alignItems = 'center';
       m.style.justifyContent = 'center';
-      renderFileList();
+      // guardar estado actual del editor antes de mostrar lista
+      if (monacoEditor) _filesCache[_activeFile] = monacoEditor.getValue();
+      await renderFileList();
     }
+
     function closeFilesPanel() {
       document.getElementById('files-modal').style.display = 'none';
       document.getElementById('new-file-row').style.display = 'none';
     }
+
     function promptNewFile() {
       var row = document.getElementById('new-file-row');
       row.style.display = 'flex';
@@ -1104,41 +1129,59 @@
       inp.value = '';
       setTimeout(function() { inp.focus(); }, 60);
     }
+
     function cancelNewFile() {
       document.getElementById('new-file-row').style.display = 'none';
     }
-    function confirmNewFile() {
+
+    async function confirmNewFile() {
       var inp = document.getElementById('new-file-input');
       var name = (inp.value || '').trim();
       if (!name) return;
-      if (name.indexOf('.') === -1) { showDiffToast('Incluye la extension: script.py, index.html...', false); return; }
-      var files = _loadVirtualFiles();
-      if (files[name]) { showDiffToast('Ya existe ' + name, false); return; }
+      if (name.indexOf('.') === -1) {
+        showDiffToast('Agrega la extensi\u00F3n: script.py, index.html, Main.java...', false);
+        return;
+      }
+      // verificar si ya existe
+      var files = await _apiFetchFiles();
+      if (files[name] !== undefined) {
+        showDiffToast('Ya existe ' + name, false);
+        return;
+      }
+      // contenido inicial por extensión
       var ext = name.split('.').pop().toLowerCase();
       var content = '';
-      if (ext === 'py')   content = '# ' + name + '\n\nprint("Hola desde Python!")\n';
-      else if (ext === 'js')  content = '// ' + name + '\n\nconsole.log("Hola!");\n';
-      else if (ext === 'ts')  content = '// ' + name + '\n\nconsole.log("Hola desde TS!");\n';
-      else if (ext === 'html') content = '<!DOCTYPE html>\n<html lang="es">\n<head><meta charset="UTF-8"><title>' + name + '</title></head>\n<body>\n<h1>Hola</h1>\n</body>\n</html>\n';
-      else if (ext === 'css') content = '/* ' + name + ' */\nbody { margin: 0; }\n';
-      else if (ext === 'sh')  content = '#!/bin/bash\n# ' + name + '\necho "Hola"\n';
-      else content = '# ' + name + '\n';
-      files[name] = content;
-      _saveVirtualFiles(files);
+      if (ext === 'py')        content = '# ' + name + '\n\nprint("Hola desde Python!")\n';
+      else if (ext === 'java') content = 'public class ' + name.replace('.java','') + ' {\n    public static void main(String[] args) {\n        System.out.println("Hola desde Java!");\n    }\n}\n';
+      else if (ext === 'js')   content = '// ' + name + '\n\nconsole.log("Hola!");\n';
+      else if (ext === 'ts')   content = '// ' + name + '\n\nconsole.log("Hola desde TypeScript!");\n';
+      else if (ext === 'html') content = '<!DOCTYPE html>\n<html lang="es">\n<head>\n  <meta charset="UTF-8">\n  <title>' + name.replace('.html','') + '</title>\n</head>\n<body>\n  <h1>Hola</h1>\n</body>\n</html>\n';
+      else if (ext === 'css')  content = '/* ' + name + ' */\nbody {\n  margin: 0;\n  font-family: sans-serif;\n}\n';
+      else if (ext === 'sh')   content = '#!/bin/bash\n# ' + name + '\n\necho "Hola"\n';
+      else if (ext === 'sql')  content = '-- ' + name + '\nSELECT 1;\n';
+      else if (ext === 'md')   content = '# ' + name.replace('.md','') + '\n\nEscribe aquí...\n';
+      else                     content = '# ' + name + '\n';
+
+      _filesCache[name] = content;
+      await _apiSaveFile(name, content);
       document.getElementById('new-file-row').style.display = 'none';
-      loadVirtualFile(name);
+      await loadVirtualFile(name);
     }
 
-    function loadVirtualFile(filename) {
-      var files = _loadVirtualFiles();
-      if (!files[filename] && filename !== 'script.js') return;
+    async function loadVirtualFile(filename) {
+      // guardar archivo actual
       if (monacoEditor) {
-        var cur = _loadVirtualFiles();
-        cur[_activeFile] = monacoEditor.getValue();
-        _saveVirtualFiles(cur);
+        _filesCache[_activeFile] = monacoEditor.getValue();
+        await _apiSaveFile(_activeFile, _filesCache[_activeFile]);
       }
       _activeFile = filename;
-      var content = files[filename] || '';
+      // obtener contenido: cache local primero, luego API
+      var content = _filesCache[filename];
+      if (content === undefined) {
+        var files = await _apiFetchFiles();
+        content = files[filename] !== undefined ? files[filename] : '';
+        _filesCache[filename] = content;
+      }
       if (monacoEditor) {
         monacoEditor.setValue(content);
         var lang = _extLang(filename);
@@ -1146,27 +1189,36 @@
         var badge = document.getElementById('editor-lang');
         if (badge) badge.textContent = lang;
       }
-      renderFileList();
+      await renderFileList();
       closeFilesPanel();
     }
 
-    function deleteVirtualFile(filename) {
+    async function deleteVirtualFile(filename) {
       if (!confirm('Borrar ' + filename + '?')) return;
-      var files = _loadVirtualFiles();
-      delete files[filename];
-      _saveVirtualFiles(files);
+      delete _filesCache[filename];
+      await _apiDeleteFile(filename);
       if (_activeFile === filename) {
+        var files = await _apiFetchFiles();
         var remaining = Object.keys(files);
-        if (remaining.length > 0) loadVirtualFile(remaining[0]);
-        else { _activeFile = 'script.js'; if (monacoEditor) monacoEditor.setValue(''); }
+        if (remaining.length > 0) {
+          await loadVirtualFile(remaining[0]);
+        } else {
+          _activeFile = 'script.js';
+          if (monacoEditor) monacoEditor.setValue('');
+        }
       }
-      renderFileList();
+      await renderFileList();
     }
 
-    function renderFileList() {
+    async function renderFileList() {
       var list = document.getElementById('files-modal-list');
       if (!list) return;
-      var files = _loadVirtualFiles();
+      list.innerHTML = '<div style="color:#526075;font-size:0.8rem;text-align:center;padding:20px;">Cargando...</div>';
+      var files = await _apiFetchFiles();
+      // incluir archivo activo en cache aunque no esté guardado aún
+      if (_filesCache[_activeFile] !== undefined && files[_activeFile] === undefined) {
+        files[_activeFile] = _filesCache[_activeFile];
+      }
       var names = Object.keys(files);
       if (names.length === 0) {
         list.innerHTML = '<div style="color:#526075;font-size:0.8rem;text-align:center;padding:20px;">Sin archivos. Presiona + NUEVO para crear uno.</div>';
@@ -1176,36 +1228,41 @@
       names.forEach(function(name) {
         var isActive = name === _activeFile;
         var card = document.createElement('div');
-        card.style.cssText = 'border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;background:' + (isActive ? 'rgba(134,239,172,0.07)' : 'rgba(255,255,255,0.02)') + ';border:1px solid ' + (isActive ? 'rgba(134,239,172,0.3)' : 'rgba(255,255,255,0.06)') + ';';
+        card.style.cssText = 'border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:6px;background:' + (isActive ? 'rgba(134,239,172,0.07)' : 'rgba(255,255,255,0.02)') + ';border:1px solid ' + (isActive ? 'rgba(134,239,172,0.3)' : 'rgba(255,255,255,0.06)') + ';';
         var icon = document.createElement('span');
-        icon.style.cssText = 'font-size:1.1rem;flex-shrink:0;';
+        icon.style.cssText = 'font-size:1.2rem;flex-shrink:0;';
         icon.textContent = _extIcon(name);
         var info = document.createElement('div');
         info.style.cssText = 'flex:1;min-width:0;';
         var fname = document.createElement('div');
-        fname.style.cssText = 'font-size:0.82rem;font-weight:' + (isActive ? '700' : '500') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:' + (isActive ? '#86efac' : '#e0e8ff') + ';';
+        fname.style.cssText = 'font-size:0.85rem;font-weight:' + (isActive ? '700' : '500') + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:' + (isActive ? '#86efac' : '#e0e8ff') + ';';
         fname.textContent = (isActive ? '\u25B6 ' : '') + name;
         var finfo = document.createElement('div');
-        finfo.style.cssText = 'color:#526075;font-size:0.68rem;margin-top:2px;';
-        var fc = files[name] || '';
-        finfo.textContent = _extLang(name) + ' \u00B7 ' + fc.split('\n').length + ' lineas';
+        finfo.style.cssText = 'color:#526075;font-size:0.7rem;margin-top:2px;';
+        finfo.textContent = _extLang(name) + ' \u00B7 ' + (files[name]||'').split('\n').length + ' l\u00EDneas';
         info.appendChild(fname);
         info.appendChild(finfo);
         var btns = document.createElement('div');
         btns.style.cssText = 'display:flex;gap:4px;flex-shrink:0;';
         if (!isActive) {
           var btnOpen = document.createElement('button');
-          btnOpen.style.cssText = 'padding:5px 10px;background:#1e3a5f;color:#90caf9;border:none;border-radius:6px;font-size:0.7rem;cursor:pointer;font-weight:600;';
+          btnOpen.style.cssText = 'padding:5px 10px;background:#1e3a5f;color:#90caf9;border:none;border-radius:6px;font-size:0.72rem;cursor:pointer;font-weight:600;';
           btnOpen.textContent = '\u25B6 Abrir';
-          (function(n) { btnOpen.onclick = function(e) { e.stopPropagation(); loadVirtualFile(n); }; })(name);
+          (function(n) {
+            btnOpen.onclick = function(e) { e.stopPropagation(); loadVirtualFile(n); };
+          })(name);
           btns.appendChild(btnOpen);
         }
         var btnDel = document.createElement('button');
-        btnDel.style.cssText = 'padding:5px 8px;background:rgba(255,50,50,0.1);color:#f87171;border:1px solid rgba(255,50,50,0.2);border-radius:6px;font-size:0.7rem;cursor:pointer;';
+        btnDel.style.cssText = 'padding:5px 8px;background:rgba(255,50,50,0.1);color:#f87171;border:1px solid rgba(255,50,50,0.2);border-radius:6px;font-size:0.72rem;cursor:pointer;';
         btnDel.textContent = '\u{1F5D1}';
-        (function(n) { btnDel.onclick = function(e) { e.stopPropagation(); deleteVirtualFile(n); }; })(name);
+        (function(n) {
+          btnDel.onclick = function(e) { e.stopPropagation(); deleteVirtualFile(n); };
+        })(name);
         btns.appendChild(btnDel);
-        (function(n) { card.onclick = function() { if (n !== _activeFile) loadVirtualFile(n); }; })(name);
+        (function(n) {
+          card.onclick = function() { if (n !== _activeFile) loadVirtualFile(n); };
+        })(name);
         card.appendChild(icon);
         card.appendChild(info);
         card.appendChild(btns);
@@ -1224,9 +1281,7 @@
     window.sendChat         = sendChat;
     window.toggleComandos   = toggleComandos;
     window._flatCmds        = _flatCmds;
-
-
-    /* ══════════════════════════════════════════
+   /* ══════════════════════════════════════════
      CHAT PERSISTENCE — Guardar/Cargar en Supabase
     ══════════════════════════════════════════ */
     var _chatSessionId = (function() {
