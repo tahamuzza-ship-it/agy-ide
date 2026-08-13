@@ -542,8 +542,8 @@
     async function _buildFileContext(msg) {
       try {
         var low = msg.toLowerCase();
-        var wantsRead = /(lee|leer|revisa|mira|abre|analiza|corrige|modifica|edita|agrega|anade|añade|actualiza|completa|contin|mejora|arregla)/.test(low) &&
-                        /(archivo|editor|codigo|código|script|proyecto|manual|abierto)/.test(low);
+        var wantsRead = /(le[ée]|leer|revis|mir[ae]|abr[ei]|analiz|corri[gj]|modific|edit|agreg|anad|añad|actualiz|complet|contin|mejor|arregl|cambi|quit|borr|elimin|escrib|pon[gle])/.test(low) &&
+                        /(archivo|editor|codigo|código|script|proyecto|manual|documento|texto|abierto|contenido)/.test(low);
         var files = await _apiFetchFiles();
         if (monacoEditor && _activeFile) { _filesCache[_activeFile] = monacoEditor.getValue(); }
         Object.keys(_filesCache).forEach(function(n) { if (files[n] === undefined) files[n] = _filesCache[n]; });
