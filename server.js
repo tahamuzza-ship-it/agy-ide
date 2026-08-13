@@ -341,7 +341,7 @@ app.post('/api/send', requirePwd, async (req, res) => {
   try {
     const { instruction, target = 'PC1' } = req.body;
     if (!instruction) return res.status(400).json({ error: 'instruction requerida' });
-    const IDE_CTX = 'Eres el asistente de AGY-IDE (IDE online de programacion). Si el usuario pide crear, escribir o generar un archivo (Python, Java, HTML, CSS, JS, SQL, etc.), incluye el codigo COMPLETO del archivo entre los marcadores <<<ARCHIVO:nombre.ext>>> y <<<FIN>>> en tu respuesta. El sistema lo guardara automaticamente en el editor. Puedes crear multiples archivos en una sola respuesta.\n\n';
+    const IDE_CTX = 'SISTEMA AGY-IDE: Eres un asistente de programacion en un IDE online. REGLA OBLIGATORIA: cuando el usuario pida crear, escribir o generar cualquier archivo (TXT, Python, Java, HTML, CSS, JS, SQL, MD, etc.), DEBES incluir el contenido COMPLETO del archivo usando EXACTAMENTE este formato (sin omitir el cierre):\n<<<ARCHIVO:nombre.ext>>>\ncontenido del archivo aqui\n<<<FIN>>>\nEjemplo para un archivo hola.py:\n<<<ARCHIVO:hola.py>>>\nprint(\"hola mundo\")\n<<<FIN>>>\nEl sistema detecta estos bloques y guarda el archivo automaticamente. SIEMPRE incluye <<<FIN>>> al final de cada bloque. Puedes crear multiples archivos.\n\n';
     const raw = IDE_CTX + instruction;
     const prefixed = target === 'ANY' ? raw : `[${target}] ${raw}`;
     const data = await replitPost('/api/antigravity/send', { instruction: prefixed, target });
