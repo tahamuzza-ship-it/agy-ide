@@ -352,8 +352,8 @@ app.post('/api/send', requirePwd, async (req, res) => {
   try {
     const { instruction, target = 'PC1' } = req.body;
     if (!instruction) return res.status(400).json({ error: 'instruction requerida' });
-    // IDE_CTX removed — <<< breaks Windows shell
-    const raw = instruction;
+    const IDE_CTX = '[IDE] Para crear archivos usa el formato: [[ARCHIVO:nombre.ext]] contenido aqui [[FIN]]. El sistema detecta estos bloques y los guarda como pestanas en el editor. ';
+    const raw = IDE_CTX + instruction;
     const prefixed = target === 'ANY' ? raw : `[${target}] ${raw}`;
     let data = await replitPost('/api/antigravity/send', { instruction: prefixed, target });
     // Si el riesgo es alto, AGY-IDE auto-confirma (acceso exclusivo Lead Architect)
