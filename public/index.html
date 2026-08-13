@@ -458,8 +458,8 @@
           window.speechSynthesis.speak(u);
         } catch(e) {}
       }
-      function _speak(text) {
-        if (!_ttsOn) return;
+      function _speak(text, force) {
+      if ((!_ttsOn && !force) || !('speechSynthesis' in window)) return;
         // no leer bloques de archivos ni codigo
         var clean = String(text)
           .replace(/\[\[ARCHIVO:[\s\S]*?\[\[FIN\]\]/g, ' He creado el archivo. ')
@@ -498,6 +498,8 @@
       });
       _ttsUpdateBtn();
       if ('speechSynthesis' in window) window.speechSynthesis.getVoices();
+      var _vinp = document.getElementById('chat-input');
+      if (_vinp) _vinp.addEventListener('input', function() { window._agySpeakNext = false; });
     });
 
     function appendThinking() {
@@ -525,7 +527,8 @@
     wrap.appendChild(meta);
     chatHistory.push({ role: 'agt', text: display, time: meta.textContent });
     saveHistory(chatHistory);
-    _speak(display);
+    if (window._agySpeakNext) { window._agySpeakNext = false; _speak(display, true); }
+    else _speak(display);
     const box = document.getElementById('chat-messages');
     box.scrollTop = box.scrollHeight;
     if (parsed.files.length > 0) {
@@ -728,6 +731,7 @@
       send.disabled = false;
       inp.focus();
     }
+        window._agySpeakNext = true; // dictado por voz → AGY responderá con voz
     }
 
     /* ══════════════════════════════════════════
