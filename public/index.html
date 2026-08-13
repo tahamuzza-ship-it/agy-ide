@@ -8,10 +8,18 @@
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;600;700&family=Orbitron:wght@600;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <style>
-      /* Fondo personalizado de Roberto — imagen con velo oscuro para que el texto siga legible */
+      /* Fondo personalizado de Roberto — imagen con velo suave para que el texto siga legible */
+      html { background: #04080e !important; }
       body {
-        background: linear-gradient(rgba(4,8,14,0.82), rgba(4,8,14,0.88)), url('fondo-agy.jpeg') center/cover no-repeat fixed !important;
+        background: linear-gradient(rgba(4,8,14,0.45), rgba(4,8,14,0.60)), url('fondo-agy.jpeg') center/cover no-repeat fixed !important;
       }
+      /* paneles semitransparentes: la imagen se ve a través de la app */
+      :root {
+        --bg:  rgba(7,12,26,0.42) !important;
+        --bg2: rgba(12,18,37,0.55) !important;
+        --bg3: rgba(17,24,39,0.62) !important;
+      }
+      #app { background: transparent !important; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.43.0/min/vs/loader.js"></script>
       <script>
