@@ -1345,11 +1345,13 @@
           var r = await fetch('/api/files?project=agy-ide');
           if (!r.ok) throw new Error('HTTP ' + r.status);
           var arr = await r.json();
+          if (!Array.isArray(arr)) throw new Error('respuesta inv\u00E1lida del servidor');
           var found = null;
-          (Array.isArray(arr) ? arr : []).forEach(function(f) { if (f.filename === filename) found = f.content || ''; });
-          if (found !== null) current = found;
-          else if (_filesCache[filename] !== undefined) current = _filesCache[filename];
-          else current = '';
+          arr.forEach(function(f) { if (f.filename === filename) found = f.content || ''; });
+          // exigir lectura satisfactoria del archivo: nunca asumir vacío ni usar caché,
+          // porque un POST posterior sobrescribiría el contenido real
+          if (found === null) throw new Error('el archivo no apareci\u00F3 en la lectura');
+          current = found;
         } catch(e) {
           showDiffToast('No se pudo leer ' + filename + '. Revisa la conexi\u00F3n e intenta de nuevo.', false);
           return; // no cerrar el cuadro: el texto pegado no se pierde
