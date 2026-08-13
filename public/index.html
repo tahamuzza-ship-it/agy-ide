@@ -2134,14 +2134,20 @@
         }
 
       rec.onresult = function(e) {
-        var interim = '';
-        for (var i = e.resultIndex; i < e.results.length; i++) {
-          if (e.results[i].isFinal) {
-            accumulated += e.results[i][0].transcript;
-          } else {
-            interim += e.results[i][0].transcript;
+          /* En Android el navegador repite los resultados acumulados en cada evento.
+             Por eso NO se suma (+=): se reconstruye todo desde cero y se saltan duplicados. */
+          var finals = '', interim = '', prev = '';
+          for (var i = 0; i < e.results.length; i++) {
+            var t = e.results[i][0].transcript;
+            if (t && t === prev) continue; // duplicado exacto → ignorar
+            prev = t;
+            if (e.results[i].isFinal) {
+              finals += t;
+            } else {
+              interim += t;
+            }
           }
-        }
+          accumulated = finals;
         // mostrar en tiempo real
         var inp = document.getElementById('chat-input');
         if (inp) {
