@@ -39,7 +39,10 @@ const IDE_SYSTEM = 'Eres un asistente de programacion en un IDE online. ' +
 
 async function callGroq(userMsg) {
   if (!GROQ_KEY) throw new Error('GROQ_API_KEY no configurada');
-  const r = await fetch(GROQ_URL, {
+  console.log('[Groq] llamando API, modelo:', GROQ_MODEL);
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('Groq timeout 20s')), 20000));
+  const call = fetch(GROQ_URL, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -52,7 +55,9 @@ async function callGroq(userMsg) {
       temperature: 0.7
     })
   });
+  const r = await Promise.race([call, timeout]);
   const d = await r.json();
+  console.log('[Groq] status:', r.status, 'choices:', d.choices ? d.choices.length : 'none');
   if (!r.ok) throw new Error(d.error?.message || 'Groq error ' + r.status);
   return d.choices?.[0]?.message?.content?.trim() || '(sin respuesta)';
 }
@@ -408,8 +413,8 @@ app.post('/api/send', requirePwd, async (req, res) => {
     }
     res.json(data);
   } catch (e) {
-    console.error('[/api/send]', e.message);
-    res.status(500).json({ error: e.message });
+    console.error('[/api/send] ERROR:', e.message);
+    res.status(200).json({ ok: false, id: 'err_' + Date.now(), error: e.message, result: 'Error: ' + e.message, source: 'error' });
   }
 });
 
