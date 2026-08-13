@@ -1176,7 +1176,7 @@
       var files = [];
       var clean = text;
       // Pass 1: con [[FIN]]
-      var r1 = /\[\[ARCHIVO:([\w.\-]+)\]\]([\s\S]*?)\[\[FIN\]\]/g;
+      var r1 = /\[\[ARCHIVO:([^\]\n]+?)\]\]([\s\S]*?)\[\[FIN\]\]/g;  // acepta espacios y acentos en el nombre
       var m;
       while ((m = r1.exec(text)) !== null) {
         var fname = m[1].trim();
@@ -1186,7 +1186,7 @@
       }
       // Pass 2: [[ARCHIVO:name]] sin [[FIN]] (respuestas truncadas)
       if (files.length === 0) {
-        var r2 = /\[\[ARCHIVO:([\w.\-]+)\]\]([\s\S]+)/;
+        var r2 = /\[\[ARCHIVO:([^\]\n]+?)\]\]([\s\S]+)/;
         var m2 = r2.exec(text);
         if (m2) {
           var fname2 = m2[1].trim();
