@@ -1126,13 +1126,31 @@
     }
 
     function _parseFileBlocks(text) {
-      var regex = /<<<ARCHIVO:([\w.\-]+)>>>([\s\S]*?)<<<FIN>>>/g;
+      // Match <<<ARCHIVO:name>>> ... <<<FIN>>> (with or without FIN, captures to next block or end)
       var files = [];
       var clean = text;
+      // Pass 1: with <<<FIN>>>
+      var r1 = /<<<ARCHIVO:([\w.\-]+)>>>([\s\S]*?)<<<FIN>>>/g;
       var m;
-      while ((m = regex.exec(text)) !== null) {
-        files.push({ filename: m[1].trim(), content: m[2].trim() });
-        clean = clean.replace(m[0], '\u{1F4C1} Archivo creado: ' + m[1].trim() + ' \u2705');
+      while ((m = r1.exec(text)) !== null) {
+        var fname = m[1].trim();
+        var fcontent = m[2].trim();
+        files.push({ filename: fname, content: fcontent });
+        clean = clean.replace(m[0], '\u{1F4C1} Archivo creado: ' + fname + ' \u2705');
+      }
+      // Pass 2: <<<ARCHIVO:name>>> without <<<FIN>>> (truncated responses)
+      if (files.length === 0) {
+        var r2 = /<<<ARCHIVO:([\w.\-]+)>>>([\s\S]+)/;
+        var m2 = r2.exec(text);
+        if (m2) {
+          var fname2 = m2[1].trim();
+          // content = everything after the marker, strip any trailing <<<
+          var fcontent2 = m2[2].replace(/<<<[^>]*>*\s*$/, '').trim();
+          if (fcontent2.length > 0) {
+            files.push({ filename: fname2, content: fcontent2 });
+            clean = clean.replace(m2[0], '\u{1F4C1} Archivo creado: ' + fname2 + ' \u2705');
+          }
+        }
       }
       return { files: files, clean: clean };
     }
