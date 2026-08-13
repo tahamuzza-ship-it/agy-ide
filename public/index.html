@@ -69,7 +69,7 @@
         <button class="hbtn hbtn-run"  id="btn-run">▶ EJECUTAR</button>
         <button class="hbtn hbtn-goal" id="btn-goal">/goal</button>
         <button class="hbtn hbtn-clr"  id="btn-clear-out">🗑 Output</button>
-        <button class="hbtn hbtn-clr"  id="btn-clear-chat" title="Solo limpia la pantalla del chat (el historial guardado no se toca)">🗑 Limpiar chat</button>
+        <button class="hbtn hbtn-clr"  id="btn-clear-chat">🗑 Chat</button>
         <button class="hbtn" id="btn-puente-pc2" title="PUENTE PC2 — tmux en PC2. Termius: ssh roberto@192.168.1.14" style="background:linear-gradient(135deg,#5a0010,#cc0020);color:#fff;border:none;font-weight:700;">🔴 PUENTE PC2</button>
         <button class="hbtn" id="btn-puente-pc1" title="PUENTE PC1 — SSH Windows. Termius: ssh Roberto1@192.168.1.2" style="background:linear-gradient(135deg,#003a7f,#0055cc);color:#fff;border:none;font-weight:700;">🔵 PUENTE PC1</button>
         <button class="hbtn" id="btn-comandos" onclick="toggleComandos()" style="background:linear-gradient(135deg,#1a4731,#22c55e);color:#fff;border:none;font-weight:700;">📋 COMANDOS</button>
@@ -255,7 +255,6 @@
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid rgba(0,243,255,0.12);background:#080f1f;">
       <span style="font-family:'Orbitron',monospace;font-size:0.95rem;font-weight:900;color:#00f3ff;">💬 HISTORIAL DE CHATS</span>
       <div style="display:flex;gap:8px;align-items:center;">
-        <button id="btn-save-chat" title="Guarda ahora mismo la conversación actual" style="padding:5px 12px;background:#0a1f3a;border:1px solid rgba(0,243,255,0.4);color:#00f3ff;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;">💾 GUARDAR</button>
         <button id="btn-new-chat" style="padding:5px 12px;background:#052e16;border:1px solid #166534;color:#86efac;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;">+ NUEVO</button>
         <button id="btn-close-chats" style="background:none;border:none;color:#8c9cb2;font-size:1.2rem;cursor:pointer;padding:4px 8px;">✕</button>
       </div>
@@ -1069,13 +1068,6 @@
     if (btnCloseChats) btnCloseChats.addEventListener('click', closeChatsModal);
     var btnNewChat = document.getElementById('btn-new-chat');
     if (btnNewChat) btnNewChat.addEventListener('click', startNewChat);
-    var btnSaveChat = document.getElementById('btn-save-chat');
-    if (btnSaveChat) btnSaveChat.addEventListener('click', async function() {
-      btnSaveChat.textContent = 'Guardando...';
-      try { await autoSaveChat(); btnSaveChat.textContent = '✅ Guardado'; }
-      catch(e) { btnSaveChat.textContent = '⚠ Error'; }
-      setTimeout(function() { btnSaveChat.textContent = '💾 GUARDAR'; renderChatsList(); }, 1200);
-    });
     var btnCloseFiles = document.getElementById('btn-close-files');
     if (btnCloseFiles) btnCloseFiles.addEventListener('click', closeFilesPanel);
     var btnPromptNew = document.getElementById('btn-prompt-new-file');
@@ -1275,12 +1267,13 @@
 
     async function _apiSaveFile(filename, content) {
       try {
-        await fetch('/api/files', {
+        var r = await fetch('/api/files', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ filename: filename, content: content, project: 'agy-ide' })
         });
-      } catch(e) {}
+        return r.ok;
+      } catch(e) { return false; }
     }
 
     async function _apiDeleteFile(filename) {
@@ -1345,15 +1338,28 @@
       if (filename === _activeFile && monacoEditor) {
         current = monacoEditor.getValue();
       } else {
-        var files = await _apiFetchFiles();
-        current = files[filename];
-        if (current === undefined) current = _filesCache[filename];
-        if (current === undefined) current = '';
+        try {
+          var r = await fetch('/api/files?project=agy-ide');
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          var arr = await r.json();
+          var found = null;
+          (Array.isArray(arr) ? arr : []).forEach(function(f) { if (f.filename === filename) found = f.content || ''; });
+          if (found !== null) current = found;
+          else if (_filesCache[filename] !== undefined) current = _filesCache[filename];
+          else current = '';
+        } catch(e) {
+          showDiffToast('No se pudo leer ' + filename + '. Revisa la conexi\u00F3n e intenta de nuevo.', false);
+          return; // no cerrar el cuadro: el texto pegado no se pierde
+        }
       }
       var updated = current + '\n' + text;
+      var ok = await _apiSaveFile(filename, updated);
+      if (!ok) {
+        showDiffToast('No se pudo guardar ' + filename + '. Intenta de nuevo.', false);
+        return; // no cerrar el cuadro: el texto pegado no se pierde
+      }
       _filesCache[filename] = updated;
       if (filename === _activeFile && monacoEditor) monacoEditor.setValue(updated);
-      await _apiSaveFile(filename, updated);
       document.getElementById('append-file-row').style.display = 'none';
       _appendTarget = null;
       await renderFileList();
