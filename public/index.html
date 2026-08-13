@@ -1288,7 +1288,9 @@
     async function deleteVirtualFile(filename) {
       if (!confirm('Borrar ' + filename + '?')) return;
       delete _filesCache[filename];
-      await _apiDeleteFile(filename);
+        var ti = _openTabs.indexOf(filename);
+        if (ti !== -1) _openTabs.splice(ti, 1);
+        await _apiDeleteFile(filename);
       if (_activeFile === filename) {
         var files = await _apiFetchFiles();
         var remaining = Object.keys(files);
@@ -1299,6 +1301,7 @@
           if (monacoEditor) monacoEditor.setValue('');
         }
       }
+      _renderFileTabs();
       await renderFileList();
     }
 
@@ -1768,7 +1771,7 @@
       var listening      = false;
       var silenceTimer   = null;
       var accumulated    = '';
-      var SILENCE_MS     = 1800;  // espera 1.8s de silencio antes de enviar
+      var SILENCE_MS     = 2500;  // espera 2.5s de silencio antes de detener el micrófono
 
       function setListening(v) {
         listening = v;
@@ -1779,16 +1782,21 @@
         micBtn.title             = v ? 'Escuchando… clic para cancelar' : 'Hablar con AGY';
       }
 
-      function doSend() {
-        clearTimeout(silenceTimer);
-        var text = accumulated.trim();
-        accumulated = '';
-        rec.stop();
-        if (!text) return;
-        var inp = document.getElementById('chat-input');
-        if (inp) { inp.value = text; inp.style.height = 'auto'; inp.style.height = inp.scrollHeight + 'px'; }
-        window.sendChat(text);
-      }
+      /* La voz SOLO escribe el texto en la caja — el usuario envía manualmente con ➤ */
+        function doStop() {
+          clearTimeout(silenceTimer);
+          var text = accumulated.trim();
+          accumulated = '';
+          rec.stop();
+          if (!text) return;
+          var inp = document.getElementById('chat-input');
+          if (inp) {
+            inp.value = text;
+            inp.style.height = 'auto';
+            inp.style.height = Math.min(inp.scrollHeight, 100) + 'px';
+            inp.focus();
+          }
+        }
 
       rec.onresult = function(e) {
         var interim = '';
@@ -1808,7 +1816,7 @@
         }
         // reiniciar timer de silencio
         clearTimeout(silenceTimer);
-        silenceTimer = setTimeout(doSend, SILENCE_MS);
+        silenceTimer = setTimeout(doStop, SILENCE_MS);
       };
 
       rec.onerror = function(e) {
@@ -1820,11 +1828,11 @@
       };
 
       rec.onend = function() {
-        // si habia texto acumulado y no se envio, enviar ahora
-        if (accumulated.trim()) { doSend(); return; }
-        clearTimeout(silenceTimer);
-        setListening(false);
-      };
+          // dejar el texto pendiente en la caja — el usuario envía manualmente
+          if (accumulated.trim()) doStop();
+          clearTimeout(silenceTimer);
+          setListening(false);
+        };
 
       micBtn.addEventListener('click', function() {
         if (listening) {
