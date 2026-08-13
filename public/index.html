@@ -425,6 +425,21 @@
       b.style.background = _ttsOn ? 'rgba(134,239,172,0.18)' : 'rgba(134,239,172,0.08)';
       b.title = _ttsOn ? 'Voz de AGY: ACTIVADA (toca para apagar)' : 'Que AGY responda con voz (gratis, del navegador)';
     }
+    function _bestVoice() {
+      var voices = (window.speechSynthesis.getVoices() || []).filter(function(v) { return /^es/i.test(v.lang); });
+      if (!voices.length) return null;
+      // puntaje: voces naturales primero, femeninas primero
+      function score(v) {
+        var n = (v.name || '').toLowerCase(), s = 0;
+        if (/natural|neural|online|premium|enhanced|google/.test(n)) s += 20; // menos robóticas
+        if (/paloma|paulina|mónica|monica|helena|sabina|lucia|lucía|elvira|dalia|camila|isidora|catalina|salome|salomé|ximena|female|mujer|maría|maria|laura|carmen|sofia|sofía|elena/.test(n)) s += 10;
+        if (/pablo|jorge|raul|raúl|diego|male|hombre|alvaro|álvaro|gonzalo|liberto|saul|saúl|tomas|tomás/.test(n)) s -= 10;
+        if (/es[-_](es|mx|us|co|419)/i.test(v.lang)) s += 3;
+        return s;
+      }
+      voices.sort(function(a, b) { return score(b) - score(a); });
+      return voices[0];
+    }
     function _speak(text) {
       if (!_ttsOn || !('speechSynthesis' in window)) return;
       try {
@@ -438,10 +453,10 @@
         if (!clean.trim()) return;
         var u = new SpeechSynthesisUtterance(clean);
         u.lang = 'es-ES';
-        var voices = window.speechSynthesis.getVoices() || [];
-        var es = voices.find(function(v) { return /^es/i.test(v.lang); });
-        if (es) u.voice = es;
+        var best = _bestVoice();
+        if (best) u.voice = best;
         u.rate = 1.0;
+        u.pitch = 1.05;
         window.speechSynthesis.speak(u);
       } catch(e) {}
     }
