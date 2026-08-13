@@ -1442,6 +1442,13 @@
           })(name);
           btns.appendChild(btnOpen);
         }
+        var btnAdd = document.createElement('button');
+        btnAdd.style.cssText = 'padding:5px 10px;background:rgba(134,239,172,0.1);color:#86efac;border:1px solid rgba(134,239,172,0.25);border-radius:6px;font-size:0.72rem;cursor:pointer;font-weight:600;';
+        btnAdd.textContent = '\u2795 A\u00F1adir';
+        (function(n) {
+          btnAdd.onclick = function(e) { e.stopPropagation(); _openAppendBox(n); };
+        })(name);
+        btns.appendChild(btnAdd);
         var btnDel = document.createElement('button');
         btnDel.style.cssText = 'padding:5px 8px;background:rgba(255,50,50,0.1);color:#f87171;border:1px solid rgba(255,50,50,0.2);border-radius:6px;font-size:0.72rem;cursor:pointer;';
         btnDel.textContent = '\u{1F5D1}';
@@ -1463,6 +1470,63 @@
         var fs = document.getElementById('files-search');
         if (fs) fs.addEventListener('input', _renderFileCards);
       });
+    /* ➕ AÑADIR AL FINAL — agrega texto al final de un archivo SIN pasar por la IA */
+    function _openAppendBox(name) {
+      var old = document.getElementById('append-overlay');
+      if (old) old.remove();
+      var ov = document.createElement('div');
+      ov.id = 'append-overlay';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(4,8,20,0.92);z-index:9000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);padding:16px;';
+      var box = document.createElement('div');
+      box.style.cssText = 'background:#0a1526;border:1px solid rgba(134,239,172,0.3);border-radius:12px;width:100%;max-width:560px;display:flex;flex-direction:column;gap:12px;padding:18px;';
+      var title = document.createElement('div');
+      title.style.cssText = 'color:#86efac;font-weight:700;font-size:0.95rem;';
+      title.textContent = '\u2795 A\u00F1adir al final de: ' + name;
+      var hint = document.createElement('div');
+      hint.style.cssText = 'color:#8c9cb2;font-size:0.78rem;';
+      hint.textContent = 'Pega o escribe el texto. Se agregar\u00E1 al final del archivo sin tocar lo que ya tiene.';
+      var ta = document.createElement('textarea');
+      ta.rows = 10;
+      ta.style.cssText = 'width:100%;box-sizing:border-box;background:#0c1a2e;border:1px solid rgba(134,239,172,0.25);border-radius:8px;color:#e0e8ff;padding:10px;font-size:0.85rem;font-family:monospace;outline:none;resize:vertical;';
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;';
+      var bCancel = document.createElement('button');
+      bCancel.style.cssText = 'padding:9px 16px;background:none;color:#8c9cb2;border:1px solid rgba(255,255,255,0.15);border-radius:8px;font-size:0.82rem;cursor:pointer;';
+      bCancel.textContent = 'Cancelar';
+      bCancel.onclick = function() { ov.remove(); };
+      var bOk = document.createElement('button');
+      bOk.style.cssText = 'padding:9px 18px;background:#166534;color:#dcfce7;border:none;border-radius:8px;font-size:0.82rem;cursor:pointer;font-weight:700;';
+      bOk.textContent = '\u2795 A\u00F1adir al final';
+      bOk.onclick = async function() {
+        var txt = ta.value;
+        if (!txt.trim()) { ov.remove(); return; }
+        bOk.disabled = true; bOk.textContent = 'Guardando...';
+        try {
+          var files = await _apiFetchFiles();
+          var current = files[name] !== undefined ? files[name] : (_filesCache[name] || '');
+          var updated = current + (current && !current.endsWith('\n') ? '\n' : '') + '\n' + txt.replace(/\s+$/, '') + '\n';
+          _filesCache[name] = updated;
+          await _apiSaveFile(name, updated);
+          if (_activeFile === name && typeof monacoEditor !== 'undefined' && monacoEditor) monacoEditor.setValue(updated);
+          ov.remove();
+          renderFileList();
+        } catch(e) {
+          bOk.disabled = false; bOk.textContent = '\u2795 A\u00F1adir al final';
+          alert('No se pudo guardar. Intenta de nuevo.');
+        }
+      };
+      row.appendChild(bCancel);
+      row.appendChild(bOk);
+      box.appendChild(title);
+      box.appendChild(hint);
+      box.appendChild(ta);
+      box.appendChild(row);
+      ov.appendChild(box);
+      ov.addEventListener('click', function(e) { if (e.target === ov) ov.remove(); });
+      document.body.appendChild(ov);
+      setTimeout(function() { ta.focus(); }, 50);
+    }
+
     
 
     window.openFilesPanel   = openFilesPanel;
