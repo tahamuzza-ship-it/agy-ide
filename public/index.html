@@ -550,8 +550,8 @@
       const sent = await sendToAGY(msg);
       if (!sent.id) throw new Error(sent.error || 'Sin ID');
 
-      // Groq devuelve resultado directo — sin polling
-      if (sent.source === 'groq' && sent.result) {
+      // Resultado directo (IA) o error — nunca ir a pollStatus si ya hay resultado
+      if (sent.result) {
         finalizeThinking(wrap, bubble, sent.result);
         void autoSaveChat();
       } else {
