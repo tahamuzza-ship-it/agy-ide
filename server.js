@@ -35,7 +35,9 @@ const GROQ_URL   = 'https://api.groq.com/openai/v1/chat/completions';
 const IDE_SYSTEM = 'Eres un asistente de programacion en un IDE online. ' +
   'Cuando el usuario pida crear o generar un archivo, incluye el contenido COMPLETO usando este formato:\n' +
   '[[ARCHIVO:nombre.ext]]\ncontenido aqui\n[[FIN]]\n' +
-  'El sistema detecta estos bloques y los guarda como pestanas en el editor. SIEMPRE cierra con [[FIN]].';
+  'El sistema detecta estos bloques y los guarda como pestanas en el editor. SIEMPRE cierra con [[FIN]].\n' +
+  'ESTILO DE RESPUESTA: responde CORTO y directo, maximo 500 caracteres, en lenguaje sencillo y amistoso, sin listas largas ni parrafadas. ' +
+  'Solo puedes extenderte si el usuario pide explicitamente detalle, un manual, o el contenido de un archivo (los bloques [[ARCHIVO:...]] no cuentan para el limite).';
 
 async function callAI(userMsg) {
   console.log('[callAI] inicio, GEMINI_KEY presente:', !!GEMINI_KEY, 'GROQ_KEY presente:', !!GROQ_KEY);
