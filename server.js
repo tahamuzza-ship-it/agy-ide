@@ -37,27 +37,39 @@ const IDE_SYSTEM = 'Eres un asistente de programacion en un IDE online. ' +
   '[[ARCHIVO:nombre.ext]]\ncontenido aqui\n[[FIN]]\n' +
   'El sistema detecta estos bloques y los guarda como pestanas en el editor. SIEMPRE cierra con [[FIN]].';
 
-async function callGroq(userMsg) {
-  if (!GROQ_KEY) throw new Error('GROQ_API_KEY no configurada');
-  console.log('[Groq] llamando API, modelo:', GROQ_MODEL);
-  const timeout = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('Groq timeout 20s')), 20000));
-  const call = fetch(GROQ_URL, {
+async function callAI(userMsg) {
+  const key = GEMINI_KEY || GROQ_KEY;
+  if (!key) throw new Error('Sin API key de IA configurada');
+
+  if (GEMINI_KEY) {
+    // Gemini — funciona desde Railway (mismo que CiberCode)
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: IDE_SYSTEM + '\n\nUsuario: ' + userMsg }] }],
+          generationConfig: { maxOutputTokens: 4096, temperature: 0.7 }
+        })
+      }
+    );
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error?.message || 'Gemini error ' + r.status);
+    return d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '(sin respuesta)';
+  }
+
+  // Fallback Groq
+  const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages: [
-        { role: 'system', content: IDE_SYSTEM },
-        { role: 'user',   content: userMsg }
-      ],
-      max_tokens: 4096,
-      temperature: 0.7
+      model: 'llama-3.3-70b-versatile',
+      messages: [{ role: 'system', content: IDE_SYSTEM }, { role: 'user', content: userMsg }],
+      max_tokens: 4096
     })
   });
-  const r = await Promise.race([call, timeout]);
   const d = await r.json();
-  console.log('[Groq] status:', r.status, 'choices:', d.choices ? d.choices.length : 'none');
   if (!r.ok) throw new Error(d.error?.message || 'Groq error ' + r.status);
   return d.choices?.[0]?.message?.content?.trim() || '(sin respuesta)';
 }
@@ -390,7 +402,7 @@ app.post('/api/send', requirePwd, async (req, res) => {
 
     if (!isExecution && GROQ_KEY) {
       // PLAN B: Groq directo para chat — bypassa agy.exe y cuota Claude
-      const groqReply = await callGroq(instruction);
+      const groqReply = await callAI(instruction);
       // Guardar en Supabase Y devolver directo — compatible con frontend nuevo y viejo
       const cmdId = 'groq_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
       if (SUPABASE_URL && SUPABASE_KEY) {
