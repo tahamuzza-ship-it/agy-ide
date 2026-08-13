@@ -1272,7 +1272,10 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ filename: filename, content: content, project: 'agy-ide' })
         });
-        return r.ok;
+        if (!r.ok) return false;
+        var j = await r.json().catch(function() { return null; });
+        // el backend responde HTTP 200 con {ok:false} si Supabase no está configurado
+        return !!(j && j.ok === true);
       } catch(e) { return false; }
     }
 
