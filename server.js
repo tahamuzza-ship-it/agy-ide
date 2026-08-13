@@ -42,16 +42,17 @@ async function callGroq(userMsg) {
   const r = await fetch(GROQ_URL, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages: [
-        { role: 'system', content: IDE_SYSTEM },
-        { role: 'user',   content: userMsg }
-      ],
-      max_tokens: 4096,
-      temperature: 0.7
-    })
-  });
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [
+          { role: 'system', content: IDE_SYSTEM },
+          { role: 'user',   content: userMsg }
+        ],
+        max_tokens: 4096,
+        temperature: 0.7
+      })
+    });
+  } finally { clearTimeout(timer); }
   const d = await r.json();
   if (!r.ok) throw new Error(d.error?.message || `Groq HTTP ${r.status}`);
   return d.choices?.[0]?.message?.content?.trim() || '(sin respuesta)';
