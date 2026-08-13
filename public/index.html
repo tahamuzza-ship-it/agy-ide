@@ -118,7 +118,7 @@
             <textarea id="chat-input" rows="1" placeholder="Escribe una instrucción para AGY…"></textarea>
             <button id="chat-send">➤</button>
             <button id="btn-mic" title="Hablar con AGY" style="flex-shrink:0;padding:0 12px;height:38px;background:rgba(0,243,255,0.08);border:1px solid rgba(0,243,255,0.3);border-radius:8px;color:#00f3ff;font-size:1.1rem;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;">🎤</button>
-            <button id="btn-tts" title="Que AGY responda con voz (gratis, del navegador)" style="flex-shrink:0;padding:0 12px;height:38px;background:rgba(134,239,172,0.08);border:1px solid rgba(134,239,172,0.3);border-radius:8px;color:#526075;font-size:1.1rem;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;">🔊</button>
+            <button id="btn-tts" title="Que AGY responda con voz natural (IA)" style="flex-shrink:0;padding:0 12px;height:38px;background:rgba(134,239,172,0.08);border:1px solid rgba(134,239,172,0.3);border-radius:8px;color:#526075;font-size:1.1rem;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;">🔊</button>
           </div>
         </div>
 
@@ -423,7 +423,7 @@
       if (!b) return;
       b.style.color = _ttsOn ? '#86efac' : '#526075';
       b.style.background = _ttsOn ? 'rgba(134,239,172,0.18)' : 'rgba(134,239,172,0.08)';
-      b.title = _ttsOn ? 'Voz de AGY: ACTIVADA (toca para apagar)' : 'Que AGY responda con voz (gratis, del navegador)';
+      b.title = _ttsOn ? 'Voz de AGY: ACTIVADA (toca para apagar)' : 'Que AGY responda con voz natural (IA)';
     }
     function _bestVoice() {
       var voices = (window.speechSynthesis.getVoices() || []).filter(function(v) { return /^es/i.test(v.lang); });
@@ -440,10 +440,26 @@
       voices.sort(function(a, b) { return score(b) - score(a); });
       return voices[0];
     }
-    function _speak(text) {
-      if (!_ttsOn || !('speechSynthesis' in window)) return;
-      try {
-        window.speechSynthesis.cancel();
+    var _ttsAudio = null;
+      function _ttsStop() {
+        try { if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio = null; } } catch(e) {}
+        try { window.speechSynthesis.cancel(); } catch(e) {}
+      }
+      function _speakBrowser(clean) {
+        if (!('speechSynthesis' in window)) return;
+        try {
+          window.speechSynthesis.cancel();
+          var u = new SpeechSynthesisUtterance(clean);
+          u.lang = 'es-ES';
+          var best = _bestVoice();
+          if (best) u.voice = best;
+          u.rate = 1.0;
+          u.pitch = 1.05;
+          window.speechSynthesis.speak(u);
+        } catch(e) {}
+      }
+      function _speak(text) {
+        if (!_ttsOn) return;
         // no leer bloques de archivos ni codigo
         var clean = String(text)
           .replace(/\[\[ARCHIVO:[\s\S]*?\[\[FIN\]\]/g, ' He creado el archivo. ')
@@ -451,21 +467,32 @@
           .replace(/https?:\/\/\S+/g, ' enlace ')
           .slice(0, 1200);
         if (!clean.trim()) return;
-        var u = new SpeechSynthesisUtterance(clean);
-        u.lang = 'es-ES';
-        var best = _bestVoice();
-        if (best) u.voice = best;
-        u.rate = 1.0;
-        u.pitch = 1.05;
-        window.speechSynthesis.speak(u);
-      } catch(e) {}
-    }
+        _ttsStop();
+        // Voz premium con IA (Gemini TTS); si falla, cae al lector del navegador
+        fetch('/api/tts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: clean })
+        }).then(function(r) {
+          if (!r.ok) throw new Error('tts ' + r.status);
+          return r.blob();
+        }).then(function(blob) {
+          if (!_ttsOn) return;
+          var url = URL.createObjectURL(blob);
+          _ttsStop();
+          _ttsAudio = new Audio(url);
+          _ttsAudio.onended = function() { URL.revokeObjectURL(url); };
+          return _ttsAudio.play();
+        }).catch(function() {
+          if (_ttsOn) _speakBrowser(clean);
+        });
+      }
     document.addEventListener('DOMContentLoaded', function() {
       var b = document.getElementById('btn-tts');
       if (b) b.addEventListener('click', function() {
         _ttsOn = !_ttsOn;
         try { localStorage.setItem('agyide_tts', _ttsOn ? '1' : '0'); } catch(e) {}
-        if (!_ttsOn) { try { window.speechSynthesis.cancel(); } catch(e) {} }
+        if (!_ttsOn) { _ttsStop(); }
         else _speak('Voz activada. Ahora te leo mis respuestas.');
         _ttsUpdateBtn();
       });
