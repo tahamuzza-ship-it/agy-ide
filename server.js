@@ -352,8 +352,8 @@ app.post('/api/send', requirePwd, async (req, res) => {
   try {
     const { instruction, target = 'PC1' } = req.body;
     if (!instruction) return res.status(400).json({ error: 'instruction requerida' });
-    const IDE_CTX = 'SISTEMA AGY-IDE: Eres un asistente de programacion en un IDE online. REGLA: cuando el usuario pida crear o generar un archivo, incluye el contenido COMPLETO usando el formato: <<<ARCHIVO:nombre.ext>>> contenido <<<FIN>>>. El sistema detecta estos bloques y guarda el archivo automaticamente. SIEMPRE cierra con <<<FIN>>>. ';
-    const raw = IDE_CTX + instruction;
+    // IDE_CTX removed — <<< breaks Windows shell
+    const raw = instruction;
     const prefixed = target === 'ANY' ? raw : `[${target}] ${raw}`;
     let data = await replitPost('/api/antigravity/send', { instruction: prefixed, target });
     // Si el riesgo es alto, AGY-IDE auto-confirma (acceso exclusivo Lead Architect)
