@@ -28,6 +28,34 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 /* Use service role key — anon key must never access goal_sessions */
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 const GEMINI_KEY          = process.env.GEMINI_API_KEY;
+const GROQ_KEY   = process.env.GROQ_API_KEY;
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_URL   = 'https://api.groq.com/openai/v1/chat/completions';
+
+const IDE_SYSTEM = 'Eres un asistente de programacion en un IDE online. ' +
+  'Cuando el usuario pida crear o generar un archivo, incluye el contenido COMPLETO usando este formato:\n' +
+  '[[ARCHIVO:nombre.ext]]\ncontenido aqui\n[[FIN]]\n' +
+  'El sistema detecta estos bloques y los guarda como pestanas en el editor. SIEMPRE cierra con [[FIN]].';
+
+async function callGroq(userMsg) {
+  if (!GROQ_KEY) throw new Error('GROQ_API_KEY no configurada');
+  const r = await fetch(GROQ_URL, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages: [
+        { role: 'system', content: IDE_SYSTEM },
+        { role: 'user',   content: userMsg }
+      ],
+      max_tokens: 4096,
+      temperature: 0.7
+    })
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error?.message || `Groq HTTP ${r.status}`);
+  return d.choices?.[0]?.message?.content?.trim() || '(sin respuesta)';
+}
 const TG_TOKEN            = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT_ID          = process.env.TELEGRAM_LEAD_ARCHITECT_CHAT_ID;
 const TG_WEBHOOK_SECRET   = process.env.TELEGRAM_WEBHOOK_SECRET; // optional but recommended
@@ -352,11 +380,28 @@ app.post('/api/send', requirePwd, async (req, res) => {
   try {
     const { instruction, target = 'PC1' } = req.body;
     if (!instruction) return res.status(400).json({ error: 'instruction requerida' });
-    const IDE_CTX = '[IDE] Para crear archivos usa el formato: [[ARCHIVO:nombre.ext]] contenido aqui [[FIN]]. El sistema detecta estos bloques y los guarda como pestanas en el editor. ';
+
+    const isExecution = instruction.trimStart().startsWith('EJECUTAR');
+
+    if (!isExecution && GROQ_KEY) {
+      // PLAN B: Groq directo para chat — bypassa agy.exe y cuota Claude
+      const groqReply = await callGroq(instruction);
+      const cmdId = 'groq_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
+      if (SUPABASE_URL && SUPABASE_KEY) {
+        await fetch(`${SUPABASE_URL}/rest/v1/antigravity_commands`, {
+          method: 'POST',
+          headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ id: cmdId, instruction, status: 'done', result: groqReply, updated_at: new Date().toISOString() })
+        });
+      }
+      return res.json({ ok: true, id: cmdId, riskLevel: 0, source: 'groq' });
+    }
+
+    // PLAN A: ag-listener en PC (para EJECUTAR o si no hay GROQ_KEY)
+    const IDE_CTX = '[IDE] Para crear archivos usa: [[ARCHIVO:nombre.ext]] contenido [[FIN]]. ';
     const raw = IDE_CTX + instruction;
     const prefixed = target === 'ANY' ? raw : `[${target}] ${raw}`;
     let data = await replitPost('/api/antigravity/send', { instruction: prefixed, target });
-    // Si el riesgo es alto, AGY-IDE auto-confirma (acceso exclusivo Lead Architect)
     if (data.requiresConfirmation) {
       data = await replitPost('/api/antigravity/send', { instruction: prefixed, target, confirmed: true });
     }
@@ -369,7 +414,17 @@ app.post('/api/send', requirePwd, async (req, res) => {
 
 app.get('/api/status/:id', requirePwd, async (req, res) => {
   try {
-    const data = await replitGet(`/api/antigravity/status/${req.params.id}`);
+    const { id } = req.params;
+    if (id.startsWith('groq_') && SUPABASE_URL && SUPABASE_KEY) {
+      const r = await fetch(
+        `${SUPABASE_URL}/rest/v1/antigravity_commands?id=eq.${encodeURIComponent(id)}&select=id,status,result`,
+        { headers: sbHeaders() }
+      );
+      const rows = await r.json();
+      const row = Array.isArray(rows) ? rows[0] : null;
+      if (row) return res.json({ id: row.id, status: row.status, result: row.result });
+    }
+    const data = await replitGet(`/api/antigravity/status/${id}`);
     res.json(data);
   } catch (e) {
     res.status(500).json({ error: e.message });
