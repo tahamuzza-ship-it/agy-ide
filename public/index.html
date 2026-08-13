@@ -227,7 +227,16 @@
       <button id="btn-confirm-new-file" style="padding:7px 14px;background:#166534;color:#86efac;border:none;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;">Crear</button>
       <button id="btn-cancel-new-file" style="padding:7px 10px;background:none;border:1px solid #374151;color:#8c9cb2;border-radius:6px;font-size:0.75rem;cursor:pointer;">Cancelar</button>
     </div>
-        <div style="padding:8px 16px;border-bottom:1px solid rgba(134,239,172,0.08);background:#060d1a;">
+        <!-- Añadir texto al final de un archivo (sin IA) -->
+    <div id="append-file-row" style="display:none;padding:10px 16px;border-bottom:1px solid rgba(134,239,172,0.1);background:#060d1a;flex-direction:column;gap:8px;">
+      <div id="append-file-label" style="color:#86efac;font-size:0.78rem;font-weight:700;"></div>
+      <textarea id="append-file-input" placeholder="Pega aquí el texto que quieres añadir al final del archivo..." style="width:100%;box-sizing:border-box;min-height:140px;resize:vertical;padding:8px 10px;background:#0c1a2e;border:1px solid rgba(134,239,172,0.3);border-radius:6px;color:#e0e8ff;font-size:0.8rem;font-family:monospace;outline:none;"></textarea>
+      <div style="display:flex;gap:8px;">
+        <button id="btn-confirm-append-file" style="padding:7px 14px;background:#166534;color:#86efac;border:none;border-radius:6px;font-size:0.75rem;cursor:pointer;font-weight:700;">➕ Añadir al final</button>
+        <button id="btn-cancel-append-file" style="padding:7px 10px;background:none;border:1px solid #374151;color:#8c9cb2;border-radius:6px;font-size:0.75rem;cursor:pointer;">Cancelar</button>
+      </div>
+    </div>
+    <div style="padding:8px 16px;border-bottom:1px solid rgba(134,239,172,0.08);background:#060d1a;">
       <input id="files-search" type="text" placeholder="🔎 Buscar archivo..." style="width:100%;box-sizing:border-box;padding:7px 10px;background:#0c1a2e;border:1px solid rgba(134,239,172,0.25);border-radius:6px;color:#e0e8ff;font-size:0.8rem;outline:none;" />
     </div>
     <div id="files-modal-list" style="flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:6px;">
@@ -1069,6 +1078,10 @@
     if (btnCancelNew) btnCancelNew.addEventListener('click', cancelNewFile);
     var btnConfirmNew = document.getElementById('btn-confirm-new-file');
     if (btnConfirmNew) btnConfirmNew.addEventListener('click', confirmNewFile);
+    var btnCancelAppend = document.getElementById('btn-cancel-append-file');
+    if (btnCancelAppend) btnCancelAppend.addEventListener('click', cancelAppendFile);
+    var btnConfirmAppend = document.getElementById('btn-confirm-append-file');
+    if (btnConfirmAppend) btnConfirmAppend.addEventListener('click', confirmAppendFile);
     }
 
     /* ══════════════════════════════════════════
@@ -1291,6 +1304,52 @@
     function closeFilesPanel() {
       document.getElementById('files-modal').style.display = 'none';
       document.getElementById('new-file-row').style.display = 'none';
+      document.getElementById('append-file-row').style.display = 'none';
+      _appendTarget = null;
+    }
+
+    /* ── Añadir texto al final de un archivo (sin IA, determinista) ── */
+    var _appendTarget = null;
+
+    function promptAppendFile(filename) {
+      _appendTarget = filename;
+      var row = document.getElementById('append-file-row');
+      row.style.display = 'flex';
+      document.getElementById('append-file-label').textContent = '\u2795 A\u00F1adir al final de: ' + filename;
+      var ta = document.getElementById('append-file-input');
+      ta.value = '';
+      setTimeout(function() { ta.focus(); }, 60);
+    }
+
+    function cancelAppendFile() {
+      document.getElementById('append-file-row').style.display = 'none';
+      _appendTarget = null;
+    }
+
+    async function confirmAppendFile() {
+      if (!_appendTarget) return;
+      var ta = document.getElementById('append-file-input');
+      var text = ta.value;
+      if (!text.trim()) { showDiffToast('Escribe o pega el texto a a\u00F1adir', false); return; }
+      var filename = _appendTarget;
+      // obtener el contenido más reciente: editor activo > servidor > cache local
+      var current;
+      if (filename === _activeFile && monacoEditor) {
+        current = monacoEditor.getValue();
+      } else {
+        var files = await _apiFetchFiles();
+        current = files[filename];
+        if (current === undefined) current = _filesCache[filename];
+        if (current === undefined) current = '';
+      }
+      var updated = current + '\n' + text;
+      _filesCache[filename] = updated;
+      if (filename === _activeFile && monacoEditor) monacoEditor.setValue(updated);
+      await _apiSaveFile(filename, updated);
+      document.getElementById('append-file-row').style.display = 'none';
+      _appendTarget = null;
+      await renderFileList();
+      showDiffToast('\u2795 Texto a\u00F1adido al final de ' + filename, true);
     }
 
     function promptNewFile() {
@@ -1442,13 +1501,14 @@
           })(name);
           btns.appendChild(btnOpen);
         }
-        var btnAdd = document.createElement('button');
-        btnAdd.style.cssText = 'padding:5px 10px;background:rgba(134,239,172,0.1);color:#86efac;border:1px solid rgba(134,239,172,0.25);border-radius:6px;font-size:0.72rem;cursor:pointer;font-weight:600;';
-        btnAdd.textContent = '\u2795 A\u00F1adir';
+        var btnAppend = document.createElement('button');
+        btnAppend.style.cssText = 'padding:5px 10px;background:#052e16;color:#86efac;border:1px solid #166534;border-radius:6px;font-size:0.72rem;cursor:pointer;font-weight:600;';
+        btnAppend.textContent = '\u2795 A\u00F1adir';
+        btnAppend.title = 'A\u00F1adir texto al final del archivo (sin IA)';
         (function(n) {
-          btnAdd.onclick = function(e) { e.stopPropagation(); _openAppendBox(n); };
+          btnAppend.onclick = function(e) { e.stopPropagation(); promptAppendFile(n); };
         })(name);
-        btns.appendChild(btnAdd);
+        btns.appendChild(btnAppend);
         var btnDel = document.createElement('button');
         btnDel.style.cssText = 'padding:5px 8px;background:rgba(255,50,50,0.1);color:#f87171;border:1px solid rgba(255,50,50,0.2);border-radius:6px;font-size:0.72rem;cursor:pointer;';
         btnDel.textContent = '\u{1F5D1}';
@@ -1470,63 +1530,6 @@
         var fs = document.getElementById('files-search');
         if (fs) fs.addEventListener('input', _renderFileCards);
       });
-    /* ➕ AÑADIR AL FINAL — agrega texto al final de un archivo SIN pasar por la IA */
-    function _openAppendBox(name) {
-      var old = document.getElementById('append-overlay');
-      if (old) old.remove();
-      var ov = document.createElement('div');
-      ov.id = 'append-overlay';
-      ov.style.cssText = 'position:fixed;inset:0;background:rgba(4,8,20,0.92);z-index:9000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);padding:16px;';
-      var box = document.createElement('div');
-      box.style.cssText = 'background:#0a1526;border:1px solid rgba(134,239,172,0.3);border-radius:12px;width:100%;max-width:560px;display:flex;flex-direction:column;gap:12px;padding:18px;';
-      var title = document.createElement('div');
-      title.style.cssText = 'color:#86efac;font-weight:700;font-size:0.95rem;';
-      title.textContent = '\u2795 A\u00F1adir al final de: ' + name;
-      var hint = document.createElement('div');
-      hint.style.cssText = 'color:#8c9cb2;font-size:0.78rem;';
-      hint.textContent = 'Pega o escribe el texto. Se agregar\u00E1 al final del archivo sin tocar lo que ya tiene.';
-      var ta = document.createElement('textarea');
-      ta.rows = 10;
-      ta.style.cssText = 'width:100%;box-sizing:border-box;background:#0c1a2e;border:1px solid rgba(134,239,172,0.25);border-radius:8px;color:#e0e8ff;padding:10px;font-size:0.85rem;font-family:monospace;outline:none;resize:vertical;';
-      var row = document.createElement('div');
-      row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;';
-      var bCancel = document.createElement('button');
-      bCancel.style.cssText = 'padding:9px 16px;background:none;color:#8c9cb2;border:1px solid rgba(255,255,255,0.15);border-radius:8px;font-size:0.82rem;cursor:pointer;';
-      bCancel.textContent = 'Cancelar';
-      bCancel.onclick = function() { ov.remove(); };
-      var bOk = document.createElement('button');
-      bOk.style.cssText = 'padding:9px 18px;background:#166534;color:#dcfce7;border:none;border-radius:8px;font-size:0.82rem;cursor:pointer;font-weight:700;';
-      bOk.textContent = '\u2795 A\u00F1adir al final';
-      bOk.onclick = async function() {
-        var txt = ta.value;
-        if (!txt.trim()) { ov.remove(); return; }
-        bOk.disabled = true; bOk.textContent = 'Guardando...';
-        try {
-          var files = await _apiFetchFiles();
-          var current = files[name] !== undefined ? files[name] : (_filesCache[name] || '');
-          var updated = current + (current && !current.endsWith('\n') ? '\n' : '') + '\n' + txt.replace(/\s+$/, '') + '\n';
-          _filesCache[name] = updated;
-          await _apiSaveFile(name, updated);
-          if (_activeFile === name && typeof monacoEditor !== 'undefined' && monacoEditor) monacoEditor.setValue(updated);
-          ov.remove();
-          renderFileList();
-        } catch(e) {
-          bOk.disabled = false; bOk.textContent = '\u2795 A\u00F1adir al final';
-          alert('No se pudo guardar. Intenta de nuevo.');
-        }
-      };
-      row.appendChild(bCancel);
-      row.appendChild(bOk);
-      box.appendChild(title);
-      box.appendChild(hint);
-      box.appendChild(ta);
-      box.appendChild(row);
-      ov.appendChild(box);
-      ov.addEventListener('click', function(e) { if (e.target === ov) ov.remove(); });
-      document.body.appendChild(ov);
-      setTimeout(function() { ta.focus(); }, 50);
-    }
-
     
 
     window.openFilesPanel   = openFilesPanel;
