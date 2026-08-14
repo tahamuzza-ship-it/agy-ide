@@ -2230,30 +2230,33 @@
     return 'hace ' + Math.round(s / 3600) + ' h';
   }
 
-  function setCard(pc, state, hb) {
+  function setCard(pc, state, bridgeDown) {
     var dot = document.getElementById('equipo-dot-' + pc.toLowerCase());
     var info = document.getElementById('equipo-info-' + pc.toLowerCase());
     if (!dot || !info) return;
     var on = state && state.online === true;
     var off = state && state.online === false;
-    dot.style.background = on ? '#2ecc71' : (off ? '#ff3355' : '#888');
-    dot.style.boxShadow = on ? '0 0 8px #2ecc71' : (off ? '0 0 8px #ff3355' : 'none');
+    dot.style.background = on ? '#2ecc71' : (off ? '#ff3355' : '#f0a020');
+    dot.style.boxShadow = on ? '0 0 8px #2ecc71' : (off ? '0 0 8px #ff3355' : '0 0 8px #f0a020');
     if (on) {
-      var extra = hb && hb.seconds_ago != null ? ' · señal ' + fmtAgo(hb.seconds_ago) : '';
+      var extra = state.seconds_ago != null ? ' · señal ' + fmtAgo(state.seconds_ago) : '';
       info.textContent = 'Conectado ✅' + extra;
     } else if (off) {
       info.textContent = 'Sin señal ⚠️ — puede estar apagado';
     } else {
-      info.textContent = 'Aún sin datos…';
+      info.textContent = bridgeDown ? 'Desconocido — puente caído 🟠' : 'Aún sin datos…';
     }
   }
 
   function refreshEquipos() {
-    fetch('/api/equipos')
+    var headers = {};
+    try { if (typeof _getPwd === 'function') headers['x-agyide-pwd'] = _getPwd(); } catch (e) {}
+    fetch('/api/equipos', { headers: headers })
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        setCard('PC1', d.PC1, d.heartbeat && d.heartbeat.PC1);
-        setCard('PC2', d.PC2, d.heartbeat && d.heartbeat.PC2);
+        var bridgeDown = d.bridge_ok === false;
+        setCard('PC1', d.PC1, bridgeDown);
+        setCard('PC2', d.PC2, bridgeDown);
         var u = document.getElementById('equipos-updated');
         if (u && d.checked_at) u.textContent = 'actualizado ' + new Date(d.checked_at).toLocaleTimeString();
       })
