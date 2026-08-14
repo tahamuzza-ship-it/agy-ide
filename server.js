@@ -936,43 +936,71 @@ const PC_WATCH = {
   PC1: { online: null, misses: 0, since: null },
   PC2: { online: null, misses: 0, since: null }
 };
+const BRIDGE_WATCH = { ok: null, misses: 0 };
 let PC_LAST_HB = null;
 
 async function checkPCs() {
+  /* 1. Consultar el puente con timeout de 10s */
+  let d = null;
   try {
-    const r = await fetch(`${REPLIT_API}/api/antigravity/heartbeat`);
-    if (!r.ok) return;
-    const d = await r.json();
-    PC_LAST_HB = { data: d, at: new Date().toISOString() };
-    for (const pc of ['PC1', 'PC2']) {
-      const st = PC_WATCH[pc];
-      const on = !!(d[pc] && d[pc].online);
-      if (st.online === null) { st.online = on; st.since = Date.now(); continue; } // primera lectura: sin alerta
-      if (on) {
-        st.misses = 0;
-        if (!st.online) {
-          st.online = true; st.since = Date.now();
-          await tgSend(`🟢 <b>${pc}</b> volvió a conectarse. Todo en orden.`);
-        }
-      } else if (st.online) {
-        st.misses++;
-        if (st.misses >= 3) {
-          st.online = false; st.since = Date.now(); st.misses = 0;
-          await tgSend(`🔴 <b>${pc}</b> lleva ~3 minutos sin dar señal. Puede estar apagado o sin internet.`);
-        }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10000);
+    const r = await fetch(`${REPLIT_API}/api/antigravity/heartbeat`, { signal: ctrl.signal });
+    clearTimeout(timer);
+    if (r.ok) d = await r.json();
+  } catch (e) { console.error('[pc-watcher] puente:', e.message); }
+
+  /* 2. Puente caído/sin respuesta: estado de los PCs pasa a DESCONOCIDO */
+  if (!d || typeof d !== 'object') {
+    BRIDGE_WATCH.misses++;
+    if (BRIDGE_WATCH.misses >= 3 && BRIDGE_WATCH.ok !== false) {
+      BRIDGE_WATCH.ok = false;
+      PC_WATCH.PC1.online = null; PC_WATCH.PC1.misses = 0;
+      PC_WATCH.PC2.online = null; PC_WATCH.PC2.misses = 0;
+      await tgSend('⚠️ El <b>puente</b> lleva ~3 minutos sin responder. No puedo ver el estado de PC1 ni PC2 (pueden estar bien, pero estoy ciego). Plan B: entrar por Termius/Tailscale.');
+    }
+    return;
+  }
+
+  /* 3. Puente OK */
+  BRIDGE_WATCH.misses = 0;
+  if (BRIDGE_WATCH.ok === false) await tgSend('🟢 El <b>puente</b> volvió a responder. Vuelvo a vigilar PC1 y PC2.');
+  BRIDGE_WATCH.ok = true;
+  PC_LAST_HB = { data: d, at: new Date().toISOString() };
+
+  for (const pc of ['PC1', 'PC2']) {
+    const st = PC_WATCH[pc];
+    const on = !!(d[pc] && d[pc].online);
+    if (st.online === null) { st.online = on; st.since = Date.now(); continue; } // primera lectura tras arranque o apagón del puente: sin alerta
+    if (on) {
+      st.misses = 0;
+      if (!st.online) {
+        st.online = true; st.since = Date.now();
+        await tgSend(`🟢 <b>${pc}</b> volvió a conectarse. Todo en orden.`);
+      }
+    } else if (st.online) {
+      st.misses++;
+      if (st.misses >= 3) {
+        st.online = false; st.since = Date.now(); st.misses = 0;
+        await tgSend(`🔴 <b>${pc}</b> lleva ~3 minutos sin dar señal. Puede estar apagado o sin internet.`);
       }
     }
-  } catch (e) { console.error('[pc-watcher]', e.message); }
+  }
 }
 setInterval(checkPCs, 60000);
 setTimeout(() => checkPCs().catch(() => {}), 5000);
 
-/* Estado para el panel MIS EQUIPOS del frontend */
-app.get('/api/equipos', (_req, res) => {
+/* Estado para el panel MIS EQUIPOS del frontend (requiere contraseña del IDE).
+   online: true = conectado, false = sin señal, null = desconocido (sin datos o puente caído) */
+app.get('/api/equipos', requirePwd, (_req, res) => {
+  const ago = (pc) => {
+    const hb = PC_LAST_HB && PC_LAST_HB.data && PC_LAST_HB.data[pc];
+    return hb && typeof hb.seconds_ago === 'number' ? hb.seconds_ago : null;
+  };
   res.json({
-    PC1: { online: PC_WATCH.PC1.online, since: PC_WATCH.PC1.since },
-    PC2: { online: PC_WATCH.PC2.online, since: PC_WATCH.PC2.since },
-    heartbeat: PC_LAST_HB ? PC_LAST_HB.data : null,
+    bridge_ok: BRIDGE_WATCH.ok,
+    PC1: { online: PC_WATCH.PC1.online, seconds_ago: ago('PC1') },
+    PC2: { online: PC_WATCH.PC2.online, seconds_ago: ago('PC2') },
     checked_at: PC_LAST_HB ? PC_LAST_HB.at : null
   });
 });
