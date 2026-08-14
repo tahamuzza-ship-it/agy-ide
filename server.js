@@ -926,6 +926,57 @@ app.delete('/api/files/:filename', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+/* ══════════════════════════════════════════
+   PC WATCHER — Panel MIS EQUIPOS
+   Vigila el heartbeat de PC1/PC2 cada minuto.
+   Avisa por Telegram cuando un PC se cae (3 fallos seguidos ≈ 3 min)
+   y cuando vuelve. Una sola alerta por transición, sin spam.
+══════════════════════════════════════════ */
+const PC_WATCH = {
+  PC1: { online: null, misses: 0, since: null },
+  PC2: { online: null, misses: 0, since: null }
+};
+let PC_LAST_HB = null;
+
+async function checkPCs() {
+  try {
+    const r = await fetch(`${REPLIT_API}/api/antigravity/heartbeat`);
+    if (!r.ok) return;
+    const d = await r.json();
+    PC_LAST_HB = { data: d, at: new Date().toISOString() };
+    for (const pc of ['PC1', 'PC2']) {
+      const st = PC_WATCH[pc];
+      const on = !!(d[pc] && d[pc].online);
+      if (st.online === null) { st.online = on; st.since = Date.now(); continue; } // primera lectura: sin alerta
+      if (on) {
+        st.misses = 0;
+        if (!st.online) {
+          st.online = true; st.since = Date.now();
+          await tgSend(`🟢 <b>${pc}</b> volvió a conectarse. Todo en orden.`);
+        }
+      } else if (st.online) {
+        st.misses++;
+        if (st.misses >= 3) {
+          st.online = false; st.since = Date.now(); st.misses = 0;
+          await tgSend(`🔴 <b>${pc}</b> lleva ~3 minutos sin dar señal. Puede estar apagado o sin internet.`);
+        }
+      }
+    }
+  } catch (e) { console.error('[pc-watcher]', e.message); }
+}
+setInterval(checkPCs, 60000);
+setTimeout(() => checkPCs().catch(() => {}), 5000);
+
+/* Estado para el panel MIS EQUIPOS del frontend */
+app.get('/api/equipos', (_req, res) => {
+  res.json({
+    PC1: { online: PC_WATCH.PC1.online, since: PC_WATCH.PC1.since },
+    PC2: { online: PC_WATCH.PC2.online, since: PC_WATCH.PC2.since },
+    heartbeat: PC_LAST_HB ? PC_LAST_HB.data : null,
+    checked_at: PC_LAST_HB ? PC_LAST_HB.at : null
+  });
+});
+
 app.listen(PORT, async () => {
   console.log(`AGY-IDE ▶  puerto ${PORT} | /goal mode ACTIVO`);
   await reconcileInterruptedSessions();
