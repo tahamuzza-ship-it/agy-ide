@@ -2196,5 +2196,79 @@
     })();
     </script>
 
+<!-- ── PANEL MIS EQUIPOS — estado PC1/PC2 con luz verde/roja ── -->
+<div id="equipos-fab" style="position:fixed;right:12px;bottom:76px;z-index:9000;width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#0c1225,#1a2340);border:1px solid rgba(0,243,255,0.4);color:#00f3ff;font-size:1.2rem;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,0.5);user-select:none;">🖥️</div>
+<div id="equipos-panel" style="display:none;position:fixed;right:12px;bottom:130px;z-index:9001;width:230px;background:#0c1225;border:1px solid rgba(0,243,255,0.3);border-radius:14px;padding:12px;font-family:'Inter',sans-serif;box-shadow:0 8px 30px rgba(0,0,0,0.6);">
+  <div style="font-family:'Orbitron',monospace;font-size:0.7rem;letter-spacing:0.12em;color:#00f3ff;margin-bottom:10px;">🖥️ MIS EQUIPOS</div>
+  <div class="equipo-card" id="equipo-card-pc1" style="display:flex;align-items:center;gap:10px;background:rgba(0,85,204,0.12);border:1px solid rgba(0,85,204,0.35);border-radius:10px;padding:10px;margin-bottom:8px;">
+    <span id="equipo-dot-pc1" style="width:12px;height:12px;border-radius:50%;background:#555;flex-shrink:0;"></span>
+    <div style="min-width:0;">
+      <div style="font-size:0.78rem;font-weight:700;color:#e8f0ff;">🔵 PC1 (Windows)</div>
+      <div id="equipo-info-pc1" style="font-size:0.65rem;color:#8c9cb2;">consultando…</div>
+    </div>
+  </div>
+  <div class="equipo-card" id="equipo-card-pc2" style="display:flex;align-items:center;gap:10px;background:rgba(204,0,32,0.10);border:1px solid rgba(204,0,32,0.35);border-radius:10px;padding:10px;">
+    <span id="equipo-dot-pc2" style="width:12px;height:12px;border-radius:50%;background:#555;flex-shrink:0;"></span>
+    <div style="min-width:0;">
+      <div style="font-size:0.78rem;font-weight:700;color:#e8f0ff;">🔴 PC2 (Linux)</div>
+      <div id="equipo-info-pc2" style="font-size:0.65rem;color:#8c9cb2;">consultando…</div>
+    </div>
+  </div>
+  <div id="equipos-updated" style="font-size:0.58rem;color:#5a6a80;margin-top:8px;text-align:right;"></div>
+</div>
+<script>
+(function () {
+  var fab = document.getElementById('equipos-fab');
+  var panel = document.getElementById('equipos-panel');
+  var timer = null;
+
+  function fmtAgo(s) {
+    if (s == null) return '';
+    s = Math.round(s);
+    if (s < 90) return 'hace ' + s + ' s';
+    if (s < 5400) return 'hace ' + Math.round(s / 60) + ' min';
+    return 'hace ' + Math.round(s / 3600) + ' h';
+  }
+
+  function setCard(pc, state, hb) {
+    var dot = document.getElementById('equipo-dot-' + pc.toLowerCase());
+    var info = document.getElementById('equipo-info-' + pc.toLowerCase());
+    if (!dot || !info) return;
+    var on = state && state.online === true;
+    var off = state && state.online === false;
+    dot.style.background = on ? '#2ecc71' : (off ? '#ff3355' : '#888');
+    dot.style.boxShadow = on ? '0 0 8px #2ecc71' : (off ? '0 0 8px #ff3355' : 'none');
+    if (on) {
+      var extra = hb && hb.seconds_ago != null ? ' · señal ' + fmtAgo(hb.seconds_ago) : '';
+      info.textContent = 'Conectado ✅' + extra;
+    } else if (off) {
+      info.textContent = 'Sin señal ⚠️ — puede estar apagado';
+    } else {
+      info.textContent = 'Aún sin datos…';
+    }
+  }
+
+  function refreshEquipos() {
+    fetch('/api/equipos')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        setCard('PC1', d.PC1, d.heartbeat && d.heartbeat.PC1);
+        setCard('PC2', d.PC2, d.heartbeat && d.heartbeat.PC2);
+        var u = document.getElementById('equipos-updated');
+        if (u && d.checked_at) u.textContent = 'actualizado ' + new Date(d.checked_at).toLocaleTimeString();
+      })
+      .catch(function () {});
+  }
+
+  fab.addEventListener('click', function () {
+    var open = panel.style.display !== 'none';
+    panel.style.display = open ? 'none' : 'block';
+    if (!open) {
+      refreshEquipos();
+      timer = setInterval(refreshEquipos, 30000);
+    } else if (timer) { clearInterval(timer); timer = null; }
+  });
+})();
+</script>
 </body>
     </html>
