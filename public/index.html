@@ -2251,16 +2251,30 @@
   function refreshEquipos() {
     var headers = {};
     try { if (typeof _getPwd === 'function') headers['x-agyide-pwd'] = _getPwd(); } catch (e) {}
+    var u = document.getElementById('equipos-updated');
     fetch('/api/equipos', { headers: headers })
-      .then(function (r) { return r.json(); })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (d) {
         var bridgeDown = d.bridge_ok === false;
         setCard('PC1', d.PC1, bridgeDown);
         setCard('PC2', d.PC2, bridgeDown);
-        var u = document.getElementById('equipos-updated');
         if (u && d.checked_at) u.textContent = 'actualizado ' + new Date(d.checked_at).toLocaleTimeString();
       })
-      .catch(function () {});
+      .catch(function () {
+        /* Plan B: misma vía pública que los puntos del encabezado */
+        fetch('/api/heartbeat')
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            setCard('PC1', d.PC1 && { online: !!d.PC1.online, seconds_ago: d.PC1.seconds_ago }, false);
+            setCard('PC2', d.PC2 && { online: !!d.PC2.online, seconds_ago: d.PC2.seconds_ago }, false);
+            if (u) u.textContent = 'actualizado ' + new Date().toLocaleTimeString() + ' (modo básico)';
+          })
+          .catch(function () {
+            setCard('PC1', null, true);
+            setCard('PC2', null, true);
+            if (u) u.textContent = 'sin conexión con el servidor';
+          });
+      });
   }
 
   fab.addEventListener('click', function () {
