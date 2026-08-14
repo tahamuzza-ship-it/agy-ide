@@ -665,6 +665,36 @@ app.post('/api/telegram-webhook', async (req, res) => {
       });
     };
 
+    /* /pc1 <comando> | /pc2 <comando> — comando directo sin modo agente */
+    const pcMatch = text.match(/^\/pc([12])\s+([\s\S]+)/i);
+    if (pcMatch) {
+      const pcTarget = 'PC' + pcMatch[1];
+      const pcCmd = pcMatch[2].trim();
+      const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      await tgReply(`⏳ Enviando a <b>${pcTarget}</b>:\n<code>${esc(pcCmd.slice(0, 300))}</code>`);
+      try {
+        const prefixed = `[${pcTarget}] EJECUTAR ${pcCmd}`;
+        let sent = await replitPost('/api/antigravity/send', { instruction: prefixed, target: pcTarget });
+        if (sent && sent.requiresConfirmation) {
+          sent = await replitPost('/api/antigravity/send', { instruction: prefixed, target: pcTarget, confirmed: true });
+        }
+        if (!sent || !sent.id) {
+          await tgReply(`❌ ${pcTarget} no aceptó el comando: ${esc(JSON.stringify(sent || {}).slice(0, 300))}`);
+          return;
+        }
+        const done = await pollAGY(sent.id, 60000);
+        const out = String(done.result || '(sin salida)');
+        if (done.status === 'done') {
+          await tgReply(`✅ <b>${pcTarget}</b> respondió:\n<pre>${esc(out.slice(0, 3500))}</pre>`);
+        } else {
+          await tgReply(`⚠️ <b>${pcTarget}</b> no respondió a tiempo (60s) o falló:\n<pre>${esc(out.slice(0, 500))}</pre>`);
+        }
+      } catch (e) {
+        await tgReply(`❌ Error con ${pcTarget}: ${esc(e.message.slice(0, 200))}`);
+      }
+      return;
+    }
+
     /* /goal cancel <session_id> */
     const cancelMatch = text.match(/^\/goal\s+cancel\s+(\S+)/i);
     if (cancelMatch) {
