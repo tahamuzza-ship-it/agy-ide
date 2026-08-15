@@ -1980,6 +1980,17 @@
             cmd:  "ssh roberto@100.121.53.89 pgrep -a ttyd"
           },
         ]},
+      { cat: "📷 Cámara de PC2 — verte tú mismo en el teléfono (desde la terminal de PC2)",
+        items: [
+          {
+            desc: "Prender la cámara de PC2 a pantalla completa. Tu cara aparece en el teléfono bajo 'Pantalla de PC2' en unos segundos. Pegar en la terminal de PC2 (tmux).",
+            cmd:  "eval \"$(tr '\\0' '\\n' < /proc/$(pgrep -f -i telegram | head -1)/environ | grep -E '^DISPLAY=|^XAUTHORITY=' | sed 's/^/export /')\"; ffplay -loglevel quiet -fs -f v4l2 -framerate 15 -video_size 640x480 -i /dev/video0"
+          },
+          {
+            desc: "Apagar la cámara de PC2 (cierra la ventana de video). También sirve Ctrl+C en la terminal donde la prendiste.",
+            cmd:  "pkill -f ffplay"
+          },
+        ]},
       { cat: "📊 Estado del ecosistema — ver PC2 desde PC1 con un solo comando",
         items: [
           {
