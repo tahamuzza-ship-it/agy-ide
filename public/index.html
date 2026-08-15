@@ -2206,6 +2206,7 @@
       <div style="font-size:0.78rem;font-weight:700;color:#e8f0ff;">🔵 PC1 (Windows)</div>
       <div id="equipo-info-pc1" style="font-size:0.65rem;color:#8c9cb2;">consultando…</div>
     </div>
+    <button id="equipo-pause-pc1" data-paused="0" style="margin-left:auto;flex-shrink:0;background:rgba(0,243,255,0.08);border:1px solid rgba(0,243,255,0.3);color:#00f3ff;border-radius:8px;padding:4px 8px;font-size:0.6rem;cursor:pointer;">🙈 Pausar</button>
   </div>
   <div id="equipo-eye-pc1" style="display:none;margin:0 0 8px;">
     <div id="equipo-shotlbl-pc1" style="display:none;font-size:0.6rem;color:#00f3ff;margin:2px 0;">📸 Pantalla de PC1 (Windows)</div>
@@ -2220,6 +2221,7 @@
       <div style="font-size:0.78rem;font-weight:700;color:#e8f0ff;">🔴 PC2 (Linux)</div>
       <div id="equipo-info-pc2" style="font-size:0.65rem;color:#8c9cb2;">consultando…</div>
     </div>
+    <button id="equipo-pause-pc2" data-paused="0" style="margin-left:auto;flex-shrink:0;background:rgba(0,243,255,0.08);border:1px solid rgba(0,243,255,0.3);color:#00f3ff;border-radius:8px;padding:4px 8px;font-size:0.6rem;cursor:pointer;">🙈 Pausar</button>
   </div>
   <div id="equipo-eye-pc2" style="display:none;margin:8px 0 0;">
     <div id="equipo-shotlbl-pc2" style="display:none;font-size:0.6rem;color:#00f3ff;margin:2px 0;">📸 Pantalla de PC2 (Linux)</div>
@@ -2326,7 +2328,21 @@
     var info = document.getElementById('equipo-eyeinfo-' + lc);
     var shotLbl = document.getElementById('equipo-shotlbl-' + lc);
     var termLbl = document.getElementById('equipo-termlbl-' + lc);
+    var btn = document.getElementById('equipo-pause-' + lc);
     if (!box) return;
+    if (btn && data) {
+      btn.setAttribute('data-paused', data.paused ? '1' : '0');
+      btn.textContent = data.paused ? '👁️ Reanudar' : '🙈 Pausar';
+    }
+    if (data && data.paused) {
+      box.style.display = 'block';
+      img.style.display = 'none'; img.removeAttribute('src');
+      term.style.display = 'none';
+      if (shotLbl) shotLbl.style.display = 'none';
+      if (termLbl) termLbl.style.display = 'none';
+      info.textContent = '🙈 Ojo pausado por ti — este PC no envía nada';
+      _revokeShot(pc); return;
+    }
     if (!data) {
       box.style.display = 'none'; img.style.display = 'none'; img.removeAttribute('src');
       if (shotLbl) shotLbl.style.display = 'none';
@@ -2367,6 +2383,24 @@
       .then(function (d) { setEye('PC1', d.PC1); setEye('PC2', d.PC2); })
       .catch(function () { setEye('PC1', null); setEye('PC2', null); });
   }
+
+  ['PC1', 'PC2'].forEach(function (pc) {
+    var btn = document.getElementById('equipo-pause-' + pc.toLowerCase());
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var toPause = btn.getAttribute('data-paused') !== '1';
+      btn.disabled = true;
+      fetch('/api/equipos/pause', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, _pwdHeaders()),
+        body: JSON.stringify({ pc: pc, paused: toPause })
+      })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function () { refreshScreens(); })
+        .catch(function () {})
+        .then(function () { btn.disabled = false; });
+    });
+  });
 
   var full = document.getElementById('equipo-shot-full');
   var fullImg = document.getElementById('equipo-shot-full-img');

@@ -1015,7 +1015,8 @@ app.get('/api/equipos', requirePwd, (_req, res) => {
    Los listeners hacen POST /api/equipos/report cada 10-15 s.
    Solo se guarda la ÚLTIMA captura por PC (en memoria, retención corta).
 ══════════════════════════════════════════ */
-const _equiposEye = {}; // 'PC1'|'PC2' -> { shot(Buffer), mime, terminal, ts }
+const _equiposEye = {};
+const _eyePaused = {}; // 'PC1'|'PC2' -> true si el dueño pausó el ojo // 'PC1'|'PC2' -> { shot(Buffer), mime, terminal, ts }
 const EQUIPOS_REPORT_KEY = process.env.EQUIPOS_REPORT_KEY || AGY_IDE_PWD;
 const EQUIPOS_TTL_MS = 10 * 60 * 1000; // retención corta: 10 minutos
 
@@ -1037,6 +1038,7 @@ app.post('/api/equipos/report', (req, res) => {
   const { pc, shot, terminal } = req.body || {};
   const id = String(pc || '').toUpperCase();
   if (id !== 'PC1' && id !== 'PC2') return res.status(400).json({ error: 'pc debe ser PC1 o PC2' });
+  if (_eyePaused[id]) { delete _equiposEye[id]; return res.json({ ok: true, paused: true }); }
   const entry = _equiposEye[id] || {};
   if (typeof shot === 'string' && shot.length) {
     if (shot.length > 6000000) return res.status(413).json({ error: 'captura demasiado grande (máx ~4MB)' });
@@ -1107,13 +1109,25 @@ app.get('/eye/pc1.ps1', (req, res) => {
   );
 });
 
+
+/* Pausar/reanudar el ojo de un PC (privacidad): mientras esté pausado,
+   el servidor descarta lo que llegue y borra lo guardado. */
+app.post('/api/equipos/pause', requirePwd, (req, res) => {
+  const { pc, paused } = req.body || {};
+  const id = String(pc || '').toUpperCase();
+  if (id !== 'PC1' && id !== 'PC2') return res.status(400).json({ error: 'pc debe ser PC1 o PC2' });
+  _eyePaused[id] = !!paused;
+  if (_eyePaused[id]) delete _equiposEye[id];
+  res.json({ ok: true, pc: id, paused: _eyePaused[id] });
+});
+
 app.get('/api/equipos/screens', requirePwd, (_req, res) => {
   const out = {};
   ['PC1', 'PC2'].forEach((id) => {
     const e = _eyeFresh(id);
     out[id] = e
-      ? { ts: e.ts, seconds_ago: Math.round((Date.now() - e.ts) / 1000), has_shot: !!e.shot, terminal: e.terminal || '' }
-      : null;
+      ? { ts: e.ts, seconds_ago: Math.round((Date.now() - e.ts) / 1000), has_shot: !!e.shot, terminal: e.terminal || '', paused: !!_eyePaused[id] }
+      : (_eyePaused[id] ? { paused: true } : null);
   });
   res.json(out);
 });
