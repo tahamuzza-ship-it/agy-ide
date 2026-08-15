@@ -2198,7 +2198,7 @@
 
 <!-- ── PANEL MIS EQUIPOS — estado PC1/PC2 con luz verde/roja ── -->
 <div id="equipos-fab" style="position:fixed;right:12px;bottom:76px;z-index:9000;width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#0c1225,#1a2340);border:1px solid rgba(0,243,255,0.4);color:#00f3ff;font-size:1.2rem;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,0.5);user-select:none;">🖥️</div>
-<div id="equipos-panel" style="display:none;position:fixed;right:12px;bottom:130px;z-index:9001;width:230px;background:#0c1225;border:1px solid rgba(0,243,255,0.3);border-radius:14px;padding:12px;font-family:'Inter',sans-serif;box-shadow:0 8px 30px rgba(0,0,0,0.6);">
+<div id="equipos-panel" style="display:none;position:fixed;right:12px;bottom:130px;z-index:9001;width:min(340px,92vw);max-height:min(70vh,560px);overflow-y:auto;background:#0c1225;border:1px solid rgba(0,243,255,0.3);border-radius:14px;padding:12px;font-family:'Inter',sans-serif;box-shadow:0 8px 30px rgba(0,0,0,0.6);">
   <div style="font-family:'Orbitron',monospace;font-size:0.7rem;letter-spacing:0.12em;color:#00f3ff;margin-bottom:10px;">🖥️ MIS EQUIPOS</div>
   <div class="equipo-card" id="equipo-card-pc1" style="display:flex;align-items:center;gap:10px;background:rgba(0,85,204,0.12);border:1px solid rgba(0,85,204,0.35);border-radius:10px;padding:10px;margin-bottom:8px;">
     <span id="equipo-dot-pc1" style="width:12px;height:12px;border-radius:50%;background:#555;flex-shrink:0;"></span>
@@ -2207,6 +2207,11 @@
       <div id="equipo-info-pc1" style="font-size:0.65rem;color:#8c9cb2;">consultando…</div>
     </div>
   </div>
+  <div id="equipo-eye-pc1" style="display:none;margin:0 0 8px;">
+    <img id="equipo-shot-pc1" alt="Pantalla PC1" style="display:none;width:100%;border-radius:8px;border:1px solid rgba(0,243,255,0.25);cursor:zoom-in;"/>
+    <pre id="equipo-term-pc1" style="display:none;max-height:110px;overflow:auto;background:#060a16;border:1px solid rgba(0,243,255,0.15);border-radius:8px;padding:6px 8px;font-size:0.58rem;line-height:1.35;color:#9fe8c0;white-space:pre-wrap;word-break:break-all;margin:6px 0 0;"></pre>
+    <div id="equipo-eyeinfo-pc1" style="font-size:0.55rem;color:#5a6a80;margin-top:3px;"></div>
+  </div>
   <div class="equipo-card" id="equipo-card-pc2" style="display:flex;align-items:center;gap:10px;background:rgba(204,0,32,0.10);border:1px solid rgba(204,0,32,0.35);border-radius:10px;padding:10px;">
     <span id="equipo-dot-pc2" style="width:12px;height:12px;border-radius:50%;background:#555;flex-shrink:0;"></span>
     <div style="min-width:0;">
@@ -2214,7 +2219,15 @@
       <div id="equipo-info-pc2" style="font-size:0.65rem;color:#8c9cb2;">consultando…</div>
     </div>
   </div>
+  <div id="equipo-eye-pc2" style="display:none;margin:8px 0 0;">
+    <img id="equipo-shot-pc2" alt="Pantalla PC2" style="display:none;width:100%;border-radius:8px;border:1px solid rgba(0,243,255,0.25);cursor:zoom-in;"/>
+    <pre id="equipo-term-pc2" style="display:none;max-height:110px;overflow:auto;background:#060a16;border:1px solid rgba(0,243,255,0.15);border-radius:8px;padding:6px 8px;font-size:0.58rem;line-height:1.35;color:#9fe8c0;white-space:pre-wrap;word-break:break-all;margin:6px 0 0;"></pre>
+    <div id="equipo-eyeinfo-pc2" style="font-size:0.55rem;color:#5a6a80;margin-top:3px;"></div>
+  </div>
   <div id="equipos-updated" style="font-size:0.58rem;color:#5a6a80;margin-top:8px;text-align:right;"></div>
+</div>
+<div id="equipo-shot-full" style="display:none;position:fixed;inset:0;z-index:9500;background:rgba(2,5,14,0.95);align-items:center;justify-content:center;cursor:zoom-out;padding:12px;">
+  <img id="equipo-shot-full-img" alt="Pantalla ampliada" style="max-width:100%;max-height:100%;border-radius:10px;border:1px solid rgba(0,243,255,0.35);"/>
 </div>
 <script>
 (function () {
@@ -2277,13 +2290,100 @@
       });
   }
 
+  /* ── OJO REMOTO: pantalla + terminal de cada PC ── */
+  var eyeTimer = null;
+  var shotUrls = {};
+  var pendingRevoke = [];
+
+  function _revokeShot(pc) {
+    var old = shotUrls[pc];
+    if (!old) return;
+    delete shotUrls[pc];
+    var fullImgEl = document.getElementById('equipo-shot-full-img');
+    if (fullImgEl && fullImgEl.src === old) { pendingRevoke.push(old); return; } // el overlay la sigue usando
+    URL.revokeObjectURL(old);
+  }
+
+  function _pwdHeaders() {
+    var h = {};
+    try { if (typeof _getPwd === 'function') h['x-agyide-pwd'] = _getPwd(); } catch (e) {}
+    return h;
+  }
+
+  function setEye(pc, data) {
+    var lc = pc.toLowerCase();
+    var box = document.getElementById('equipo-eye-' + lc);
+    var img = document.getElementById('equipo-shot-' + lc);
+    var term = document.getElementById('equipo-term-' + lc);
+    var info = document.getElementById('equipo-eyeinfo-' + lc);
+    if (!box) return;
+    if (!data) { box.style.display = 'none'; img.style.display = 'none'; img.removeAttribute('src'); _revokeShot(pc); return; }
+    box.style.display = 'block';
+    if (data.terminal) {
+      term.style.display = 'block';
+      if (term.textContent !== data.terminal) {
+        term.textContent = data.terminal;
+        term.scrollTop = term.scrollHeight;
+      }
+    } else { term.style.display = 'none'; }
+    var stale = data.seconds_ago != null && data.seconds_ago > 60;
+    info.textContent = stale
+      ? '⚠️ sin señal ' + fmtAgo(data.seconds_ago)
+      : (data.seconds_ago != null ? 'captura ' + fmtAgo(data.seconds_ago) : '');
+    img.style.opacity = stale ? '0.4' : '1';
+    if (data.has_shot) {
+      fetch('/api/equipos/screens/' + pc + '/shot?t=' + Date.now(), { headers: _pwdHeaders() })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
+        .then(function (b) {
+          _revokeShot(pc);
+          shotUrls[pc] = URL.createObjectURL(b);
+          img.src = shotUrls[pc];
+          img.style.display = 'block';
+        })
+        .catch(function () {});
+    } else { img.style.display = 'none'; img.removeAttribute('src'); _revokeShot(pc); }
+  }
+
+  function refreshScreens() {
+    fetch('/api/equipos/screens', { headers: _pwdHeaders() })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) { setEye('PC1', d.PC1); setEye('PC2', d.PC2); })
+      .catch(function () { setEye('PC1', null); setEye('PC2', null); });
+  }
+
+  var full = document.getElementById('equipo-shot-full');
+  var fullImg = document.getElementById('equipo-shot-full-img');
+  ['pc1', 'pc2'].forEach(function (lc) {
+    var img = document.getElementById('equipo-shot-' + lc);
+    if (img) img.addEventListener('click', function () {
+      fullImg.src = img.src;
+      full.style.display = 'flex';
+    });
+  });
+  full.addEventListener('click', function () {
+    full.style.display = 'none';
+    fullImg.removeAttribute('src');
+    pendingRevoke.forEach(function (u) { URL.revokeObjectURL(u); });
+    pendingRevoke = [];
+  });
+
   fab.addEventListener('click', function () {
     var open = panel.style.display !== 'none';
     panel.style.display = open ? 'none' : 'block';
     if (!open) {
       refreshEquipos();
+      refreshScreens();
       timer = setInterval(refreshEquipos, 30000);
-    } else if (timer) { clearInterval(timer); timer = null; }
+      eyeTimer = setInterval(refreshScreens, 10000);
+    } else {
+      if (timer) { clearInterval(timer); timer = null; }
+      if (eyeTimer) { clearInterval(eyeTimer); eyeTimer = null; }
+      ['PC1', 'PC2'].forEach(function (pc) {
+        var im = document.getElementById('equipo-shot-' + pc.toLowerCase());
+        if (im) { im.style.display = 'none'; im.removeAttribute('src'); }
+        _revokeShot(pc);
+      });
+    }
   });
 })();
 </script>

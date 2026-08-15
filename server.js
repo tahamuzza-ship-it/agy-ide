@@ -93,7 +93,7 @@ const TG_TOKEN            = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT_ID          = process.env.TELEGRAM_LEAD_ARCHITECT_CHAT_ID;
 const TG_WEBHOOK_SECRET   = process.env.TELEGRAM_WEBHOOK_SECRET; // optional but recommended
 
-app.use(express.json());
+app.use(express.json({ limit: '8mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 /* ── helpers — Antigravity ── */
@@ -1007,6 +1007,72 @@ app.get('/api/equipos', requirePwd, (_req, res) => {
     PC2: { online: PC_WATCH.PC2.online, seconds_ago: ago('PC2') },
     checked_at: PC_LAST_HB ? PC_LAST_HB.at : null
   });
+});
+
+
+/* ══════════════════════════════════════════
+   OJO REMOTO — capturas de pantalla y terminal de PC1/PC2
+   Los listeners hacen POST /api/equipos/report cada 10-15 s.
+   Solo se guarda la ÚLTIMA captura por PC (en memoria, retención corta).
+══════════════════════════════════════════ */
+const _equiposEye = {}; // 'PC1'|'PC2' -> { shot(Buffer), mime, terminal, ts }
+const EQUIPOS_REPORT_KEY = process.env.EQUIPOS_REPORT_KEY || AGY_IDE_PWD;
+const EQUIPOS_TTL_MS = 10 * 60 * 1000; // retención corta: 10 minutos
+
+function _eyeFresh(id) {
+  const e = _equiposEye[id];
+  if (!e) return null;
+  if (Date.now() - e.ts > EQUIPOS_TTL_MS) { delete _equiposEye[id]; return null; }
+  return e;
+}
+
+app.post('/api/equipos/report', (req, res) => {
+  const key = req.headers['x-equipos-key'] || req.headers['x-agyide-pwd'];
+  // Nunca autorizar si el servidor no tiene llave configurada o la petición no la trae
+  if (!EQUIPOS_REPORT_KEY || !key || key !== EQUIPOS_REPORT_KEY) {
+    if (!key || !AGY_IDE_PWD || key !== AGY_IDE_PWD) {
+      return res.status(401).json({ error: 'No autorizado' });
+    }
+  }
+  const { pc, shot, terminal } = req.body || {};
+  const id = String(pc || '').toUpperCase();
+  if (id !== 'PC1' && id !== 'PC2') return res.status(400).json({ error: 'pc debe ser PC1 o PC2' });
+  const entry = _equiposEye[id] || {};
+  if (typeof shot === 'string' && shot.length) {
+    if (shot.length > 6000000) return res.status(413).json({ error: 'captura demasiado grande (máx ~4MB)' });
+    const buf = Buffer.from(shot.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+    // Solo JPEG o PNG reales (firma de bytes), sin fiarse del MIME declarado
+    const isPng = buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
+    const isJpg = buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
+    if (!isPng && !isJpg) return res.status(400).json({ error: 'la captura debe ser PNG o JPEG' });
+    entry.mime = isPng ? 'image/png' : 'image/jpeg';
+    entry.shot = buf;
+  }
+  if (typeof terminal === 'string') {
+    entry.terminal = terminal.split('\n').slice(-80).join('\n').slice(-12000);
+  }
+  entry.ts = Date.now();
+  _equiposEye[id] = entry;
+  res.json({ ok: true });
+});
+
+app.get('/api/equipos/screens', requirePwd, (_req, res) => {
+  const out = {};
+  ['PC1', 'PC2'].forEach((id) => {
+    const e = _eyeFresh(id);
+    out[id] = e
+      ? { ts: e.ts, seconds_ago: Math.round((Date.now() - e.ts) / 1000), has_shot: !!e.shot, terminal: e.terminal || '' }
+      : null;
+  });
+  res.json(out);
+});
+
+app.get('/api/equipos/screens/:pc/shot', requirePwd, (req, res) => {
+  const e = _eyeFresh(String(req.params.pc || '').toUpperCase());
+  if (!e || !e.shot) return res.status(404).json({ error: 'sin captura' });
+  res.set('Content-Type', e.mime || 'image/jpeg');
+  res.set('Cache-Control', 'no-store');
+  res.send(e.shot);
 });
 
 app.listen(PORT, async () => {
