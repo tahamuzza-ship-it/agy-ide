@@ -1133,7 +1133,9 @@ app.get('/api/equipos/screens', requirePwd, (_req, res) => {
 });
 
 app.get('/api/equipos/screens/:pc/shot', requirePwd, (req, res) => {
-  const e = _eyeFresh(String(req.params.pc || '').toUpperCase());
+  const _id = String(req.params.pc || '').toUpperCase();
+  if (_eyePaused[_id]) return res.status(404).json({ error: 'ojo pausado' });
+  const e = _eyeFresh(_id);
   if (!e || !e.shot) return res.status(404).json({ error: 'sin captura' });
   res.set('Content-Type', e.mime || 'image/jpeg');
   res.set('Cache-Control', 'no-store');

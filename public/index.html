@@ -2320,6 +2320,7 @@
     return h;
   }
 
+  var _eyePausedUI = { PC1: false, PC2: false };
   function setEye(pc, data) {
     var lc = pc.toLowerCase();
     var box = document.getElementById('equipo-eye-' + lc);
@@ -2334,9 +2335,15 @@
       btn.setAttribute('data-paused', data.paused ? '1' : '0');
       btn.textContent = data.paused ? '👁️ Reanudar' : '🙈 Pausar';
     }
+    _eyePausedUI[pc] = !!(data && data.paused);
     if (data && data.paused) {
       box.style.display = 'block';
       img.style.display = 'none'; img.removeAttribute('src');
+      var _full = document.getElementById('equipo-shot-full');
+      var _fullImg = document.getElementById('equipo-shot-full-img');
+      if (_full && _fullImg && shotUrls[pc] && _fullImg.src === shotUrls[pc]) {
+        _full.style.display = 'none'; _fullImg.removeAttribute('src');
+      }
       term.style.display = 'none';
       if (shotLbl) shotLbl.style.display = 'none';
       if (termLbl) termLbl.style.display = 'none';
@@ -2367,6 +2374,7 @@
       fetch('/api/equipos/screens/' + pc + '/shot?t=' + Date.now(), { headers: _pwdHeaders() })
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.blob(); })
         .then(function (b) {
+          if (_eyePausedUI[pc]) return; // llegó tarde: el dueño ya pausó este PC
           _revokeShot(pc);
           shotUrls[pc] = URL.createObjectURL(b);
           img.src = shotUrls[pc];
