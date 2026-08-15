@@ -1056,6 +1056,57 @@ app.post('/api/equipos/report', (req, res) => {
   res.json({ ok: true });
 });
 
+
+/* Ojo autónomo de PC1 — servido desde el propio IDE, sin depender del puente.
+   Uso (en PC1): descargar con ?pwd=<clave del IDE> y ejecutar. */
+const PC1_EYE_PS1 = [
+"$ErrorActionPreference='SilentlyContinue'",
+"$U='__URL__/api/equipos/report'",
+"$K='__KEY__'",
+"Add-Type -AssemblyName System.Drawing",
+"Add-Type -AssemblyName System.Windows.Forms",
+"Write-Host ('[EYE-PC1] iniciado -> '+$U)",
+"while($true){",
+"  try{",
+"    $b=[System.Windows.Forms.SystemInformation]::VirtualScreen",
+"    $bmp=New-Object System.Drawing.Bitmap $b.Width,$b.Height",
+"    $g=[System.Drawing.Graphics]::FromImage($bmp)",
+"    $g.CopyFromScreen($b.X,$b.Y,0,0,$bmp.Size)",
+"    $ms=New-Object System.IO.MemoryStream",
+"    $enc=[System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders()|Where-Object{$_.MimeType -eq 'image/jpeg'}",
+"    $ep=New-Object System.Drawing.Imaging.EncoderParameters 1",
+"    $ep.Param[0]=New-Object System.Drawing.Imaging.EncoderParameter([System.Drawing.Imaging.Encoder]::Quality,[long]60)",
+"    $bmp.Save($ms,$enc,$ep)",
+"    $shot=[Convert]::ToBase64String($ms.ToArray())",
+"    $g.Dispose();$bmp.Dispose();$ms.Dispose()",
+"    $t=@()",
+"    $t+=('== '+(Get-Date -Format 'HH:mm:ss')+' PC1 ==')",
+"    $t+='== PROCESOS (top CPU) =='",
+"    $t+=(Get-Process|Sort-Object CPU -Descending|Select-Object -First 8|ForEach-Object{($_.Name+'  CPU:'+[math]::Round([double]$_.CPU,1)+'  RAM:'+[math]::Round($_.WS/1MB)+'MB')})",
+"    $t+='== RED (conexiones activas) =='",
+"    $t+=(Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue|Select-Object -First 6|ForEach-Object{($_.RemoteAddress+':'+$_.RemotePort)})",
+"    $t+='== SISTEMA =='",
+"    $os=Get-CimInstance Win32_OperatingSystem",
+"    $t+=('RAM libre: '+[math]::Round($os.FreePhysicalMemory/1KB)+' MB de '+[math]::Round($os.TotalVisibleMemorySize/1KB)+' MB')",
+"    $d=Get-PSDrive C",
+"    $t+=('Disco C libre: '+[math]::Round($d.Free/1GB,1)+' GB')",
+"    $body=@{pc='PC1';shot=$shot;terminal=($t -join [Environment]::NewLine)}|ConvertTo-Json -Compress",
+"    Invoke-RestMethod -Uri $U -Method Post -Headers @{'x-equipos-key'=$K} -ContentType 'application/json' -Body $body|Out-Null",
+"    Write-Host ('[EYE-PC1] enviado '+(Get-Date -Format 'HH:mm:ss'))",
+"  }catch{ Write-Host ('[EYE-PC1] error: '+$_.Exception.Message) }",
+"  Start-Sleep -Seconds 12",
+"}"
+].join("\n");
+
+app.get('/eye/pc1.ps1', (req, res) => {
+  const pwd = req.query.pwd || req.headers['x-agyide-pwd'];
+  if (!AGY_IDE_PWD || !pwd || pwd !== AGY_IDE_PWD) return res.status(401).send('No autorizado');
+  const base = 'https://' + (req.headers.host || 'agy-ide-production.up.railway.app');
+  res.type('text/plain; charset=utf-8').send(
+    PC1_EYE_PS1.replace('__URL__', base).replace('__KEY__', EQUIPOS_REPORT_KEY || '')
+  );
+});
+
 app.get('/api/equipos/screens', requirePwd, (_req, res) => {
   const out = {};
   ['PC1', 'PC2'].forEach((id) => {
