@@ -2208,7 +2208,9 @@
     </div>
   </div>
   <div id="equipo-eye-pc1" style="display:none;margin:0 0 8px;">
+    <div id="equipo-shotlbl-pc1" style="display:none;font-size:0.6rem;color:#00f3ff;margin:2px 0;">📸 Pantalla de PC1 (Windows)</div>
     <img id="equipo-shot-pc1" alt="Pantalla PC1" style="display:none;width:100%;border-radius:8px;border:1px solid rgba(0,243,255,0.25);cursor:zoom-in;"/>
+    <div id="equipo-termlbl-pc1" style="display:none;font-size:0.6rem;color:#9fe8c0;margin:6px 0 0;">⌨️ Terminal de PC1 (Windows)</div>
     <pre id="equipo-term-pc1" style="display:none;max-height:110px;overflow:auto;background:#060a16;border:1px solid rgba(0,243,255,0.15);border-radius:8px;padding:6px 8px;font-size:0.58rem;line-height:1.35;color:#9fe8c0;white-space:pre-wrap;word-break:break-all;margin:6px 0 0;"></pre>
     <div id="equipo-eyeinfo-pc1" style="font-size:0.55rem;color:#5a6a80;margin-top:3px;"></div>
   </div>
@@ -2220,7 +2222,9 @@
     </div>
   </div>
   <div id="equipo-eye-pc2" style="display:none;margin:8px 0 0;">
+    <div id="equipo-shotlbl-pc2" style="display:none;font-size:0.6rem;color:#00f3ff;margin:2px 0;">📸 Pantalla de PC2 (Linux)</div>
     <img id="equipo-shot-pc2" alt="Pantalla PC2" style="display:none;width:100%;border-radius:8px;border:1px solid rgba(0,243,255,0.25);cursor:zoom-in;"/>
+    <div id="equipo-termlbl-pc2" style="display:none;font-size:0.6rem;color:#9fe8c0;margin:6px 0 0;">⌨️ Terminal de PC2 (Linux)</div>
     <pre id="equipo-term-pc2" style="display:none;max-height:110px;overflow:auto;background:#060a16;border:1px solid rgba(0,243,255,0.15);border-radius:8px;padding:6px 8px;font-size:0.58rem;line-height:1.35;color:#9fe8c0;white-space:pre-wrap;word-break:break-all;margin:6px 0 0;"></pre>
     <div id="equipo-eyeinfo-pc2" style="font-size:0.55rem;color:#5a6a80;margin-top:3px;"></div>
   </div>
@@ -2320,16 +2324,24 @@
     var img = document.getElementById('equipo-shot-' + lc);
     var term = document.getElementById('equipo-term-' + lc);
     var info = document.getElementById('equipo-eyeinfo-' + lc);
+    var shotLbl = document.getElementById('equipo-shotlbl-' + lc);
+    var termLbl = document.getElementById('equipo-termlbl-' + lc);
     if (!box) return;
-    if (!data) { box.style.display = 'none'; img.style.display = 'none'; img.removeAttribute('src'); _revokeShot(pc); return; }
+    if (!data) {
+      box.style.display = 'none'; img.style.display = 'none'; img.removeAttribute('src');
+      if (shotLbl) shotLbl.style.display = 'none';
+      if (termLbl) termLbl.style.display = 'none';
+      _revokeShot(pc); return;
+    }
     box.style.display = 'block';
     if (data.terminal) {
       term.style.display = 'block';
+      if (termLbl) termLbl.style.display = 'block';
       if (term.textContent !== data.terminal) {
         term.textContent = data.terminal;
         term.scrollTop = term.scrollHeight;
       }
-    } else { term.style.display = 'none'; }
+    } else { term.style.display = 'none'; if (termLbl) termLbl.style.display = 'none'; }
     var stale = data.seconds_ago != null && data.seconds_ago > 60;
     info.textContent = stale
       ? '⚠️ sin señal ' + fmtAgo(data.seconds_ago)
@@ -2343,9 +2355,10 @@
           shotUrls[pc] = URL.createObjectURL(b);
           img.src = shotUrls[pc];
           img.style.display = 'block';
+          if (shotLbl) shotLbl.style.display = 'block';
         })
         .catch(function () {});
-    } else { img.style.display = 'none'; img.removeAttribute('src'); _revokeShot(pc); }
+    } else { img.style.display = 'none'; img.removeAttribute('src'); if (shotLbl) shotLbl.style.display = 'none'; _revokeShot(pc); }
   }
 
   function refreshScreens() {
