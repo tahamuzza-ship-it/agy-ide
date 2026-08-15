@@ -11,11 +11,14 @@ const MEMORY_API  = 'https://workspaceapi-server-production-905a.up.railway.app'
 /* ── Fire-and-forget al agente de memoria ── */
 function notifyMemory(type, payload) {
   const endpoint = type === 'chat' ? '/api/ide/chat' : '/api/ide/file';
+  // La memoria rechaza nombres de app con guiones (check constraint): normalizar a minúsculas alfanuméricas
+  if (payload && payload.app) payload.app = String(payload.app).toLowerCase().replace(/[^a-z0-9]/g, '');
   fetch(MEMORY_API + endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
-  }).catch(() => {}); // silencioso — no bloquea la respuesta principal
+  }).then(r => { if (!r.ok) console.error(`[memoria] ${endpoint} HTTP ${r.status}`); })
+    .catch(() => {}); // silencioso — no bloquea la respuesta principal
 }
 
 /* ── Required env vars — server refuses to start if missing ── */
@@ -384,7 +387,8 @@ Responde SOLO con el comando corregido, sin explicaciones.`;
 ══════════════════════════════════════════ */
 function requirePwd(req, res, next) {
   const pwd = req.headers['x-agyide-pwd'] || (req.body && req.body._pwd);
-  if (pwd === AGY_IDE_PWD) return next();
+  // Nunca autorizar si el servidor no tiene contraseña configurada o la petición no la trae
+  if (AGY_IDE_PWD && pwd && pwd === AGY_IDE_PWD) return next();
   return res.status(401).json({ error: 'No autorizado' });
 }
 
@@ -807,7 +811,7 @@ async function sbQuery(table, params) {
   return Array.isArray(data) ? data : [];
 }
 
-app.get('/api/chats', async (req, res) => {
+app.get('/api/chats', requirePwd, async (req, res) => {
   if (!SUPABASE_URL || !SUPABASE_KEY) return res.json([]);
   try {
     const project = req.query.project || 'agy-ide';
@@ -820,7 +824,7 @@ app.get('/api/chats', async (req, res) => {
   } catch (e) { res.json([]); }
 });
 
-app.post('/api/chats', async (req, res) => {
+app.post('/api/chats', requirePwd, async (req, res) => {
   if (!SUPABASE_URL || !SUPABASE_KEY) return res.json({ ok: false });
   const { id, project = 'agy-ide', messages, title } = req.body || {};
   if (!id || !messages) return res.status(400).json({ error: 'id y messages requeridos' });
@@ -841,12 +845,12 @@ app.post('/api/chats', async (req, res) => {
       });
       if (!r.ok) throw new Error(await r.text());
     }
-    notifyMemory('chat', { session_id: id, app: project, title: title || 'Sin título' });
+    notifyMemory('chat', { session_id: id, app: project, title: title || 'Sin título', messages });
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/chats/:id', async (req, res) => {
+app.delete('/api/chats/:id', requirePwd, async (req, res) => {
   if (!SUPABASE_URL || !SUPABASE_KEY) return res.json({ ok: false });
   try {
     const r = await fetch(
@@ -861,7 +865,7 @@ app.delete('/api/chats/:id', async (req, res) => {
    /api/files — archivos virtuales AGY-IDE en Supabase
    Reutiliza tabla cibercode_chats: id='agyide_file_'+filename
 ══════════════════════════════════════════════════════════ */
-app.get('/api/files', async (req, res) => {
+app.get('/api/files', requirePwd, async (req, res) => {
   if (!SUPABASE_URL || !SUPABASE_KEY) return res.json([]);
   try {
     const project = req.query.project || 'agy-ide';
@@ -881,7 +885,7 @@ app.get('/api/files', async (req, res) => {
   } catch (e) { res.json([]); }
 });
 
-app.post('/api/files', async (req, res) => {
+app.post('/api/files', requirePwd, async (req, res) => {
   if (!SUPABASE_URL || !SUPABASE_KEY) return res.json({ ok: false });
   const { filename, content = '', project = 'agy-ide' } = req.body || {};
   if (!filename) return res.status(400).json({ error: 'filename requerido' });
@@ -913,7 +917,7 @@ app.post('/api/files', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.delete('/api/files/:filename', async (req, res) => {
+app.delete('/api/files/:filename', requirePwd, async (req, res) => {
   if (!SUPABASE_URL || !SUPABASE_KEY) return res.json({ ok: false });
   const project = req.query.project || 'agy-ide';
   const id      = 'agyide_file_' + project + '_' + req.params.filename;

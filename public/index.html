@@ -1404,7 +1404,7 @@
 
     async function _apiFetchFiles() {
       try {
-        var r = await fetch('/api/files?project=agy-ide');
+        var r = await fetch('/api/files?project=agy-ide', { headers: { 'x-agyide-pwd': _getPwd() } });
         var arr = await r.json();
         if (!Array.isArray(arr)) return {};
         var obj = {};
@@ -1417,7 +1417,7 @@
       try {
         var r = await fetch('/api/files', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': _getPwd() },
           body: JSON.stringify({ filename: filename, content: content, project: 'agy-ide' })
         });
         if (!r.ok) return false;
@@ -1430,7 +1430,7 @@
     async function _apiDeleteFile(filename) {
       try {
         await fetch('/api/files/' + encodeURIComponent(filename) + '?project=agy-ide',
-          { method: 'DELETE' });
+          { method: 'DELETE', headers: { 'x-agyide-pwd': _getPwd() } });
       } catch(e) {}
     }
 
@@ -1488,7 +1488,7 @@
       // porque un POST posterior sobrescribiría el contenido real
       var current;
       try {
-        var r = await fetch('/api/files?project=agy-ide');
+        var r = await fetch('/api/files?project=agy-ide', { headers: { 'x-agyide-pwd': _getPwd() } });
         if (!r.ok) throw new Error('HTTP ' + r.status);
         var arr = await r.json();
         if (!Array.isArray(arr)) throw new Error('respuesta inv\u00E1lida del servidor');
@@ -1743,7 +1743,7 @@
         if (msgs.length === 0) return;
         await fetch('/api/chats', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': _getPwd() },
           body: JSON.stringify({ id: _chatSessionId, project: 'agy-ide', messages: msgs, title: _getTitle(msgs) })
         });
       } catch(e) {}
@@ -1765,7 +1765,7 @@
       var list = document.getElementById('chats-modal-list');
       list.innerHTML = '<div style="color:#526075;font-size:0.8rem;text-align:center;padding:20px;">Cargando...</div>';
       try {
-        var r = await fetch('/api/chats?project=agy-ide');
+        var r = await fetch('/api/chats?project=agy-ide', { headers: { 'x-agyide-pwd': _getPwd() } });
         var chats = await r.json();
         if (!Array.isArray(chats) || chats.length === 0) {
           list.innerHTML = '<div style="color:#526075;font-size:0.8rem;text-align:center;padding:20px;">Sin chats guardados. Empieza a chatear y aparecerán aquí.</div>';
@@ -1834,7 +1834,7 @@
     async function deleteChatSession(cid) {
       if (!confirm('¿Borrar este chat?')) return;
       try {
-        await fetch('/api/chats/' + encodeURIComponent(cid), { method: 'DELETE' });
+        await fetch('/api/chats/' + encodeURIComponent(cid), { method: 'DELETE', headers: { 'x-agyide-pwd': _getPwd() } });
         renderChatsList();
       } catch(e) {}
     }
