@@ -1161,6 +1161,7 @@ let _stKeyCache = null;
 async function storageKey() {
   if (_stKeyCache) return _stKeyCache;
   const cands = [
+    process.env.SUPABASE_STORAGE_KEY,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
     process.env.SUPABASE_KEY_2,
     process.env.SUPABASE_SERVICE_ROLE_KEY_2,
