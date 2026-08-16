@@ -28,7 +28,12 @@ const AGY_IDE_PWD = process.env.AGY_IDE_PASSWORD;
 if (!AGY_KEY)     { console.error('FATAL: ANTIGRAVITY_KEY env var not set'); process.exit(1); }
 if (!AGY_IDE_PWD) { console.error('FATAL: AGY_IDE_PASSWORD env var not set'); process.exit(1); }
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
+/* Base del IDE (Supabase 2, donde vive cibercode_chats). Acepta SUPABASE_URL_2 o
+   SUPABASE_URL si coincide con el proyecto 2. El fallback garantiza el proyecto correcto
+   incluso si la variable de entorno no está seteada. Nota: SUPABASE_URL (sin sufijo _2)
+   apunta a crpsnlonpmgwatjpyzkm (Supabase 1) — no usarlo para cibercode_chats. */
+const SUPABASE_URL = (process.env.SUPABASE_URL_2 || 'https://lxlcivzuevowckbcxczc.supabase.co')
+  .replace(/\/$/, '');
 /* Use service role key — anon key must never access goal_sessions */
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 const GEMINI_KEY          = process.env.GEMINI_API_KEY;
