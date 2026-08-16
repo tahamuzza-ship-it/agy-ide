@@ -72,18 +72,25 @@ Siempre por **URL de commit exacto** (el raw de `main` cachea versiones viejas):
 [PC1] EJECUTAR Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/tahamuzza-ship-it/agy-ide/<COMMIT>/docs/<archivo>' -OutFile 'C:\Users\Roberto1\OneDrive\Desktop\GitHub\cibercode-ide\SGN_Master_Prompt\<archivo>' -UseBasicParsing; (Get-Item '<destino>').Length
 ```
 
-## 6. 🎞️ MONTAJE FINAL — receta en RECETAS_PRIMER_PLANO.md
+## 6. 🎞️ MONTAJE FINAL — UN solo comando (construido en tarea #44) ✅
 
-Un solo comando PowerShell en PC1: baja todas las fotos vía `/api/pelicula/shot` y arma `pelicula.mp4` en el Escritorio con ffmpeg (2 fotos por segundo).
-
-### Paso previo: instalar ffmpeg en PC1 (solo la primera vez)
+El IDE sirve el script ya armado en `GET /montaje/pc1.ps1?pwd=<CLAVE>` (igual que el ojo).
+Un solo comando en PC1 lo baja y lo lanza como proceso aparte (a prueba de ETIMEDOUT):
 
 ```
-[PC1] EJECUTAR Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/tahamuzza-ship-it/agy-ide/main/tools/instalar-ffmpeg-pc1.ps1' -OutFile "$env:TEMP\instalar-ffmpeg.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\instalar-ffmpeg.ps1"
+[PC1] EJECUTAR powershell -NoProfile -ExecutionPolicy Bypass -Command "Invoke-WebRequest -Uri 'https://agy-ide-production.up.railway.app/montaje/pc1.ps1?pwd=<CLAVE>' -OutFile ($env:TEMP+'\montar.ps1') -UseBasicParsing; Start-Process powershell -WindowStyle Hidden -ArgumentList '-ExecutionPolicy','Bypass','-File',($env:TEMP+'\montar.ps1'); Write-Host MONTAJE_LANZADO"
 ```
+⚠️ El listener de PC1 ejecuta EJECUTAR con `cmd /c`: por eso el comando va envuelto en
+`powershell -Command "..."` (sintaxis PS suelta como `$c='...'` falla en cmd). Para montar
+una sesión concreta, añadir `,'-Id','rodaje-...'` a la ArgumentList.
 
-Respuestas posibles: `FFMPEG_YA_LISTO`, `FFMPEG_INSTALADO_WINGET`, o `FFMPEG_INSTALADO_PORTABLE`.
-Verificar: `[PC1] EJECUTAR ffmpeg -version 2>&1 | Select-Object -First 1`
+Qué hace solo: baja TODAS las fotos del último rodaje (o `-Id rodaje-...` para una sesión
+concreta), arma `pelicula-<sesión>-PC1.mp4` y `...-PC2.mp4` (~1.7 fps, fundidos por mezcla
+de fotogramas, 720p), los manda a Telegram (claves del `.env` de cibercode-ide, nunca por
+el puente), deja copia en el Escritorio y borra los temporales. Si ffmpeg no está, se lo
+instala solo (una vez, a `%USERPROFILE%\ffmpeg`). Diario: `%USERPROFILE%\montaje.log`.
+También está en el panel 📋 COMANDOS del IDE, categoría "🎞️ Montar la película".
+⚠️ Las fotos NO se borran solas: tras confirmar los videos, usar el botón "Borrar rodaje".
 
 ### Escena narrada completa — RECETA GANADORA (toma 6, probada ✅)
 
