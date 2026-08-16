@@ -495,7 +495,7 @@ app.post('/api/send', requirePwd, async (req, res) => {
 
     const isExecution = instruction.trimStart().startsWith('EJECUTAR');
 
-    if (!isExecution && GROQ_KEY) {
+    if (!isExecution && (GEMINI_KEY || GROQ_KEY)) {
       // PLAN B: Groq directo para chat — bypassa agy.exe y cuota Claude
       const groqReply = await callAI(instruction);
       // Guardar en Supabase Y devolver directo — compatible con frontend nuevo y viejo

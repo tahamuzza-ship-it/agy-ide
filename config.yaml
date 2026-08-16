@@ -15,7 +15,7 @@ limites:
   ia_timeout_ms: 15000                 # tiempo máximo de espera por respuesta de IA
   goal_pasos_max: 50                   # tope duro de pasos en una sesión /goal
   goal_pasos_default_telegram: 20      # pasos por defecto al lanzar /goal desde Telegram
-  manual_max_chars: 12000              # tope del manual inyectado en el prompt
+  manual_max_chars: 24000              # tope del manual inyectado (holgado: hoy el manual completo cabe entero)
 
 herramientas:
   alma_en_prompt: true                 # inyectar soul.md en cada chat
