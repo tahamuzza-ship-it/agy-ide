@@ -149,6 +149,25 @@ OpenCode v1.18.18 instalado en PC2 (`/usr/local/bin/opencode`) y en PC1 (npm). U
 - Úsalo como PLAN B: lo que no pudo Antigravity, lo intenta OpenCode en terminal.
 - ⚠️ Preguntas largas pueden tardar; para el puente, pedir respuestas corticas.
 
+## 11. 🕵️ VIGILANCIA DEL CUARTO (detectar intrusos por webcam) — probado ✅
+
+Detecta movimiento en la webcam de PC2 durante 1 hora; al detectar a alguien guarda foto y avisa a Telegram con fecha y hora. El script `~/vigilante.py` lee las claves de `~/.env` (TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID) — la clave NUNCA pasa por el puente.
+
+**Lanzar (PC2):**
+```
+[PC2] EJECUTAR pkill ffplay 2>/dev/null; sleep 1; nohup python3 ~/vigilante.py > ~/vigilancia.log 2>&1 & echo VIGILANCIA_ON
+```
+
+**Detener antes de tiempo:**
+```
+[PC2] EJECUTAR pkill -f vigilante.py; echo VIGILANCIA_OFF
+```
+
+- Las fotos de intrusos quedan en `~/vigilancia/intruso_FECHA_HORA.jpg`.
+- Ajustes dentro del script: `UMBRAL` (sensibilidad, más bajo = más sensible), `ENFRIA` (segundos entre alertas), `DURACION` (segundos totales).
+- Requiere PIL en PC2 (`python3 -c 'import PIL'`) y libera la webcam matando ffplay primero.
+- ⚠️ La webcam física (ffplay) y la vigilancia usan el MISMO lente `/dev/video0`: no pueden correr a la vez. La vigilancia toma una foto cada 3s.
+
 ## ❌ Lo que NO usar todavía
 
 - `/goal` del IDE: apunta a la base equivocada (tarea #33 pendiente).
