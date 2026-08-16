@@ -1241,7 +1241,8 @@
     /* La clave viaja en un header HTTP: si tiene caracteres no-ASCII el
        navegador la corrompe (el login por JSON funcionaba pero el header daba 401).
        Se envía codificada; el servidor acepta ambas formas. */
-    function _getPwd() { try { var p = localStorage.getItem(AUTH_STORE) || ''; return p ? encodeURIComponent(p) : ''; } catch { return ''; } }
+    function _getPwdRaw() { try { return localStorage.getItem(AUTH_STORE) || ''; } catch { return ''; } }
+    function _getPwd() { var p = _getPwdRaw(); return p ? encodeURIComponent(p) : ''; }
 
     async function tryLogin(pwd) {
       try {
@@ -1276,7 +1277,7 @@
       };
       if (btn)   btn.addEventListener('click', doLogin);
       if (input) input.addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
-      const stored = _getPwd();
+      const stored = _getPwdRaw(); /* el login por JSON va con la clave tal cual */
       if (stored) {
         tryLogin(stored).then(function(ok) {
           if (ok) { gate.style.display = 'none'; try { if (window.refreshEquipos) window.refreshEquipos(); } catch {} }
