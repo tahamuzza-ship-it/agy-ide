@@ -154,7 +154,7 @@ Cada listener compara su versión con `GET /api/ag/ver` **cada 5 min**. Si el se
 ## 9. VARIABLES DE ENTORNO NECESARIAS (nombres, nunca valores)
 Supabase: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_URL`.
 Telegram: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_LEAD_ARCHITECT_CHAT_ID`, `TELEGRAM_COMANDANTE_CHAT_ID`, `TELEGRAM_SUPERGRUPO_CHAT_ID`.
-Auth interna: `ANTIGRAVITY_KEY` (listener → header `x-antigravity-key`; el listener trae fija `ag-sgn-2026-roberto`), `SENTINEL_API_KEY`, `LEAD_ARCHITECT_AUTH_PHRASE`, `MISSION_SIGNING_KEY`.
+Auth interna: `ANTIGRAVITY_KEY` (listener → header `x-antigravity-key`; el listener trae fija `<ANTIGRAVITY_KEY>`), `SENTINEL_API_KEY`, `LEAD_ARCHITECT_AUTH_PHRASE`, `MISSION_SIGNING_KEY`.
 Servidor: `APP_URL` (URL pública del puente — el listener la usa para todo), `PORT`.
 Opcionales: `OPENAI_API_KEY` (demos), `SESSION_SECRET`.
 Para la mudanza: cambiar `APP_URL`/variable `A` del listener a la URL nueva (o soportar `AG_BACKEND_URL`).
