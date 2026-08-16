@@ -125,6 +125,30 @@ Enciende la cámara real que apunta al frente (distinto del "ojo" que captura la
 - Verificar con el ojo: `GET /api/equipos/screens/PC2/shot` debe mostrar la ventana `/dev/video0` con la imagen del lente.
 - Para APAGAR la webcam de PC2: `[PC2] EJECUTAR pkill ffplay; echo CAM_PC2_OFF`
 
+## 10. 🤖 OPENCODE — la IA suplente (cuando Antigravity agota cuota) — probado ✅
+
+OpenCode v1.18.18 instalado en PC2 (`/usr/local/bin/opencode`) y en PC1 (npm). Usa Gemini Flash de respaldo.
+
+**PC2 (Linux) — hacerle una pregunta y que responda (modo directo, no abre ventana):**
+```
+[PC2] EJECUTAR opencode run 'tu pregunta o tarea aqui' 2>&1 | tail -5
+```
+
+**PC2 — abrir OpenCode en modo chat interactivo (ventana):**
+```
+[PC2] EJECUTAR eval "$(tr '\0' '\n' < /proc/$(pgrep -f -i telegram | head -1)/environ | grep -E '^DISPLAY=|^XAUTHORITY=' | sed 's/^/export /')"; nohup x-terminal-emulator -e opencode >/dev/null 2>&1 & echo OPENCODE_ABIERTO
+```
+
+**PC1 (Windows) — pregunta directa:**
+```
+[PC1] EJECUTAR opencode run 'tu pregunta aqui'
+```
+
+- `opencode run '...'` = una tarea y sale (ideal para el puente, no se queda colgado).
+- Ver versión: `opencode --version`.
+- Úsalo como PLAN B: lo que no pudo Antigravity, lo intenta OpenCode en terminal.
+- ⚠️ Preguntas largas pueden tardar; para el puente, pedir respuestas corticas.
+
 ## ❌ Lo que NO usar todavía
 
 - `/goal` del IDE: apunta a la base equivocada (tarea #33 pendiente).
