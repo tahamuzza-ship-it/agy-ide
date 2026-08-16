@@ -168,6 +168,24 @@ Detecta movimiento en la webcam de PC2 durante 1 hora; al detectar a alguien gua
 - Requiere PIL en PC2 (`python3 -c 'import PIL'`) y libera la webcam matando ffplay primero.
 - ⚠️ La webcam física (ffplay) y la vigilancia usan el MISMO lente `/dev/video0`: no pueden correr a la vez. La vigilancia toma una foto cada 3s.
 
+## 12. 🕵️ VIGILANCIA EN PC1 (Windows, webcam cada 3s) — probado ✅
+
+Igual que la vigilancia de PC2 pero en Windows. Usa `python + opencv` (instalar una vez: `python -m pip install opencv-python-headless`). El script `tools/vigilante_win.py` lee las claves del `.env` de cibercode-ide — la clave NUNCA pasa por el puente.
+
+**Lanzar (PC1):**
+```
+[PC1] EJECUTAR Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/tahamuzza-ship-it/agy-ide/main/tools/vigilante_win.py' -OutFile "$env:TEMP\vigilante_win.py" -UseBasicParsing; Start-Process python -WindowStyle Hidden -ArgumentList "$env:TEMP\vigilante_win.py"; Write-Host VIGILANCIA_PC1_ON
+```
+
+**Detener:**
+```
+[PC1] EJECUTAR Get-Process python -EA SilentlyContinue | Stop-Process -Force; Write-Host VIGILANCIA_PC1_OFF
+```
+
+- Fotos de intrusos: `%USERPROFILE%\vigilancia_pc1\intruso_FECHA_HORA.jpg`.
+- ⚠️ REGLA DE ORO DEL PUENTE (Windows): NO mandar scripts largos en base64 dentro del comando — Windows falla con `spawnSync cmd.exe EPERM` cuando la línea pasa el límite (~8000 chars). Subir el script a GitHub y que PC1 lo baje con Invoke-WebRequest. Comandos cortos siempre.
+- ⚠️ `Start-Process` con `-RedirectStandardOutput/Error` también da EPERM en este puente: lanzar sin redirect.
+
 ## ❌ Lo que NO usar todavía
 
 - `/goal` del IDE: apunta a la base equivocada (tarea #33 pendiente).
