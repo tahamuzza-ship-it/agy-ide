@@ -1,5 +1,50 @@
 # GUION MAESTRO — SUPER PRUEBA DE 1 HORA (PILOTO DEL VIDEO)
-_Este documento se coloca en la carpeta **Master Prompt** de PC1 y se referencia en el `/goal`. El interlocutor único es **Antigravity en PC2** (el "Director"). Última revisión: 2026-08-15._
+_Este documento se coloca en la carpeta **Master Prompt** de PC1 y se referencia en el `/goal`. El interlocutor único es **Antigravity en PC2** (el "Director"). Última revisión: 2026-08-16._
+
+---
+
+## 🎬 RECETAS DE PRIMER PLANO — RESUMEN OBLIGATORIO
+
+> **Antes de actuar en pantalla, lee este bloque. La película se arruina si ignoras estas reglas.**
+> Detalle completo en `RECETAS_PRIMER_PLANO.md` (misma carpeta).
+
+### Las 5 Reglas Sagradas
+1. **VENTANA NUEVA SIEMPRE.** En Win11: `notepad "$env:TEMP\escena_XXX.txt"` — nunca `notepad` a secas (abre pestaña sobre documentos del dueño).
+2. **WIN32 AL FRENTE ANTES DE CADA TECLA.** AppActivate solo no basta; usar `[Win32]::SetForegroundWindow($h)` antes de CADA bloque de texto.
+3. **ÓRDENES CORTICAS.** Un paso = un comando. Escenas >30 s → lanzar como `.ps1` aparte (ver Receta 6).
+4. **PRE-AVISO.** Antes de automatizar teclado/ratón, narrar en voz alta qué se va a hacer. Si Roberto usa el PC, ESPERAR.
+5. **PORTAPAPELES > SENDKEYS.** `Set-Clipboard -Value "texto"; $ws.SendKeys("^v")` — reduce la ventana de robo-de-foco de 40 s a milisegundos.
+
+### Receta ganadora (toma 6 — probada ✅)
+```powershell
+# Al inicio del script (una sola vez):
+Add-Type @"
+using System; using System.Runtime.InteropServices;
+public class Win32 {
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+}
+"@
+# Abrir hoja propia:
+$hoja = Join-Path $env:TEMP ("ESCENA_" + (Get-Date -Format 'HHmmss') + ".txt")
+"" | Set-Content $hoja
+Start-Process notepad -ArgumentList "`"$hoja`""
+Start-Sleep 3
+# Proceso REAL (el PID de -PassThru puede ser fantasma en Win11):
+$np = Get-Process notepad | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+$h = $np.MainWindowHandle
+[Win32]::ShowWindow($h, 3); [Win32]::SetForegroundWindow($h); Start-Sleep -Milliseconds 500
+# Escribir via portapapeles:
+$ws = New-Object -ComObject WScript.Shell
+Set-Clipboard -Value "Texto a escribir aqui"; $ws.SendKeys("^v"); Start-Sleep 12
+```
+
+### Errores prohibidos
+- `notepad` a secas → pestaña sobre documento de Roberto ❌
+- `AppActivate` por título genérico → puede caer en ventana del dueño ❌
+- SendKeys letra por letra durante texto largo → robo de foco en 40 s ❌
+- Prompt AGY con esperas largas → ETIMEDOUT ❌
+- Script base64 >8000 chars en el puente → EPERM (cmd.exe limit) ❌
 
 ---
 
@@ -15,7 +60,7 @@ Todo lo que hagas debe verse **en primer plano, lento y pausado**, para que un e
 4. Verifica que el ojo remoto está capturando (las pantallas de PC1 y PC2 llegan al panel MIS EQUIPOS cada ~12 segundos). Esas capturas serán los fotogramas del video final.
 
 ## FASE 1 — EL PLAN (visible, en Notepad/gedit) · ~10 min
-1. Abre un editor de texto **en pantalla** (Notepad en PC1 vía puente, o gedit/nano en PC2) y redacta el plan escribiéndolo despacio, punto por punto.
+1. Abre un editor de texto **en pantalla** (Notepad en PC1 vía puente, o gedit/nano en PC2) y redacta el plan escribiéndolo despacio, punto por punto. **Usar la receta ganadora de arriba.**
 2. El plan nace del **objetivo** que llegará en el `/goal`. Descomponlo en tareas ejecutables.
 3. Cada paso del plan debe decir **tres cosas**:
    - QUÉ se hace
@@ -39,13 +84,14 @@ Reparto de agentes — cada paso del plan usa el ayudante correcto:
 | **Replit AGYCIBERCODE** | Auditor del plan y de los resultados |
 | **OpenCode (PC2)** | Ejecución de comandos de terminal (suplente si Antigravity agota cuota) |
 | **PC1 (navegador)** | Investigación profunda por web |
+
 Reglas de escena:
 - Movimientos de cursor lentos, pausa de 2-3 segundos después de cada acción importante (recuerda: la foto se toma cada 12 segundos — si vas muy rápido, la cámara no te alcanza).
 - Narra en pantalla: antes de cada paso, escribe en el editor o en la terminal una línea diciendo qué vas a hacer.
 - Ve marcando en el plan cada paso completado (✔) para que el avance se vea en el video.
 
 ### EL BUCLE DEL DIRECTOR (la coreografía oficial — se repite por CADA paso)
-1. **Notepad:** con el mapa ya leído, abre Notepad y escribe el OBJETIVO.
+1. **Notepad:** con el mapa ya leído, abre Notepad (receta ganadora) y escribe el OBJETIVO.
 2. **Descomposición:** debajo, descompone el objetivo en pasos. Cada paso dice QUÉ HERRAMIENTA va a usar y EN QUÉ PASO la usa. Todo anotado visible en Notepad.
 3. **Orden:** manda la orden del paso a AGY o a CIBERCODE y espera.
 4. **Voz:** CIBERCODE/AGY la lee EN VOZ ALTA antes de ejecutar.
