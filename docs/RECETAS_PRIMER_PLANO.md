@@ -68,10 +68,33 @@ Si un punto completo corona de principio a fin: 🏆 CORONAMOS — la película 
 - SendKeys a ciegas: el texto cayó en un documento real abierto de Roberto.
 - Una orden larga con esperas de 15+20 segundos adentro: timeout del motor (ETIMEDOUT).
 
+## 🛠️ INSTALAR FFMPEG EN PC1 (solo la primera vez)
+
+Antes de poder montar el video, PC1 necesita tener ffmpeg instalado.
+Ejecutar este comando en el puente — se descarga y corre el instalador automático:
+
+```
+[PC1] EJECUTAR Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/tahamuzza-ship-it/agy-ide/main/tools/instalar-ffmpeg-pc1.ps1' -OutFile "$env:TEMP\instalar-ffmpeg.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\instalar-ffmpeg.ps1"
+```
+
+El instalador:
+1. Si ffmpeg ya está → sale con `FFMPEG_YA_LISTO` (no hace nada más).
+2. Intenta instalar via **winget** (Gyan.FFmpeg) — método preferido, queda en PATH global.
+3. Si winget falla → descarga la **versión portable** desde GitHub (Gyan.dev) en `%LOCALAPPDATA%\ffmpeg-portable\bin` y la agrega al PATH de usuario permanentemente.
+4. Al final imprime `FFMPEG_INSTALADO_WINGET` o `FFMPEG_INSTALADO_PORTABLE`.
+
+**Verificar que quedó bien** (nueva terminal o dentro del mismo comando):
+```
+[PC1] EJECUTAR ffmpeg -version 2>&1 | Select-Object -First 1
+```
+Debe responder algo como `ffmpeg version 7.x.x ...`.
+
+---
+
 ## 🎞️ MONTAJE — armar el video con un solo comando (en PC1)
 
 Cuando el rodaje terminó (botón "Parar" en el panel), PC1 baja todas las fotos y arma el video.
-Requiere ffmpeg instalado en PC1. Reemplaza `TU_CLAVE` por la clave del IDE.
+Requiere ffmpeg instalado en PC1 (ver sección anterior). Reemplaza `TU_CLAVE` por la clave del IDE.
 
 ```powershell
 $B='https://agy-ide-production.up.railway.app'; $K='TU_CLAVE'
