@@ -92,6 +92,21 @@ El patrón que funciona de punta a punta (voz + hoja en blanco propia + escritur
 
 El script completo de referencia queda en PC1: `$env:TEMP\escena6.ps1`.
 
+## 8. 🔌 PRENDER EL OJO (la cámara de cada PC)
+
+**PC1 (Windows)** — el propio IDE regala el script del ojo; bajarlo y arrancarlo:
+```
+[PC1] EJECUTAR Invoke-WebRequest -Uri "https://agy-ide-production.up.railway.app/eye/pc1.ps1?pwd=<CLAVE>" -OutFile "$env:USERPROFILE\pc1-eye.ps1"; Start-Process powershell -WindowStyle Hidden -ArgumentList '-ExecutionPolicy','Bypass','-File',"$env:USERPROFILE\pc1-eye.ps1"; Write-Host OJO_PC1_ON
+```
+- En PC1 también existe `pc1-eye-guard.vbs` (el guardián que lo revive).
+- Comprobar que quedó vivo: `GET /api/equipos/screens` → PC1 con `seconds_ago` bajito.
+
+**PC2 (Linux)** — su ojo corre en el propio PC2 y normalmente ya está andando.
+Comprobar: `GET /api/equipos/screens` → PC2 con `seconds_ago` bajito.
+(El comando de arranque vive en PC2; se documentará al arreglar la #37 pantalla negra.)
+
+⚠️ La `<CLAVE>` es la del IDE (la misma del header `x-agyide-pwd`). Nunca escribirla en documentos.
+
 ## ❌ Lo que NO usar todavía
 
 - `/goal` del IDE: apunta a la base equivocada (tarea #33 pendiente).
