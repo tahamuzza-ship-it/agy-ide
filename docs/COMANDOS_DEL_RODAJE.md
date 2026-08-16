@@ -72,9 +72,22 @@ Siempre por **URL de commit exacto** (el raw de `main` cachea versiones viejas):
 [PC1] EJECUTAR Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/tahamuzza-ship-it/agy-ide/<COMMIT>/docs/<archivo>' -OutFile 'C:\Users\Roberto1\OneDrive\Desktop\GitHub\cibercode-ide\SGN_Master_Prompt\<archivo>' -UseBasicParsing; (Get-Item '<destino>').Length
 ```
 
-## 6. 🎞️ MONTAJE FINAL — receta en RECETAS_PRIMER_PLANO.md
+## 6. 🎞️ MONTAJE FINAL — UN solo comando (construido en tarea #44) ✅
 
-Un solo comando PowerShell en PC1: baja todas las fotos vía `/api/pelicula/shot` y arma `pelicula.mp4` en el Escritorio con ffmpeg (2 fotos por segundo).
+El IDE sirve el script ya armado en `GET /montaje/pc1.ps1?pwd=<CLAVE>` (igual que el ojo).
+Un solo comando en PC1 lo baja y lo lanza como proceso aparte (a prueba de ETIMEDOUT):
+
+```
+[PC1] EJECUTAR $c='<CLAVE>'; Invoke-WebRequest -Uri ("https://agy-ide-production.up.railway.app/montaje/pc1.ps1?pwd=$c") -OutFile "$env:TEMP\montar.ps1" -UseBasicParsing; Start-Process powershell -WindowStyle Hidden -ArgumentList '-ExecutionPolicy','Bypass','-File',"$env:TEMP\montar.ps1"; Write-Host MONTAJE_LANZADO
+```
+
+Qué hace solo: baja TODAS las fotos del último rodaje (o `-Id rodaje-...` para una sesión
+concreta), arma `pelicula-<sesión>-PC1.mp4` y `...-PC2.mp4` (~1.7 fps, fundidos por mezcla
+de fotogramas, 720p), los manda a Telegram (claves del `.env` de cibercode-ide, nunca por
+el puente), deja copia en el Escritorio y borra los temporales. Si ffmpeg no está, se lo
+instala solo (una vez, a `%USERPROFILE%\ffmpeg`). Diario: `%USERPROFILE%\montaje.log`.
+También está en el panel 📋 COMANDOS del IDE, categoría "🎞️ Montar la película".
+⚠️ Las fotos NO se borran solas: tras confirmar los videos, usar el botón "Borrar rodaje".
 
 ### Escena narrada completa — RECETA GANADORA (toma 6, probada ✅)
 
