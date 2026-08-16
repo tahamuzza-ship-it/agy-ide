@@ -1154,16 +1154,19 @@ const EQUIPOS_TTL_MS = 10 * 60 * 1000; // retención corta: 10 minutos
    Tope duro de 700 fotos: al llegar, se detiene la sesión y avisa por Telegram
    para que el dueño decida borrar. */
 const PELICULA_BUCKET = 'pelicula';
+/* Para Storage SIEMPRE la service-role (las claves de chat tipo sb_... no valen para Storage) */
+const STORAGE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || SUPABASE_KEY;
+const stHeaders = () => ({ apikey: STORAGE_KEY, Authorization: `Bearer ${STORAGE_KEY}`, 'Content-Type': 'application/json' });
 const PELICULA_MAX = 700; // tope de fotos por sesión
 let _film = { active: false, id: null, count: 0, startedAt: 0, byPc: { PC1: 0, PC2: 0 }, warned: false };
 
 async function _peliculaEnsureBucket() {
-  if (!SUPABASE_URL || !SUPABASE_KEY) return false;
+  if (!SUPABASE_URL || !STORAGE_KEY) return false;
   try {
-    const r = await fetch(`${SUPABASE_URL}/storage/v1/bucket/${PELICULA_BUCKET}`, { headers: sbHeaders() });
+    const r = await fetch(`${SUPABASE_URL}/storage/v1/bucket/${PELICULA_BUCKET}`, { headers: stHeaders() });
     if (r.ok) return true;
     const cr = await fetch(`${SUPABASE_URL}/storage/v1/bucket`, {
-      method: 'POST', headers: sbHeaders(),
+      method: 'POST', headers: stHeaders(),
       body: JSON.stringify({ id: PELICULA_BUCKET, name: PELICULA_BUCKET, public: false, file_size_limit: 6000000, allowed_mime_types: ['image/jpeg', 'image/png'] })
     });
     return cr.ok || cr.status === 409;
@@ -1171,7 +1174,7 @@ async function _peliculaEnsureBucket() {
 }
 
 async function _peliculaUpload(pc, buf, mime) {
-  if (!SUPABASE_URL || !SUPABASE_KEY) return;
+  if (!SUPABASE_URL || !STORAGE_KEY) return;
   const sid = _film.id; // sesión a la que pertenece esta foto (queda fija aunque cambie el estado)
   const ext = mime === 'image/png' ? 'png' : 'jpg';
   // Nombre único (tiempo + azar): PC1 y PC2 suben a la vez, un contador compartido colisionaría.
@@ -1180,7 +1183,7 @@ async function _peliculaUpload(pc, buf, mime) {
   const path = `${sid}/${stamp}-${pc}.${ext}`;
   const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}/${path}`, {
     method: 'POST',
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': mime, 'x-upsert': 'false' },
+    headers: { apikey: STORAGE_KEY, Authorization: `Bearer ${STORAGE_KEY}`, 'Content-Type': mime, 'x-upsert': 'false' },
     body: buf
   });
   if (!r.ok) throw new Error(`storage: ${r.status} ${await r.text()}`);
@@ -1257,11 +1260,11 @@ app.post('/api/pelicula/stop', requirePwd, (req, res) => {
 
 app.get('/api/pelicula/list', requirePwd, async (req, res) => {
   try {
-    if (!SUPABASE_URL || !SUPABASE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
+    if (!SUPABASE_URL || !STORAGE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
     let id = String(req.query.id || _film.id || '');
     if (!id) {
       const rr = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${PELICULA_BUCKET}`, {
-        method: 'POST', headers: { ...sbHeaders() },
+        method: 'POST', headers: { ...stHeaders() },
         body: JSON.stringify({ prefix: '', limit: 200, sortBy: { column: 'name', order: 'asc' } })
       });
       if (rr.ok) {
@@ -1273,7 +1276,7 @@ app.get('/api/pelicula/list', requirePwd, async (req, res) => {
     }
     if (!id) return res.json({ id: null, files: [] });
     const r = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${PELICULA_BUCKET}`, {
-      method: 'POST', headers: { ...sbHeaders() },
+      method: 'POST', headers: { ...stHeaders() },
       body: JSON.stringify({ prefix: id + '/', limit: 1000, sortBy: { column: 'name', order: 'asc' } })
     });
     if (!r.ok) return res.status(502).json({ error: 'no se pudo listar: ' + await r.text() });
@@ -1285,11 +1288,11 @@ app.get('/api/pelicula/list', requirePwd, async (req, res) => {
 
 app.get('/api/pelicula/shot', requirePwd, async (req, res) => {
   try {
-    if (!SUPABASE_URL || !SUPABASE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
+    if (!SUPABASE_URL || !STORAGE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
     const name = String(req.query.name || '');
     if (!name || name.includes('..')) return res.status(400).json({ error: 'nombre inválido' });
     const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}/${name}`, {
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+      headers: { apikey: STORAGE_KEY, Authorization: `Bearer ${STORAGE_KEY}` }
     });
     if (!r.ok) return res.status(404).json({ error: 'no encontrada' });
     res.set('Content-Type', r.headers.get('content-type') || 'image/jpeg');
@@ -1301,11 +1304,11 @@ app.get('/api/pelicula/shot', requirePwd, async (req, res) => {
 
 app.post('/api/pelicula/clear', requirePwd, async (req, res) => {
   try {
-    if (!SUPABASE_URL || !SUPABASE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
+    if (!SUPABASE_URL || !STORAGE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
     const id = String((req.body && req.body.id) || _film.id || '');
     if (!id) return res.status(400).json({ error: 'falta id de sesión' });
     const lr = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${PELICULA_BUCKET}`, {
-      method: 'POST', headers: { ...sbHeaders() },
+      method: 'POST', headers: { ...stHeaders() },
       body: JSON.stringify({ prefix: id + '/', limit: 1000 })
     });
     if (!lr.ok) return res.status(502).json({ error: 'no se pudo listar para borrar: ' + await lr.text() });
@@ -1313,7 +1316,7 @@ app.post('/api/pelicula/clear', requirePwd, async (req, res) => {
     const names = Array.isArray(rows) ? rows.map(f => id + '/' + f.name) : [];
     if (names.length) {
       const dr = await fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}`, {
-        method: 'DELETE', headers: { ...sbHeaders() }, body: JSON.stringify({ prefixes: names })
+        method: 'DELETE', headers: { ...stHeaders() }, body: JSON.stringify({ prefixes: names })
       });
       if (!dr.ok) return res.status(502).json({ error: 'no se pudo borrar: ' + await dr.text() });
     }
