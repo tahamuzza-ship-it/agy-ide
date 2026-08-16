@@ -1999,7 +1999,11 @@
       { cat: "🎞️ Montar la película — UN solo comando en PC1",
         items: [
           {
-            desc: "MONTAJE COMPLETO — Pégalo en PowerShell de PC1 (o mándalo por el puente). Baja TODAS las fotos del último rodaje, arma un video de ~3 min por PC (ffmpeg, con fundidos), lo manda a Telegram, deja copia en el Escritorio y borra los temporales. Cambia CLAVE_DEL_IDE por la clave real. Si ffmpeg no está, se instala solo la primera vez.",
+            desc: "MONTAJE POR EL PUENTE — La versión para mandar como [PC1] EJECUTAR (el listener usa cmd, por eso va envuelto en powershell -Command). Cambia CLAVE_DEL_IDE por la clave real. Lanza el montaje completo y avisa por Telegram al terminar.",
+            cmd:  "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Invoke-WebRequest -Uri 'https://agy-ide-production.up.railway.app/montaje/pc1.ps1?pwd=CLAVE_DEL_IDE' -OutFile ($env:TEMP+'\\montar.ps1') -UseBasicParsing; Start-Process powershell -WindowStyle Hidden -ArgumentList '-ExecutionPolicy','Bypass','-File',($env:TEMP+'\\montar.ps1'); Write-Host MONTAJE_LANZADO\""
+          },
+          {
+            desc: "MONTAJE COMPLETO — Pégalo en PowerShell de PC1 (ventana PowerShell directa). Baja TODAS las fotos del último rodaje, arma un video de ~3 min por PC (ffmpeg, con fundidos), lo manda a Telegram, deja copia en el Escritorio y borra los temporales. Cambia CLAVE_DEL_IDE por la clave real. Si ffmpeg no está, se instala solo la primera vez.",
             cmd:  "$c='CLAVE_DEL_IDE'; Invoke-WebRequest -Uri (\"https://agy-ide-production.up.railway.app/montaje/pc1.ps1?pwd=$c\") -OutFile \"$env:TEMP\\montar.ps1\" -UseBasicParsing; Start-Process powershell -WindowStyle Hidden -ArgumentList '-ExecutionPolicy','Bypass','-File',\"$env:TEMP\\montar.ps1\"; Write-Host MONTAJE_LANZADO"
           },
           {
