@@ -1163,11 +1163,17 @@ let _film = { active: false, id: null, count: 0, startedAt: 0, byPc: { PC1: 0, P
 async function _peliculaEnsureBucket() {
   if (!SUPABASE_URL || !STORAGE_KEY) return false;
   try {
+    const cfg = { public: false, file_size_limit: 6000000, allowed_mime_types: ['image/jpeg', 'image/png', 'text/plain'] };
     const r = await fetch(`${SUPABASE_URL}/storage/v1/bucket/${PELICULA_BUCKET}`, { headers: stHeaders() });
-    if (r.ok) return true;
+    if (r.ok) {
+      await fetch(`${SUPABASE_URL}/storage/v1/bucket/${PELICULA_BUCKET}`, {
+        method: 'PUT', headers: stHeaders(), body: JSON.stringify(cfg)
+      }).catch(() => {});
+      return true;
+    }
     const cr = await fetch(`${SUPABASE_URL}/storage/v1/bucket`, {
       method: 'POST', headers: stHeaders(),
-      body: JSON.stringify({ id: PELICULA_BUCKET, name: PELICULA_BUCKET, public: false, file_size_limit: 6000000, allowed_mime_types: ['image/jpeg', 'image/png'] })
+      body: JSON.stringify({ id: PELICULA_BUCKET, name: PELICULA_BUCKET, ...cfg })
     });
     return cr.ok || cr.status === 409;
   } catch (e) { console.error('[pelicula bucket]', e.message); return false; }
@@ -1187,12 +1193,13 @@ async function _peliculaUpload(pc, buf, mime) {
     body: buf
   });
   if (!r.ok) throw new Error(`storage: ${r.status} ${await r.text()}`);
+  // Solo contar si la subida sigue perteneciendo a la sesión activa (evita ensuciar una sesión nueva o borrada)
   if (_film.id !== sid) return;
   _film.count += 1;
   _film.byPc[pc] = (_film.byPc[pc] || 0) + 1;
   if (_film.count >= PELICULA_MAX && !_film.warned) {
     _film.warned = true;
-    _film.active = false;
+    _film.active = false; // se detiene sola al llegar al tope
     tgSend(`🎬 RODAJE DETENIDO: se llegó al tope de ${PELICULA_MAX} fotos (sesión <code>${_film.id}</code>). Revisa el video y borra las capturas con el botón "Borrar rodaje" cuando termines.`).catch(() => {});
   }
 }
@@ -1226,6 +1233,7 @@ app.post('/api/equipos/report', (req, res) => {
     if (!isPng && !isJpg) return res.status(400).json({ error: 'la captura debe ser PNG o JPEG' });
     entry.mime = isPng ? 'image/png' : 'image/jpeg';
     entry.shot = buf;
+    // Rodaje activo: guarda esta captura en Supabase (nunca en disco del PC)
     if (_film.active && _film.count < PELICULA_MAX) {
       _peliculaUpload(id, buf, entry.mime).catch(e => console.error('[pelicula]', e.message));
     }
@@ -1233,35 +1241,62 @@ app.post('/api/equipos/report', (req, res) => {
   if (typeof terminal === 'string') {
     entry.terminal = terminal.split('\n').slice(-80).join('\n').slice(-12000);
   }
+  const h = req.body && req.body.health;
+  if (h && typeof h === 'object') {
+    const dpct = Number(h.disk_pct), rpct = Number(h.ram_pct);
+    entry.health = {
+      disk_pct: Number.isFinite(dpct) ? Math.max(0, Math.min(100, Math.round(dpct))) : null,
+      ram_pct:  Number.isFinite(rpct) ? Math.max(0, Math.min(100, Math.round(rpct))) : null
+    };
+    if (entry.health.disk_pct != null) _checkDiskAlert(id, entry.health.disk_pct);
+  }
   entry.ts = Date.now();
   _equiposEye[id] = entry;
   res.json({ ok: true });
 });
 
 /* ── ENDPOINTS DE RODAJE / PELÍCULA ── */
+// Estado del rodaje
 app.get('/api/pelicula/status', requirePwd, (_req, res) => {
   res.json({ active: _film.active, id: _film.id, count: _film.count, max: PELICULA_MAX,
     byPc: _film.byPc, startedAt: _film.startedAt, warned: _film.warned });
 });
 
+// Iniciar rodaje: crea una sesión nueva y empieza a guardar capturas
 app.post('/api/pelicula/start', requirePwd, async (req, res) => {
   const ok = await _peliculaEnsureBucket();
   if (!ok) return res.status(503).json({ error: 'no se pudo preparar el almacén de fotos (Supabase)' });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   _film = { active: true, id: 'rodaje-' + stamp, count: 0, startedAt: Date.now(), byPc: { PC1: 0, PC2: 0 }, warned: false };
+  // Marcador de "última sesión": sobrevive a los reinicios de Railway
+  fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}/_ultima.txt`, {
+    method: 'POST',
+    headers: { apikey: STORAGE_KEY, Authorization: `Bearer ${STORAGE_KEY}`, 'Content-Type': 'text/plain', 'x-upsert': 'true' },
+    body: _film.id
+  }).catch(() => {});
   tgSend(`🎬 RODAJE INICIADO (sesión <code>${_film.id}</code>). Guardando capturas en Supabase, tope ${PELICULA_MAX} fotos.`).catch(() => {});
   res.json({ ok: true, id: _film.id, max: PELICULA_MAX });
 });
 
+// Detener rodaje (sin borrar nada)
 app.post('/api/pelicula/stop', requirePwd, (req, res) => {
   _film.active = false;
   res.json({ ok: true, id: _film.id, count: _film.count });
 });
 
+// Listar las fotos guardadas de la sesión actual (o de una dada con ?id=)
+// Sin id y sin sesión en memoria (p. ej. tras un reinicio de Railway): busca la
+// última carpeta rodaje-* en el bucket, para que el montaje siempre encuentre algo.
 app.get('/api/pelicula/list', requirePwd, async (req, res) => {
   try {
     if (!SUPABASE_URL || !STORAGE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
     let id = String(req.query.id || _film.id || '');
+    if (!id) {
+      const mr = await fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}/_ultima.txt`, {
+        headers: { apikey: STORAGE_KEY, Authorization: `Bearer ${STORAGE_KEY}` }
+      }).catch(() => null);
+      if (mr && mr.ok) id = (await mr.text()).trim();
+    }
     if (!id) {
       const rr = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${PELICULA_BUCKET}`, {
         method: 'POST', headers: { ...stHeaders() },
@@ -1276,7 +1311,8 @@ app.get('/api/pelicula/list', requirePwd, async (req, res) => {
     }
     if (!id) return res.json({ id: null, files: [] });
     const r = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${PELICULA_BUCKET}`, {
-      method: 'POST', headers: { ...stHeaders() },
+      method: 'POST',
+      headers: { ...stHeaders() },
       body: JSON.stringify({ prefix: id + '/', limit: 1000, sortBy: { column: 'name', order: 'asc' } })
     });
     if (!r.ok) return res.status(502).json({ error: 'no se pudo listar: ' + await r.text() });
@@ -1286,6 +1322,7 @@ app.get('/api/pelicula/list', requirePwd, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Descargar una foto (proxy con la clave del IDE, para que PC1 pueda montar el video)
 app.get('/api/pelicula/shot', requirePwd, async (req, res) => {
   try {
     if (!SUPABASE_URL || !STORAGE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
@@ -1302,6 +1339,7 @@ app.get('/api/pelicula/shot', requirePwd, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Borrar todas las fotos de una sesión (aviso->confirmación la da el dueño)
 app.post('/api/pelicula/clear', requirePwd, async (req, res) => {
   try {
     if (!SUPABASE_URL || !STORAGE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
@@ -1320,11 +1358,11 @@ app.post('/api/pelicula/clear', requirePwd, async (req, res) => {
       });
       if (!dr.ok) return res.status(502).json({ error: 'no se pudo borrar: ' + await dr.text() });
     }
+    // Solo tras borrado confirmado se limpia el estado
     if (_film.id === id) { _film.active = false; _film.count = 0; _film.byPc = { PC1: 0, PC2: 0 }; _film.warned = false; }
     res.json({ ok: true, id, borradas: names.length });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
-
 
 /* ── MONTAJE DE LA PELÍCULA (un solo comando en PC1) ──
    El IDE sirve el script PowerShell ya armado con URL y clave. En PC1 se baja
