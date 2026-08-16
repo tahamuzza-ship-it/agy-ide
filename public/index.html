@@ -1238,7 +1238,10 @@
 
 /* ── AUTH GATE ── */
     const AUTH_STORE = 'agyide_auth_v1';
-    function _getPwd() { try { return localStorage.getItem(AUTH_STORE) || ''; } catch { return ''; } }
+    /* La clave viaja en un header HTTP: si tiene caracteres no-ASCII el
+       navegador la corrompe (el login por JSON funcionaba pero el header daba 401).
+       Se envía codificada; el servidor acepta ambas formas. */
+    function _getPwd() { try { var p = localStorage.getItem(AUTH_STORE) || ''; return p ? encodeURIComponent(p) : ''; } catch { return ''; } }
 
     async function tryLogin(pwd) {
       try {
@@ -1265,6 +1268,7 @@
         if (ok) {
           try { localStorage.setItem(AUTH_STORE, pwd); } catch {}
           gate.style.display = 'none';
+          try { if (window.refreshEquipos) window.refreshEquipos(); } catch {}
         } else {
           if (err) err.textContent = '❌ Contraseña incorrecta';
           if (input) { input.value = ''; input.focus(); }
@@ -1275,7 +1279,7 @@
       const stored = _getPwd();
       if (stored) {
         tryLogin(stored).then(function(ok) {
-          if (ok) { gate.style.display = 'none'; }
+          if (ok) { gate.style.display = 'none'; try { if (window.refreshEquipos) window.refreshEquipos(); } catch {} }
           else { try { localStorage.removeItem(AUTH_STORE); } catch {} gate.style.display = 'flex'; gate.style.alignItems = 'center'; gate.style.justifyContent = 'center'; if (input) input.focus(); }
         });
       } else {
@@ -2278,16 +2282,9 @@
     var off = state && state.online === false;
     dot.style.background = on ? '#2ecc71' : (off ? '#ff3355' : '#f0a020');
     dot.style.boxShadow = on ? '0 0 8px #2ecc71' : (off ? '0 0 8px #ff3355' : '0 0 8px #f0a020');
-    var salud = '';
-    if (state && state.health) {
-      if (state.health.disk_pct != null) {
-        salud += ' · 💾 ' + state.health.disk_pct + '%' + (state.health.disk_pct > 90 ? ' ⚠️' : '');
-      }
-      if (state.health.ram_pct != null) salud += ' · 🧠 ' + state.health.ram_pct + '%';
-    }
     if (on) {
       var extra = state.seconds_ago != null ? ' · señal ' + fmtAgo(state.seconds_ago) : '';
-      info.textContent = 'Conectado ✅' + extra + salud;
+      info.textContent = 'Conectado ✅' + extra;
     } else if (off) {
       info.textContent = 'Sin señal ⚠️ — puede estar apagado';
     } else {
@@ -2305,14 +2302,16 @@
         setCard('PC2', d.PC2, bridgeDown);
         if (u && d.checked_at) u.textContent = 'actualizado ' + new Date(d.checked_at).toLocaleTimeString();
       })
-      .catch(function () {
-        /* Plan B: misma vía pública que los puntos del encabezado */
+      .catch(function (err) {
+        /* Plan B: misma vía pública. Mostramos el motivo para diagnosticar (401 = clave rechazada). */
+        var motivo = !_eyePwd() ? 'sin clave guardada — vuelve a entrar'
+                   : (err && err.message ? err.message : 'error de red');
         fetch('/api/heartbeat')
           .then(function (r) { return r.json(); })
           .then(function (d) {
             setCard('PC1', d.PC1 && { online: !!d.PC1.online, seconds_ago: d.PC1.seconds_ago }, false);
             setCard('PC2', d.PC2 && { online: !!d.PC2.online, seconds_ago: d.PC2.seconds_ago }, false);
-            if (u) u.textContent = 'actualizado ' + new Date().toLocaleTimeString() + ' (modo básico)';
+            if (u) u.textContent = 'actualizado ' + new Date().toLocaleTimeString() + ' (modo básico — ' + motivo + ')';
           })
           .catch(function () {
             setCard('PC1', null, true);
@@ -2321,6 +2320,8 @@
           });
       });
   }
+
+  window.refreshEquipos = refreshEquipos; /* para refrescar justo tras el login */
 
   /* ── OJO REMOTO: pantalla + terminal de cada PC ── */
   var eyeTimer = null;
@@ -2339,7 +2340,7 @@
   function _eyePwd() {
     /* _getPwd puede vivir en otro ámbito de script: caer a localStorage directo */
     try { if (typeof _getPwd === 'function') { var p = _getPwd(); if (p) return p; } } catch (e) {}
-    try { return localStorage.getItem('agyide_auth_v1') || ''; } catch (e) { return ''; }
+    try { var s = localStorage.getItem('agyide_auth_v1') || ''; return s ? encodeURIComponent(s) : ''; } catch (e) { return ''; }
   }
   function _pwdHeaders() {
     var h = {};
