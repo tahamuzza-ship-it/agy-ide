@@ -107,6 +107,24 @@ Comprobar: `GET /api/equipos/screens` → PC2 con `seconds_ago` bajito.
 
 ⚠️ La `<CLAVE>` es la del IDE (la misma del header `x-agyide-pwd`). Nunca escribirla en documentos.
 
+## 9. 📹 PRENDER LA WEBCAM FÍSICA (el lente con la lucecita) — probados ✅
+
+Enciende la cámara real que apunta al frente (distinto del "ojo" que captura la pantalla).
+
+**PC1 (Windows)** — abre la app Cámara y se enciende el lente:
+```
+[PC1] EJECUTAR Start-Process 'microsoft.windows.camera:'; Write-Host CAM_PC1_ON
+```
+
+**PC2 (Linux)** — abre el lente `/dev/video0` con ffplay, usando el truco del DISPLAY:
+```
+[PC2] EJECUTAR eval "$(tr '\0' '\n' < /proc/$(pgrep -f -i telegram | head -1)/environ | grep -E '^DISPLAY=|^XAUTHORITY=' | sed 's/^/export /')"; nohup ffplay -loglevel quiet -f v4l2 -framerate 15 -video_size 640x480 -i /dev/video0 >/dev/null 2>&1 & echo CAM_PC2_ON
+```
+
+- El truco del DISPLAY en PC2 es CLAVE: sin él, ffplay no encuentra la pantalla (`XDG_RUNTIME_DIR is invalid`). Roba el DISPLAY/XAUTHORITY del proceso de Telegram, que sí está en la sesión gráfica.
+- Verificar con el ojo: `GET /api/equipos/screens/PC2/shot` debe mostrar la ventana `/dev/video0` con la imagen del lente.
+- Para APAGAR la webcam de PC2: `[PC2] EJECUTAR pkill ffplay; echo CAM_PC2_OFF`
+
 ## ❌ Lo que NO usar todavía
 
 - `/goal` del IDE: apunta a la base equivocada (tarea #33 pendiente).
