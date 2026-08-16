@@ -1154,25 +1154,48 @@ const EQUIPOS_TTL_MS = 10 * 60 * 1000; // retención corta: 10 minutos
    Tope duro de 700 fotos: al llegar, se detiene la sesión y avisa por Telegram
    para que el dueño decida borrar. */
 const PELICULA_BUCKET = 'pelicula';
-/* Para Storage SIEMPRE la service-role (las claves de chat tipo sb_... no valen para Storage) */
-const STORAGE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || SUPABASE_KEY;
-const stHeaders = () => ({ apikey: STORAGE_KEY, Authorization: `Bearer ${STORAGE_KEY}`, 'Content-Type': 'application/json' });
+/* Storage exige una clave que el storage-api acepte de verdad. Las envs han cambiado
+   varias veces (service-role, sb_secret de chat, anon...), así que en vez de adivinar,
+   se PRUEBAN los candidatos una vez y se cachea la que funciona. */
+let _stKeyCache = null;
+async function storageKey() {
+  if (_stKeyCache) return _stKeyCache;
+  const cands = [
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    process.env.SUPABASE_KEY_2,
+    process.env.SUPABASE_SERVICE_ROLE_KEY_2,
+    process.env.SUPABASE_ANON_KEY,
+    process.env.SUPABASE_KEY_CHAT
+  ].filter(Boolean);
+  for (const k of cands) {
+    try {
+      const r = await fetch(`${SUPABASE_URL}/storage/v1/bucket`, { headers: { apikey: k, Authorization: `Bearer ${k}` } });
+      if (r.ok) { _stKeyCache = k; return k; }
+    } catch (e) { /* siguiente candidato */ }
+  }
+  console.error('[pelicula] ninguna clave de Supabase sirve para Storage');
+  return null;
+}
+async function stHeaders() {
+  const k = await storageKey();
+  return { apikey: k, Authorization: `Bearer ${k}`, 'Content-Type': 'application/json' };
+}
 const PELICULA_MAX = 700; // tope de fotos por sesión
 let _film = { active: false, id: null, count: 0, startedAt: 0, byPc: { PC1: 0, PC2: 0 }, warned: false };
 
 async function _peliculaEnsureBucket() {
-  if (!SUPABASE_URL || !STORAGE_KEY) return false;
+  if (!SUPABASE_URL || !(await storageKey())) return false;
   try {
     const cfg = { public: false, file_size_limit: 6000000, allowed_mime_types: ['image/jpeg', 'image/png', 'text/plain'] };
-    const r = await fetch(`${SUPABASE_URL}/storage/v1/bucket/${PELICULA_BUCKET}`, { headers: stHeaders() });
+    const r = await fetch(`${SUPABASE_URL}/storage/v1/bucket/${PELICULA_BUCKET}`, { headers: await stHeaders() });
     if (r.ok) {
       await fetch(`${SUPABASE_URL}/storage/v1/bucket/${PELICULA_BUCKET}`, {
-        method: 'PUT', headers: stHeaders(), body: JSON.stringify(cfg)
+        method: 'PUT', headers: await stHeaders(), body: JSON.stringify(cfg)
       }).catch(() => {});
       return true;
     }
     const cr = await fetch(`${SUPABASE_URL}/storage/v1/bucket`, {
-      method: 'POST', headers: stHeaders(),
+      method: 'POST', headers: await stHeaders(),
       body: JSON.stringify({ id: PELICULA_BUCKET, name: PELICULA_BUCKET, ...cfg })
     });
     return cr.ok || cr.status === 409;
@@ -1180,7 +1203,8 @@ async function _peliculaEnsureBucket() {
 }
 
 async function _peliculaUpload(pc, buf, mime) {
-  if (!SUPABASE_URL || !STORAGE_KEY) return;
+  const SK = await storageKey();
+  if (!SUPABASE_URL || !SK) return;
   const sid = _film.id; // sesión a la que pertenece esta foto (queda fija aunque cambie el estado)
   const ext = mime === 'image/png' ? 'png' : 'jpg';
   // Nombre único (tiempo + azar): PC1 y PC2 suben a la vez, un contador compartido colisionaría.
@@ -1189,7 +1213,7 @@ async function _peliculaUpload(pc, buf, mime) {
   const path = `${sid}/${stamp}-${pc}.${ext}`;
   const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}/${path}`, {
     method: 'POST',
-    headers: { apikey: STORAGE_KEY, Authorization: `Bearer ${STORAGE_KEY}`, 'Content-Type': mime, 'x-upsert': 'false' },
+    headers: { apikey: SK, Authorization: `Bearer ${SK}`, 'Content-Type': mime, 'x-upsert': 'false' },
     body: buf
   });
   if (!r.ok) throw new Error(`storage: ${r.status} ${await r.text()}`);
@@ -1269,11 +1293,11 @@ app.post('/api/pelicula/start', requirePwd, async (req, res) => {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   _film = { active: true, id: 'rodaje-' + stamp, count: 0, startedAt: Date.now(), byPc: { PC1: 0, PC2: 0 }, warned: false };
   // Marcador de "última sesión": sobrevive a los reinicios de Railway
-  fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}/_ultima.txt`, {
+  storageKey().then(SK => SK && fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}/_ultima.txt`, {
     method: 'POST',
-    headers: { apikey: STORAGE_KEY, Authorization: `Bearer ${STORAGE_KEY}`, 'Content-Type': 'text/plain', 'x-upsert': 'true' },
+    headers: { apikey: SK, Authorization: `Bearer ${SK}`, 'Content-Type': 'text/plain', 'x-upsert': 'true' },
     body: _film.id
-  }).catch(() => {});
+  })).catch(() => {});
   tgSend(`🎬 RODAJE INICIADO (sesión <code>${_film.id}</code>). Guardando capturas en Supabase, tope ${PELICULA_MAX} fotos.`).catch(() => {});
   res.json({ ok: true, id: _film.id, max: PELICULA_MAX });
 });
@@ -1289,17 +1313,18 @@ app.post('/api/pelicula/stop', requirePwd, (req, res) => {
 // última carpeta rodaje-* en el bucket, para que el montaje siempre encuentre algo.
 app.get('/api/pelicula/list', requirePwd, async (req, res) => {
   try {
-    if (!SUPABASE_URL || !STORAGE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
+    if (!SUPABASE_URL || !(await storageKey())) return res.status(503).json({ error: 'Supabase no configurado' });
     let id = String(req.query.id || _film.id || '');
     if (!id) {
-      const mr = await fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}/_ultima.txt`, {
-        headers: { apikey: STORAGE_KEY, Authorization: `Bearer ${STORAGE_KEY}` }
-      }).catch(() => null);
+      const SKm = await storageKey();
+      const mr = SKm ? await fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}/_ultima.txt`, {
+        headers: { apikey: SKm, Authorization: `Bearer ${SKm}` }
+      }).catch(() => null) : null;
       if (mr && mr.ok) id = (await mr.text()).trim();
     }
     if (!id) {
       const rr = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${PELICULA_BUCKET}`, {
-        method: 'POST', headers: { ...stHeaders() },
+        method: 'POST', headers: { ...await stHeaders() },
         body: JSON.stringify({ prefix: '', limit: 200, sortBy: { column: 'name', order: 'asc' } })
       });
       if (rr.ok) {
@@ -1312,7 +1337,7 @@ app.get('/api/pelicula/list', requirePwd, async (req, res) => {
     if (!id) return res.json({ id: null, files: [] });
     const r = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${PELICULA_BUCKET}`, {
       method: 'POST',
-      headers: { ...stHeaders() },
+      headers: { ...await stHeaders() },
       body: JSON.stringify({ prefix: id + '/', limit: 1000, sortBy: { column: 'name', order: 'asc' } })
     });
     if (!r.ok) return res.status(502).json({ error: 'no se pudo listar: ' + await r.text() });
@@ -1325,11 +1350,12 @@ app.get('/api/pelicula/list', requirePwd, async (req, res) => {
 // Descargar una foto (proxy con la clave del IDE, para que PC1 pueda montar el video)
 app.get('/api/pelicula/shot', requirePwd, async (req, res) => {
   try {
-    if (!SUPABASE_URL || !STORAGE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
+    if (!SUPABASE_URL || !(await storageKey())) return res.status(503).json({ error: 'Supabase no configurado' });
     const name = String(req.query.name || '');
     if (!name || name.includes('..')) return res.status(400).json({ error: 'nombre inválido' });
+    const SKs = await storageKey();
     const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}/${name}`, {
-      headers: { apikey: STORAGE_KEY, Authorization: `Bearer ${STORAGE_KEY}` }
+      headers: { apikey: SKs, Authorization: `Bearer ${SKs}` }
     });
     if (!r.ok) return res.status(404).json({ error: 'no encontrada' });
     res.set('Content-Type', r.headers.get('content-type') || 'image/jpeg');
@@ -1342,11 +1368,11 @@ app.get('/api/pelicula/shot', requirePwd, async (req, res) => {
 // Borrar todas las fotos de una sesión (aviso->confirmación la da el dueño)
 app.post('/api/pelicula/clear', requirePwd, async (req, res) => {
   try {
-    if (!SUPABASE_URL || !STORAGE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
+    if (!SUPABASE_URL || !(await storageKey())) return res.status(503).json({ error: 'Supabase no configurado' });
     const id = String((req.body && req.body.id) || _film.id || '');
     if (!id) return res.status(400).json({ error: 'falta id de sesión' });
     const lr = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${PELICULA_BUCKET}`, {
-      method: 'POST', headers: { ...stHeaders() },
+      method: 'POST', headers: { ...await stHeaders() },
       body: JSON.stringify({ prefix: id + '/', limit: 1000 })
     });
     if (!lr.ok) return res.status(502).json({ error: 'no se pudo listar para borrar: ' + await lr.text() });
@@ -1354,7 +1380,7 @@ app.post('/api/pelicula/clear', requirePwd, async (req, res) => {
     const names = Array.isArray(rows) ? rows.map(f => id + '/' + f.name) : [];
     if (names.length) {
       const dr = await fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}`, {
-        method: 'DELETE', headers: { ...stHeaders() }, body: JSON.stringify({ prefixes: names })
+        method: 'DELETE', headers: { ...await stHeaders() }, body: JSON.stringify({ prefixes: names })
       });
       if (!dr.ok) return res.status(502).json({ error: 'no se pudo borrar: ' + await dr.text() });
     }
