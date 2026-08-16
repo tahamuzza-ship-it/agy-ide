@@ -1280,6 +1280,25 @@ app.post('/api/equipos/report', (req, res) => {
 });
 
 /* ── ENDPOINTS DE RODAJE / PELÍCULA ── */
+/* Diagnóstico del almacén (solo con clave; no revela valores) */
+app.get('/api/pelicula/diag', requirePwd, async (_req, res) => {
+  const names = ['SUPABASE_URL','SUPABASE_URL_2','SUPABASE_SERVICE_ROLE_KEY','SUPABASE_SERVICE_ROLE_KEY_2','SUPABASE_KEY_2','SUPABASE_ANON_KEY','SUPABASE_KEY_CHAT'];
+  const out = { url_en_uso: SUPABASE_URL, envs: {}, prueba: {} };
+  for (const n of names) {
+    const v = process.env[n];
+    out.envs[n] = v ? (v.slice(0, 6) + '...(' + v.length + ')') : null;
+  }
+  for (const n of names.filter(n => n.includes('KEY'))) {
+    const v = process.env[n];
+    if (!v) continue;
+    try {
+      const r = await fetch(`${SUPABASE_URL}/storage/v1/bucket`, { headers: { apikey: v, Authorization: `Bearer ${v}` } });
+      out.prueba[n] = r.status;
+    } catch (e) { out.prueba[n] = 'err:' + e.message; }
+  }
+  res.json(out);
+});
+
 // Estado del rodaje
 app.get('/api/pelicula/status', requirePwd, (_req, res) => {
   res.json({ active: _film.active, id: _film.id, count: _film.count, max: PELICULA_MAX,
