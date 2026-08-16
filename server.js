@@ -1,6 +1,7 @@
 const express = require('express');
 const path    = require('path');
 const crypto  = require('crypto');
+const fs      = require('fs');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -27,10 +28,7 @@ const AGY_IDE_PWD = process.env.AGY_IDE_PASSWORD;
 if (!AGY_KEY)     { console.error('FATAL: ANTIGRAVITY_KEY env var not set'); process.exit(1); }
 if (!AGY_IDE_PWD) { console.error('FATAL: AGY_IDE_PASSWORD env var not set'); process.exit(1); }
 
-/* Base del IDE (Supabase 2, donde viven cibercode_chats y goal_sessions).
-   Acepta SUPABASE_URL_2 o usa la dirección fija correcta; tolera que peguen la URL con /rest/v1/ al final. */
-const SUPABASE_URL = (process.env.SUPABASE_URL_2 || 'https://lxlcivzuevowckbcxczc.supabase.co')
-  .replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+const SUPABASE_URL = process.env.SUPABASE_URL;
 /* Use service role key — anon key must never access goal_sessions */
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 const GEMINI_KEY          = process.env.GEMINI_API_KEY;
@@ -50,18 +48,19 @@ async function callAI(userMsg) {
   if (!GEMINI_KEY && !GROQ_KEY) throw new Error('Sin API key de IA configurada');
 
   const aiTimeout = () => new Promise((_, reject) =>
-    setTimeout(() => reject(new Error('IA sin respuesta en 15s — verifique API key')), 15000));
+    setTimeout(() => reject(new Error(`IA sin respuesta en ${Math.round(CFG.limites.ia_timeout_ms / 1000)}s — verifique API key`)), CFG.limites.ia_timeout_ms));
 
   if (GEMINI_KEY) {
     try {
     const geminiCall = fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' + GEMINI_KEY,
+      'https://generativelanguage.googleapis.com/v1beta/models/' + CFG.modelos.gemini_chat + ':generateContent?key=' + GEMINI_KEY,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: [{ role: 'user', parts: [{ text: IDE_SYSTEM + '\n\nUsuario: ' + userMsg }] }],
-          generationConfig: { maxOutputTokens: 4096, temperature: 0.7 }
+          systemInstruction: { parts: [{ text: buildSystemPrompt('chat') }] },
+          contents: [{ role: 'user', parts: [{ text: userMsg }] }],
+          generationConfig: { maxOutputTokens: CFG.limites.chat_max_tokens, temperature: CFG.limites.chat_temperature }
         })
       }
     );
@@ -81,9 +80,9 @@ async function callAI(userMsg) {
     method: 'POST',
     headers: { 'Authorization': 'Bearer ' + GROQ_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'system', content: IDE_SYSTEM }, { role: 'user', content: userMsg }],
-      max_tokens: 4096
+      model: CFG.modelos.groq,
+      messages: [{ role: 'system', content: buildSystemPrompt('chat') }, { role: 'user', content: userMsg }],
+      max_tokens: CFG.limites.chat_max_tokens
     })
   });
   const r = await Promise.race([groqCall, aiTimeout()]);
@@ -170,18 +169,108 @@ REGLAS CRÍTICAS DEL ECOSISTEMA SGN — NO NEGOCIABLES
 ════════════════════════════════════════════════
 `;
 
+/* ══════════════════════════════════════════
+   ALMA (soul.md) + CONFIG CENTRAL (config.yaml) + MANUAL MAESTRO
+   Se cargan al arrancar y se inyectan en TODO prompt de IA.
+══════════════════════════════════════════ */
+function _readFirst(candidates) {
+  for (const p of candidates) {
+    try { if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8'); } catch {}
+  }
+  return '';
+}
+
+/* Mini-parser YAML (2 niveles, escalares) — sin dependencias nuevas */
+function _miniYaml(text) {
+  const out = {};
+  let section = null;
+  for (const rawLine of String(text).split('\n')) {
+    const line = rawLine.replace(/#.*$/, '').replace(/\s+$/, '');
+    if (!line.trim()) continue;
+    const indented = /^\s/.test(line);
+    const m = line.trim().match(/^([\w-]+):\s*(.*)$/);
+    if (!m) continue;
+    const key = m[1];
+    let val = m[2].trim().replace(/^['"]|['"]$/g, '');
+    if (!indented) {
+      if (val === '') { section = key; out[key] = out[key] || {}; }
+      else { section = null; out[key] = _yamlScalar(val); }
+    } else if (section) {
+      out[section][key] = _yamlScalar(val);
+    }
+  }
+  return out;
+}
+function _yamlScalar(v) {
+  if (v === 'true') return true;
+  if (v === 'false') return false;
+  if (v !== '' && !isNaN(Number(v))) return Number(v);
+  return v;
+}
+
+/* Candidatos de ruta: Railway (server.js en el root, archivos al lado) */
+function _candidates(name) {
+  return [
+    path.join(__dirname, name),
+    path.join(process.cwd(), name)
+  ];
+}
+const SOUL = _readFirst(_candidates('soul.md')).trim();
+
+const MANUAL = _readFirst([
+  ..._candidates('MANUAL_ECOSISTEMA_SGN.md'),
+  path.join(__dirname, 'docs/MANUAL_ECOSISTEMA_SGN.md'),
+  path.join(process.cwd(), 'docs/MANUAL_ECOSISTEMA_SGN.md')
+]).trim();
+
+const _cfgRaw = _miniYaml(_readFirst(_candidates('config.yaml')));
+/* Defaults = los valores que antes estaban hardcodeados */
+const CFG = {
+  modelos: Object.assign({
+    gemini_chat: 'gemini-2.5-flash',
+    gemini_goal: 'gemini-2.0-flash',
+    groq: GROQ_MODEL
+  }, _cfgRaw.modelos || {}),
+  limites: Object.assign({
+    chat_max_tokens: 4096, chat_temperature: 0.7,
+    goal_max_tokens: 2048, goal_temperature: 0.3,
+    ia_timeout_ms: 15000, goal_pasos_max: 50,
+    goal_pasos_default_telegram: 20, manual_max_chars: 12000
+  }, _cfgRaw.limites || {}),
+  herramientas: Object.assign({
+    alma_en_prompt: true, manual_en_prompt: true
+  }, _cfgRaw.herramientas || {})
+};
+console.log(`[alma] soul.md ${SOUL ? 'cargada (' + SOUL.length + ' chars)' : 'NO ENCONTRADA'} | ` +
+  `manual ${MANUAL ? 'cargado (' + MANUAL.length + ' chars)' : 'NO ENCONTRADO'} | ` +
+  `config.yaml ${Object.keys(_cfgRaw).length ? 'cargado' : 'NO ENCONTRADO (usando defaults)'}`);
+
+/* Compone el system prompt completo que AGY lee en cada chat/sesión.
+   kind: 'chat' (incluye formato de archivos del IDE) | 'goal' (sesiones autónomas) */
+function buildSystemPrompt(kind) {
+  const parts = [];
+  if (CFG.herramientas.alma_en_prompt && SOUL) parts.push(SOUL);
+  parts.push(CRITICAL_RULES.trim());
+  if (kind === 'chat') parts.push(IDE_SYSTEM);
+  if (CFG.herramientas.manual_en_prompt && MANUAL) {
+    parts.push('══════ MANUAL MAESTRO DEL ECOSISTEMA (fuente única de verdad) ══════\n' +
+      MANUAL.slice(0, CFG.limites.manual_max_chars));
+  }
+  return parts.join('\n\n');
+}
+
 /* ── helpers — Gemini ── */
 async function gemini(prompt) {
   if (!GEMINI_KEY) return '';
   const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${CFG.modelos.gemini_goal}:generateContent?key=${GEMINI_KEY}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: CRITICAL_RULES }] },
+        systemInstruction: { parts: [{ text: buildSystemPrompt('goal') }] },
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
+        generationConfig: { temperature: CFG.limites.goal_temperature, maxOutputTokens: CFG.limites.goal_max_tokens }
       })
     }
   );
@@ -482,6 +571,27 @@ app.post('/api/tts', requirePwd, async (req, res) => {
   res.json({ ok: pwd === AGY_IDE_PWD });
 });
 
+/* ── ALMA/MANUAL — verificación y distribución ── */
+/* Estado de lo que AGY lee en cada chat (para verificar sin exponer secretos) */
+app.get('/api/alma', requirePwd, (_req, res) => {
+  res.json({
+    soul_cargada: !!SOUL, soul_chars: SOUL.length,
+    manual_cargado: !!MANUAL, manual_chars: MANUAL.length,
+    config: CFG
+  });
+});
+/* El manual maestro como texto plano — PC1/PC2 lo descargan con la llave de equipos:
+   PC1: Invoke-RestMethod -Uri <IDE>/api/manual -Headers @{'x-equipos-key'=<KEY>} | Out-File ...
+   PC2: curl -H "x-equipos-key: <KEY>" <IDE>/api/manual -o MANUAL_ECOSISTEMA_SGN.md */
+app.get('/api/manual', (req, res) => {
+  const key = req.headers['x-equipos-key'] || req.headers['x-agyide-pwd'] || req.query.key;
+  const okEquipos = EQUIPOS_REPORT_KEY && key === EQUIPOS_REPORT_KEY;
+  const okPwd = AGY_IDE_PWD && key === AGY_IDE_PWD;
+  if (!key || (!okEquipos && !okPwd)) return res.status(401).send('No autorizado');
+  if (!MANUAL) return res.status(404).send('Manual no encontrado en el servidor');
+  res.type('text/markdown; charset=utf-8').send(MANUAL);
+});
+
 app.get('/api/heartbeat', async (_req, res) => {
   try {
     const r = await fetch(`${REPLIT_API}/api/antigravity/heartbeat`);
@@ -583,7 +693,7 @@ app.get('/api/revert-pending', requirePwd, async (_req, res) => {
 /* POST /api/goal — lanza una sesión autónoma */
 app.post('/api/goal', requirePwd, async (req, res) => {
   try {
-    const { goal, target = 'PC1', max_steps = 50 } = req.body;
+    const { goal, target = 'PC1', max_steps = CFG.limites.goal_pasos_max } = req.body;
     if (!goal || !goal.trim()) return res.status(400).json({ error: 'goal requerido' });
     if (!SUPABASE_URL || !SUPABASE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
 
@@ -743,9 +853,9 @@ app.post('/api/telegram-webhook', async (req, res) => {
       let rawGoal = goalMatch[1].trim();
       // Parse optional flags: target=PC1|PC2|ANY and max=N
       let target    = 'PC1';
-      let maxSteps  = 20;
+      let maxSteps  = CFG.limites.goal_pasos_default_telegram;
       rawGoal = rawGoal.replace(/\btarget=(PC1|PC2|ANY)\b/i, (_, t) => { target = t.toUpperCase(); return ''; });
-      rawGoal = rawGoal.replace(/\bmax=(\d+)\b/i, (_, n)  => { maxSteps = Math.min(50, Math.max(1, parseInt(n, 10))); return ''; });
+      rawGoal = rawGoal.replace(/\bmax=(\d+)\b/i, (_, n)  => { maxSteps = Math.min(CFG.limites.goal_pasos_max, Math.max(1, parseInt(n, 10))); return ''; });
       const goal = rawGoal.trim();
       if (!goal) { await tgReply('❌ Objetivo vacío. Uso: <code>/goal [target=PC1] [max=20] Tu objetivo aquí</code>'); return; }
 

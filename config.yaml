@@ -1,0 +1,27 @@
+# CONFIG CENTRAL DE AGY — modelo, herramientas y límites en UN solo lugar.
+# Antes estos valores vivían regados como constantes en el código.
+# Los secretos (API keys, contraseñas) NUNCA van aquí: siguen en variables de entorno.
+
+modelos:
+  gemini_chat: gemini-2.5-flash        # chat normal del IDE
+  gemini_goal: gemini-2.0-flash        # planificación y auto-healer del modo /goal
+  groq: llama-3.3-70b-versatile        # respaldo cuando Gemini falla
+
+limites:
+  chat_max_tokens: 4096
+  chat_temperature: 0.7
+  goal_max_tokens: 2048
+  goal_temperature: 0.3
+  ia_timeout_ms: 15000                 # tiempo máximo de espera por respuesta de IA
+  goal_pasos_max: 50                   # tope duro de pasos en una sesión /goal
+  goal_pasos_default_telegram: 20      # pasos por defecto al lanzar /goal desde Telegram
+  manual_max_chars: 12000              # tope del manual inyectado en el prompt
+
+herramientas:
+  alma_en_prompt: true                 # inyectar soul.md en cada chat
+  manual_en_prompt: true               # inyectar el MANUAL MAESTRO en cada chat
+  gemini: true
+  groq: true
+  telegram: true
+  puente_antigravity: true
+  memoria_tahamza: true
