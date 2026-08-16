@@ -9,6 +9,7 @@
 2. **AL FRENTE ANTES DE TOCAR.** Primero trae la ventana al primer plano, espera 1 segundo, y solo entonces escribe.
 3. **ÓRDENES CORTICAS.** Un paso = un comando. Nada de tareas de 5 pasos con esperas largas en una sola orden (el motor se ahoga y da timeout).
 4. **PRE-AVISO.** Antes de automatizar teclado o ratón, narra en voz alta / anota qué vas a hacer (regla del Master Prompt).
+5. **REACTIVAR ANTES DE CADA ESCRITURA.** Los popups (Antigravity, notificaciones) roban el foco sin avisar. Llama `$ws.AppActivate($p.Id)` + `Start-Sleep 1` justo antes de CADA `SendKeys`, no solo al principio. Y filma solo cuando el PC esté quieto (sin Roberto usándolo).
 
 ## 📖 RECETA 1 — Abrir Notepad LIMPIO y escribir visible
 
