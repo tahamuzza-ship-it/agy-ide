@@ -35,7 +35,8 @@ if (!AGY_IDE_PWD) { console.error('FATAL: AGY_IDE_PASSWORD env var not set'); pr
 const SUPABASE_URL = (process.env.SUPABASE_URL_2 || 'https://lxlcivzuevowckbcxczc.supabase.co')
   .replace(/\/$/, '');
 /* Use service role key — anon key must never access goal_sessions */
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+/* Supabase 2 key: Railway debe tener SUPABASE_KEY_2 = service_role de lxlcivzuevowckbcxczc */
+const SUPABASE_KEY = process.env.SUPABASE_KEY_2 || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 const GEMINI_KEY          = process.env.GEMINI_API_KEY;
 const GROQ_KEY   = process.env.GROQ_API_KEY;
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
