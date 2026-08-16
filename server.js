@@ -1138,7 +1138,19 @@ app.post('/api/pelicula/stop', requirePwd, (req, res) => {
 app.get('/api/pelicula/list', requirePwd, async (req, res) => {
   try {
     if (!SUPABASE_URL || !SUPABASE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
-    const id = String(req.query.id || _film.id || '');
+    let id = String(req.query.id || _film.id || '');
+    if (!id) {
+      const rr = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${PELICULA_BUCKET}`, {
+        method: 'POST', headers: { ...sbHeaders() },
+        body: JSON.stringify({ prefix: '', limit: 200, sortBy: { column: 'name', order: 'asc' } })
+      });
+      if (rr.ok) {
+        const rows = await rr.json();
+        const ses = (Array.isArray(rows) ? rows : [])
+          .map(f => f.name).filter(n => n && n.startsWith('rodaje-')).sort();
+        if (ses.length) id = ses[ses.length - 1];
+      }
+    }
     if (!id) return res.json({ id: null, files: [] });
     const r = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${PELICULA_BUCKET}`, {
       method: 'POST', headers: { ...sbHeaders() },
@@ -1190,6 +1202,272 @@ app.post('/api/pelicula/clear', requirePwd, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+
+/* ── MONTAJE DE LA PELÍCULA (un solo comando en PC1) ──
+   El IDE sirve el script PowerShell ya armado con URL y clave. En PC1 se baja
+   y se lanza como proceso aparte. El script: baja TODAS las fotos del rodaje
+   (última sesión si no se indica una), arma un MP4 por PC con ffmpeg
+   (1.7 fps + fundidos por mezcla de fotogramas), lo manda a Telegram
+   (claves leídas del .env de PC1, nunca viajan por el puente), deja copia en
+   el Escritorio y borra la carpeta temporal. Log: %USERPROFILE%\\montaje.log */
+const PC1_MONTAJE_PS1 = [
+"param([string]$Id='')",
+"$ErrorActionPreference='Continue'",
+"$U='__URL__'",
+"$K='__KEY__'",
+"$log=Join-Path $env:USERPROFILE 'montaje.log'",
+"function L($m){ Add-Content -Path $log -Value ((Get-Date -Format 'HH:mm:ss ')+$m) }",
+"L '=== MONTAJE INICIADO ==='",
+"$envf='C:\\Users\\Roberto1\\OneDrive\\Desktop\\GitHub\\cibercode-ide\\.env'",
+"$TOK=$null;$CHAT=$null",
+"if(Test-Path $envf){ Get-Content $envf | ForEach-Object { if($_ -match '^\\s*TELEGRAM_BOT_TOKEN\\s*=\\s*(.+) — servido desde el propio IDE, sin depender del puente.
+   Uso (en PC1): descargar con ?pwd=<clave del IDE> y ejecutar. */
+const PC1_EYE_PS1 = [
+"$ErrorActionPreference='SilentlyContinue'",
+"$U='__URL__/api/equipos/report'",
+"$K='__KEY__'",
+"Add-Type -AssemblyName System.Drawing",
+"Add-Type -AssemblyName System.Windows.Forms",
+"Write-Host ('[EYE-PC1] iniciado -> '+$U)",
+"while($true){",
+"  try{",
+"    $b=[System.Windows.Forms.SystemInformation]::VirtualScreen",
+"    $bmp=New-Object System.Drawing.Bitmap $b.Width,$b.Height",
+"    $g=[System.Drawing.Graphics]::FromImage($bmp)",
+"    $g.CopyFromScreen($b.X,$b.Y,0,0,$bmp.Size)",
+"    $ms=New-Object System.IO.MemoryStream",
+"    $enc=[System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders()|Where-Object{$_.MimeType -eq 'image/jpeg'}",
+"    $ep=New-Object System.Drawing.Imaging.EncoderParameters 1",
+"    $ep.Param[0]=New-Object System.Drawing.Imaging.EncoderParameter([System.Drawing.Imaging.Encoder]::Quality,[long]60)",
+"    $bmp.Save($ms,$enc,$ep)",
+"    $shot=[Convert]::ToBase64String($ms.ToArray())",
+"    $g.Dispose();$bmp.Dispose();$ms.Dispose()",
+"    $t=@()",
+"    $log=$env:USERPROFILE+'\\pc1-term.log'",
+"    if(Test-Path $log){",
+"      $tl=Get-Content $log -Tail 40 -ErrorAction SilentlyContinue|Where-Object{$_ -and $_ -notmatch 'EncodedCommand' -and $_.Length -lt 300}",
+"      if($tl -and @($tl).Count -gt 1){ $t+=('== TERMINAL EN VIVO de PC1 ('+(Get-Date -Format 'HH:mm:ss')+') =='); $t+=$tl }",
+"    }",
+"    if($t.Count -eq 0){",
+"    $t+=('== '+(Get-Date -Format 'HH:mm:ss')+' PC1 ==')",
+"    $t+='== PROCESOS (top CPU) =='",
+"    $t+=(Get-Process|Sort-Object CPU -Descending|Select-Object -First 8|ForEach-Object{($_.Name+'  CPU:'+[math]::Round([double]$_.CPU,1)+'  RAM:'+[math]::Round($_.WS/1MB)+'MB')})",
+"    $t+='== RED (conexiones activas) =='",
+"    $t+=(Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue|Select-Object -First 6|ForEach-Object{($_.RemoteAddress+':'+$_.RemotePort)})",
+"    $t+='== SISTEMA =='",
+"    $os=Get-CimInstance Win32_OperatingSystem",
+"    $t+=('RAM libre: '+[math]::Round($os.FreePhysicalMemory/1KB)+' MB de '+[math]::Round($os.TotalVisibleMemorySize/1KB)+' MB')",
+"    $d=Get-PSDrive C",
+"    $t+=('Disco C libre: '+[math]::Round($d.Free/1GB,1)+' GB')",
+"    }",
+"    $body=@{pc='PC1';shot=$shot;terminal=($t -join [Environment]::NewLine)}|ConvertTo-Json -Compress",
+"    Invoke-RestMethod -Uri $U -Method Post -Headers @{'x-equipos-key'=$K} -ContentType 'application/json' -Body $body|Out-Null",
+"    Write-Host ('[EYE-PC1] enviado '+(Get-Date -Format 'HH:mm:ss'))",
+"  }catch{ Write-Host ('[EYE-PC1] error: '+$_.Exception.Message) }",
+"  Start-Sleep -Seconds 12",
+"}"
+].join("\n");
+
+app.get('/eye/pc1.ps1', (req, res) => {
+  const pwd = req.query.pwd || req.headers['x-agyide-pwd'];
+  if (!_pwdOk(pwd)) return res.status(401).send('No autorizado');
+  const base = 'https://' + (req.headers.host || 'agy-ide-production.up.railway.app');
+  res.type('text/plain; charset=utf-8').send(
+    PC1_EYE_PS1.replace('__URL__', base).replace('__KEY__', EQUIPOS_REPORT_KEY || '')
+  );
+});
+
+
+/* Pausar/reanudar el ojo de un PC (privacidad): mientras esté pausado,
+   el servidor descarta lo que llegue y borra lo guardado. */
+app.post('/api/equipos/pause', requirePwd, (req, res) => {
+  const { pc, paused } = req.body || {};
+  const id = String(pc || '').toUpperCase();
+  if (id !== 'PC1' && id !== 'PC2') return res.status(400).json({ error: 'pc debe ser PC1 o PC2' });
+  _eyePaused[id] = !!paused;
+  if (_eyePaused[id]) delete _equiposEye[id];
+  res.json({ ok: true, pc: id, paused: _eyePaused[id] });
+});
+
+app.get('/api/equipos/screens', requirePwd, (_req, res) => {
+  const out = {};
+  ['PC1', 'PC2'].forEach((id) => {
+    const e = _eyeFresh(id);
+    out[id] = e
+      ? { ts: e.ts, seconds_ago: Math.round((Date.now() - e.ts) / 1000), has_shot: !!e.shot, terminal: e.terminal || '', paused: !!_eyePaused[id] }
+      : (_eyePaused[id] ? { paused: true } : null);
+  });
+  res.json(out);
+});
+
+app.get('/api/equipos/screens/:pc/shot', requirePwd, (req, res) => {
+  const _id = String(req.params.pc || '').toUpperCase();
+  if (_eyePaused[_id]) return res.status(404).json({ error: 'ojo pausado' });
+  const e = _eyeFresh(_id);
+  if (!e || !e.shot) return res.status(404).json({ error: 'sin captura' });
+  res.set('Content-Type', e.mime || 'image/jpeg');
+  res.set('Cache-Control', 'no-store');
+  res.send(e.shot);
+});
+
+app.listen(PORT, async () => {
+  console.log(`AGY-IDE ▶  puerto ${PORT} | /goal mode ACTIVO`);
+  await reconcileInterruptedSessions();
+});
+){$script:TOK=$Matches[1].Trim().Trim([char]34).Trim([char]39)}; if($_ -match '^\\s*TELEGRAM_CHAT_ID\\s*=\\s*(.+) — servido desde el propio IDE, sin depender del puente.
+   Uso (en PC1): descargar con ?pwd=<clave del IDE> y ejecutar. */
+const PC1_EYE_PS1 = [
+"$ErrorActionPreference='SilentlyContinue'",
+"$U='__URL__/api/equipos/report'",
+"$K='__KEY__'",
+"Add-Type -AssemblyName System.Drawing",
+"Add-Type -AssemblyName System.Windows.Forms",
+"Write-Host ('[EYE-PC1] iniciado -> '+$U)",
+"while($true){",
+"  try{",
+"    $b=[System.Windows.Forms.SystemInformation]::VirtualScreen",
+"    $bmp=New-Object System.Drawing.Bitmap $b.Width,$b.Height",
+"    $g=[System.Drawing.Graphics]::FromImage($bmp)",
+"    $g.CopyFromScreen($b.X,$b.Y,0,0,$bmp.Size)",
+"    $ms=New-Object System.IO.MemoryStream",
+"    $enc=[System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders()|Where-Object{$_.MimeType -eq 'image/jpeg'}",
+"    $ep=New-Object System.Drawing.Imaging.EncoderParameters 1",
+"    $ep.Param[0]=New-Object System.Drawing.Imaging.EncoderParameter([System.Drawing.Imaging.Encoder]::Quality,[long]60)",
+"    $bmp.Save($ms,$enc,$ep)",
+"    $shot=[Convert]::ToBase64String($ms.ToArray())",
+"    $g.Dispose();$bmp.Dispose();$ms.Dispose()",
+"    $t=@()",
+"    $log=$env:USERPROFILE+'\\pc1-term.log'",
+"    if(Test-Path $log){",
+"      $tl=Get-Content $log -Tail 40 -ErrorAction SilentlyContinue|Where-Object{$_ -and $_ -notmatch 'EncodedCommand' -and $_.Length -lt 300}",
+"      if($tl -and @($tl).Count -gt 1){ $t+=('== TERMINAL EN VIVO de PC1 ('+(Get-Date -Format 'HH:mm:ss')+') =='); $t+=$tl }",
+"    }",
+"    if($t.Count -eq 0){",
+"    $t+=('== '+(Get-Date -Format 'HH:mm:ss')+' PC1 ==')",
+"    $t+='== PROCESOS (top CPU) =='",
+"    $t+=(Get-Process|Sort-Object CPU -Descending|Select-Object -First 8|ForEach-Object{($_.Name+'  CPU:'+[math]::Round([double]$_.CPU,1)+'  RAM:'+[math]::Round($_.WS/1MB)+'MB')})",
+"    $t+='== RED (conexiones activas) =='",
+"    $t+=(Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue|Select-Object -First 6|ForEach-Object{($_.RemoteAddress+':'+$_.RemotePort)})",
+"    $t+='== SISTEMA =='",
+"    $os=Get-CimInstance Win32_OperatingSystem",
+"    $t+=('RAM libre: '+[math]::Round($os.FreePhysicalMemory/1KB)+' MB de '+[math]::Round($os.TotalVisibleMemorySize/1KB)+' MB')",
+"    $d=Get-PSDrive C",
+"    $t+=('Disco C libre: '+[math]::Round($d.Free/1GB,1)+' GB')",
+"    }",
+"    $body=@{pc='PC1';shot=$shot;terminal=($t -join [Environment]::NewLine)}|ConvertTo-Json -Compress",
+"    Invoke-RestMethod -Uri $U -Method Post -Headers @{'x-equipos-key'=$K} -ContentType 'application/json' -Body $body|Out-Null",
+"    Write-Host ('[EYE-PC1] enviado '+(Get-Date -Format 'HH:mm:ss'))",
+"  }catch{ Write-Host ('[EYE-PC1] error: '+$_.Exception.Message) }",
+"  Start-Sleep -Seconds 12",
+"}"
+].join("\n");
+
+app.get('/eye/pc1.ps1', (req, res) => {
+  const pwd = req.query.pwd || req.headers['x-agyide-pwd'];
+  if (!_pwdOk(pwd)) return res.status(401).send('No autorizado');
+  const base = 'https://' + (req.headers.host || 'agy-ide-production.up.railway.app');
+  res.type('text/plain; charset=utf-8').send(
+    PC1_EYE_PS1.replace('__URL__', base).replace('__KEY__', EQUIPOS_REPORT_KEY || '')
+  );
+});
+
+
+/* Pausar/reanudar el ojo de un PC (privacidad): mientras esté pausado,
+   el servidor descarta lo que llegue y borra lo guardado. */
+app.post('/api/equipos/pause', requirePwd, (req, res) => {
+  const { pc, paused } = req.body || {};
+  const id = String(pc || '').toUpperCase();
+  if (id !== 'PC1' && id !== 'PC2') return res.status(400).json({ error: 'pc debe ser PC1 o PC2' });
+  _eyePaused[id] = !!paused;
+  if (_eyePaused[id]) delete _equiposEye[id];
+  res.json({ ok: true, pc: id, paused: _eyePaused[id] });
+});
+
+app.get('/api/equipos/screens', requirePwd, (_req, res) => {
+  const out = {};
+  ['PC1', 'PC2'].forEach((id) => {
+    const e = _eyeFresh(id);
+    out[id] = e
+      ? { ts: e.ts, seconds_ago: Math.round((Date.now() - e.ts) / 1000), has_shot: !!e.shot, terminal: e.terminal || '', paused: !!_eyePaused[id] }
+      : (_eyePaused[id] ? { paused: true } : null);
+  });
+  res.json(out);
+});
+
+app.get('/api/equipos/screens/:pc/shot', requirePwd, (req, res) => {
+  const _id = String(req.params.pc || '').toUpperCase();
+  if (_eyePaused[_id]) return res.status(404).json({ error: 'ojo pausado' });
+  const e = _eyeFresh(_id);
+  if (!e || !e.shot) return res.status(404).json({ error: 'sin captura' });
+  res.set('Content-Type', e.mime || 'image/jpeg');
+  res.set('Cache-Control', 'no-store');
+  res.send(e.shot);
+});
+
+app.listen(PORT, async () => {
+  console.log(`AGY-IDE ▶  puerto ${PORT} | /goal mode ACTIVO`);
+  await reconcileInterruptedSessions();
+});
+){$script:CHAT=$Matches[1].Trim().Trim([char]34).Trim([char]39)} } }",
+"function TG($t){ if($TOK -and $CHAT){ try{ Invoke-RestMethod -Uri ('https://api.telegram.org/bot'+$TOK+'/sendMessage') -Method Post -Body @{chat_id=$CHAT;text=$t} | Out-Null }catch{ L ('tg err: '+$_.Exception.Message) } } }",
+"$H=@{'x-agyide-pwd'=$K}",
+"$q=''; if($Id){ $q='?id='+$Id }",
+"try{ $lst=Invoke-RestMethod -Uri ($U+'/api/pelicula/list'+$q) -Headers $H }catch{ L ('ERROR list: '+$_.Exception.Message); TG ('MONTAJE FALLO: no pude listar las fotos del rodaje.'); exit 1 }",
+"if(-not $lst.files -or @($lst.files).Count -lt 4){ L 'Sin fotos suficientes'; TG 'MONTAJE: no hay fotos suficientes guardadas (se necesitan al menos 4). Empieza un rodaje primero.'; exit 1 }",
+"$sid=$lst.id",
+"TG ('MONTAJE INICIADO: sesion '+$sid+' con '+@($lst.files).Count+' fotos. Aviso cuando el video este listo.')",
+"$tmp=Join-Path $env:TEMP ('montaje-'+(Get-Date -Format 'HHmmss'))",
+"New-Item -ItemType Directory -Force -Path (Join-Path $tmp 'PC1'),(Join-Path $tmp 'PC2') | Out-Null",
+"$n=@{PC1=0;PC2=0}",
+"foreach($f in $lst.files){",
+"  $pc='PC1'; if($f -match 'PC2'){ $pc='PC2' }",
+"  $n[$pc]=$n[$pc]+1",
+"  $dest=Join-Path (Join-Path $tmp $pc) ('img{0:D5}.jpg' -f $n[$pc])",
+"  try{ Invoke-WebRequest -Uri ($U+'/api/pelicula/shot?name='+[uri]::EscapeDataString($f)) -Headers $H -OutFile $dest -UseBasicParsing }catch{ L ('foto fallo: '+$f) }",
+"}",
+"L ('Descargadas PC1='+$n.PC1+' PC2='+$n.PC2)",
+"$ff=$null; $gc=Get-Command ffmpeg -ErrorAction SilentlyContinue; if($gc){ $ff=$gc.Source }",
+"if(-not $ff){ $ff=Get-ChildItem (Join-Path $env:USERPROFILE 'ffmpeg') -Recurse -Filter ffmpeg.exe -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName }",
+"if(-not $ff){",
+"  L 'ffmpeg no esta; descargando (una sola vez)'",
+"  TG 'MONTAJE: instalando ffmpeg en PC1 (solo la primera vez, unos minutos)...'",
+"  $zip=Join-Path $env:TEMP 'ffmpeg.zip'",
+"  try{ Invoke-WebRequest -Uri 'https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip' -OutFile $zip -UseBasicParsing; Expand-Archive -Path $zip -DestinationPath (Join-Path $env:USERPROFILE 'ffmpeg') -Force; Remove-Item $zip -Force }catch{ L ('ffmpeg dl err: '+$_.Exception.Message) }",
+"  $ff=Get-ChildItem (Join-Path $env:USERPROFILE 'ffmpeg') -Recurse -Filter ffmpeg.exe -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName",
+"}",
+"if(-not $ff){ TG 'MONTAJE FALLO: no consegui ffmpeg en PC1 (ni instalado ni descargable).'; Remove-Item $tmp -Recurse -Force; exit 1 }",
+"L ('ffmpeg: '+$ff)",
+"$desk=[Environment]::GetFolderPath('Desktop')",
+"$hechos=@()",
+"foreach($pc in 'PC1','PC2'){",
+"  if($n[$pc] -lt 4){ L ($pc+' sin fotos suficientes, se omite'); continue }",
+"  $dir=Join-Path $tmp $pc",
+"  $out=Join-Path $desk ('pelicula-'+$sid+'-'+$pc+'.mp4')",
+"  $vf='scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,format=yuv420p,framerate=fps=25'",
+"  & $ff -y -framerate 1.7 -i (Join-Path $dir 'img%05d.jpg') -vf $vf -c:v libx264 -preset veryfast -crf 23 -movflags +faststart $out 2>> $log",
+"  if(Test-Path $out){ $hechos+=$out; L ('Video listo: '+$out) } else { L ('FALLO video '+$pc); TG ('MONTAJE: fallo el video de '+$pc+' (detalle en montaje.log).') }",
+"}",
+"Remove-Item $tmp -Recurse -Force",
+"L 'Temporales borrados'",
+"foreach($v in $hechos){",
+"  $mb=[math]::Round((Get-Item $v).Length/1MB,1)",
+"  if($mb -lt 49 -and $TOK -and $CHAT){",
+"    L ('Enviando a Telegram: '+$v+' ('+$mb+' MB)')",
+"    & curl.exe -s -F ('chat_id='+$CHAT) -F ('caption=Pelicula lista: '+(Split-Path $v -Leaf)+' ('+$mb+' MB)') -F ('video=@'+$v) ('https://api.telegram.org/bot'+$TOK+'/sendVideo') | Out-Null",
+"  } else { TG ('Pelicula lista en el Escritorio de PC1: '+(Split-Path $v -Leaf)+' ('+$mb+' MB). Muy grande para mandarla por Telegram.') }",
+"}",
+"TG ('MONTAJE TERMINADO: '+$hechos.Count+' video(s) de la sesion '+$sid+'. Copia en el Escritorio de PC1. Cuando confirmes que estan bien, borra las fotos con el boton Borrar rodaje del IDE.')",
+"L '=== MONTAJE TERMINADO ==='"
+].join("\n");
+
+app.get('/montaje/pc1.ps1', (req, res) => {
+  const pwd = req.query.pwd || req.headers['x-agyide-pwd'];
+  if (!AGY_IDE_PWD || !pwd || pwd !== AGY_IDE_PWD) return res.status(401).send('No autorizado');
+  const base = 'https://' + (req.headers.host || 'agy-ide-production.up.railway.app');
+  res.type('text/plain; charset=utf-8').send(
+    PC1_MONTAJE_PS1.replace('__URL__', base).replace('__KEY__', AGY_IDE_PWD)
+  );
+});
 
 /* Ojo autónomo de PC1 — servido desde el propio IDE, sin depender del puente.
    Uso (en PC1): descargar con ?pwd=<clave del IDE> y ejecutar. */
