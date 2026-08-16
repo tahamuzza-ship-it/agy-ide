@@ -1020,6 +1020,48 @@ const _eyePaused = {}; // 'PC1'|'PC2' -> true si el dueño pausó el ojo // 'PC1
 const EQUIPOS_REPORT_KEY = process.env.EQUIPOS_REPORT_KEY || AGY_IDE_PWD;
 const EQUIPOS_TTL_MS = 10 * 60 * 1000; // retención corta: 10 minutos
 
+/* ── RODAJE / PELÍCULA ──
+   Mientras hay una sesión de rodaje activa, cada captura que llega al ojo se
+   guarda en Supabase Storage (bucket 'pelicula'), NUNCA en disco de los PC.
+   Tope duro de 700 fotos: al llegar, se detiene la sesión y avisa por Telegram
+   para que el dueño decida borrar. */
+const PELICULA_BUCKET = 'pelicula';
+const PELICULA_MAX = 700; // tope de fotos por sesión
+let _film = { active: false, id: null, count: 0, startedAt: 0, byPc: { PC1: 0, PC2: 0 }, warned: false };
+
+async function _peliculaEnsureBucket() {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return false;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/storage/v1/bucket/${PELICULA_BUCKET}`, { headers: sbHeaders() });
+    if (r.ok) return true;
+    const cr = await fetch(`${SUPABASE_URL}/storage/v1/bucket`, {
+      method: 'POST', headers: sbHeaders(),
+      body: JSON.stringify({ id: PELICULA_BUCKET, name: PELICULA_BUCKET, public: false, file_size_limit: 6000000, allowed_mime_types: ['image/jpeg', 'image/png'] })
+    });
+    return cr.ok || cr.status === 409;
+  } catch (e) { console.error('[pelicula bucket]', e.message); return false; }
+}
+
+async function _peliculaUpload(pc, buf, mime) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return;
+  const ext = mime === 'image/png' ? 'png' : 'jpg';
+  const seq = String(_film.count + 1).padStart(4, '0');
+  const path = `${_film.id}/${seq}-${pc}.${ext}`;
+  const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}/${path}`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': mime, 'x-upsert': 'true' },
+    body: buf
+  });
+  if (!r.ok) throw new Error(`storage: ${r.status} ${await r.text()}`);
+  _film.count += 1;
+  _film.byPc[pc] = (_film.byPc[pc] || 0) + 1;
+  if (_film.count >= PELICULA_MAX && !_film.warned) {
+    _film.warned = true;
+    _film.active = false;
+    tgSend(`🎬 RODAJE DETENIDO: se llegó al tope de ${PELICULA_MAX} fotos (sesión <code>${_film.id}</code>). Revisa el video y borra las capturas con el botón "Borrar rodaje" cuando termines.`).catch(() => {});
+  }
+}
+
 function _eyeFresh(id) {
   const e = _equiposEye[id];
   if (!e) return null;
@@ -1049,6 +1091,9 @@ app.post('/api/equipos/report', (req, res) => {
     if (!isPng && !isJpg) return res.status(400).json({ error: 'la captura debe ser PNG o JPEG' });
     entry.mime = isPng ? 'image/png' : 'image/jpeg';
     entry.shot = buf;
+    if (_film.active && _film.count < PELICULA_MAX) {
+      _peliculaUpload(id, buf, entry.mime).catch(e => console.error('[pelicula]', e.message));
+    }
   }
   if (typeof terminal === 'string') {
     entry.terminal = terminal.split('\n').slice(-80).join('\n').slice(-12000);
@@ -1056,6 +1101,78 @@ app.post('/api/equipos/report', (req, res) => {
   entry.ts = Date.now();
   _equiposEye[id] = entry;
   res.json({ ok: true });
+});
+
+/* ── ENDPOINTS DE RODAJE / PELÍCULA ── */
+app.get('/api/pelicula/status', requirePwd, (_req, res) => {
+  res.json({ active: _film.active, id: _film.id, count: _film.count, max: PELICULA_MAX,
+    byPc: _film.byPc, startedAt: _film.startedAt, warned: _film.warned });
+});
+
+app.post('/api/pelicula/start', requirePwd, async (req, res) => {
+  const ok = await _peliculaEnsureBucket();
+  if (!ok) return res.status(503).json({ error: 'no se pudo preparar el almacén de fotos (Supabase)' });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  _film = { active: true, id: 'rodaje-' + stamp, count: 0, startedAt: Date.now(), byPc: { PC1: 0, PC2: 0 }, warned: false };
+  tgSend(`🎬 RODAJE INICIADO (sesión <code>${_film.id}</code>). Guardando capturas en Supabase, tope ${PELICULA_MAX} fotos.`).catch(() => {});
+  res.json({ ok: true, id: _film.id, max: PELICULA_MAX });
+});
+
+app.post('/api/pelicula/stop', requirePwd, (req, res) => {
+  _film.active = false;
+  res.json({ ok: true, id: _film.id, count: _film.count });
+});
+
+app.get('/api/pelicula/list', requirePwd, async (req, res) => {
+  try {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
+    const id = String(req.query.id || _film.id || '');
+    if (!id) return res.json({ id: null, files: [] });
+    const r = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${PELICULA_BUCKET}`, {
+      method: 'POST', headers: { ...sbHeaders() },
+      body: JSON.stringify({ prefix: id + '/', limit: 1000, sortBy: { column: 'name', order: 'asc' } })
+    });
+    const rows = await r.json();
+    const files = Array.isArray(rows) ? rows.map(f => id + '/' + f.name) : [];
+    res.json({ id, count: files.length, files });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/pelicula/shot', requirePwd, async (req, res) => {
+  try {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
+    const name = String(req.query.name || '');
+    if (!name || name.includes('..')) return res.status(400).json({ error: 'nombre inválido' });
+    const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}/${name}`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+    });
+    if (!r.ok) return res.status(404).json({ error: 'no encontrada' });
+    res.set('Content-Type', r.headers.get('content-type') || 'image/jpeg');
+    res.set('Cache-Control', 'no-store');
+    const ab = await r.arrayBuffer();
+    res.send(Buffer.from(ab));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/pelicula/clear', requirePwd, async (req, res) => {
+  try {
+    if (!SUPABASE_URL || !SUPABASE_KEY) return res.status(503).json({ error: 'Supabase no configurado' });
+    const id = String((req.body && req.body.id) || _film.id || '');
+    if (!id) return res.status(400).json({ error: 'falta id de sesión' });
+    const lr = await fetch(`${SUPABASE_URL}/storage/v1/object/list/${PELICULA_BUCKET}`, {
+      method: 'POST', headers: { ...sbHeaders() },
+      body: JSON.stringify({ prefix: id + '/', limit: 1000 })
+    });
+    const rows = await lr.json();
+    const names = Array.isArray(rows) ? rows.map(f => id + '/' + f.name) : [];
+    if (names.length) {
+      await fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}`, {
+        method: 'DELETE', headers: { ...sbHeaders() }, body: JSON.stringify({ prefixes: names })
+      });
+    }
+    if (_film.id === id) { _film.active = false; _film.count = 0; _film.byPc = { PC1: 0, PC2: 0 }; _film.warned = false; }
+    res.json({ ok: true, id, borradas: names.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 
