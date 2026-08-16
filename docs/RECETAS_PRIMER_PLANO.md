@@ -67,3 +67,24 @@ Si un punto completo corona de principio a fin: 🏆 CORONAMOS — la película 
 - Abrir notepad "por debajo de la mesa" (proceso sin ventana) y decir OK: el ojo no vio nada.
 - SendKeys a ciegas: el texto cayó en un documento real abierto de Roberto.
 - Una orden larga con esperas de 15+20 segundos adentro: timeout del motor (ETIMEDOUT).
+
+## 🎞️ MONTAJE — armar el video con un solo comando (en PC1)
+
+Cuando el rodaje terminó (botón "Parar" en el panel), PC1 baja todas las fotos y arma el video.
+Requiere ffmpeg instalado en PC1. Reemplaza `TU_CLAVE` por la clave del IDE.
+
+```powershell
+$B='https://agy-ide-production.up.railway.app'; $K='TU_CLAVE'
+$dir="$env:TEMP\rodaje"; Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force $dir | Out-Null
+$list = Invoke-RestMethod -Uri "$B/api/pelicula/list" -Headers @{'x-agyide-pwd'=$K}
+$i=0
+foreach($f in $list.files){ $i++; $out=Join-Path $dir ("{0:D4}.jpg" -f $i)
+  Invoke-WebRequest -Uri "$B/api/pelicula/shot?name=$([uri]::EscapeDataString($f))" -Headers @{'x-agyide-pwd'=$K} -OutFile $out }
+ffmpeg -y -framerate 2 -i "$dir\%04d.jpg" -vf "scale=1280:-2,format=yuv420p" -r 24 "$env:USERPROFILE\Desktop\pelicula.mp4"
+Remove-Item $dir -Recurse -Force
+Write-Host "Video listo en el Escritorio: pelicula.mp4"
+```
+
+- `-framerate 2` = 2 fotos por segundo (súbelo a 3-4 para un video más rápido).
+- El video queda en el Escritorio como `pelicula.mp4`; las fotos temporales se borran solas.
+- Después, borra las fotos de Supabase con el botón "🗑️ Borrar" del panel (o deja que el tope de 700 avise).
