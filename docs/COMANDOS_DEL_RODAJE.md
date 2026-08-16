@@ -76,7 +76,39 @@ Siempre por **URL de commit exacto** (el raw de `main` cachea versiones viejas):
 
 Un solo comando PowerShell en PC1: baja todas las fotos vía `/api/pelicula/shot` y arma `pelicula.mp4` en el Escritorio con ffmpeg (2 fotos por segundo).
 
+### Escena narrada completa — RECETA GANADORA (toma 6, probada ✅)
+
+El patrón que funciona de punta a punta (voz + hoja en blanco propia + escritura lenta visible + lectura final):
+
+1. **Aviso por voz** y 10 segundos de espera (nadie toca el PC durante la escena).
+2. **Hoja en blanco PROPIA**: crear un .txt nuevo en TEMP y abrir ESE archivo — nunca `notepad` a secas (el Notepad moderno abre pestaña sobre el documento del dueño):
+   `$hoja = Join-Path $env:TEMP ('ESCENA_' + (Get-Date -Format 'HHmmss') + '.txt'); '' | Set-Content $hoja; Start-Process notepad -ArgumentList "`"$hoja`""`
+3. **Buscar el proceso REAL**: `Start-Process notepad -PassThru` da un PID fantasma (muere al instante). Usar: `Get-Process notepad | Where-Object { $_.MainWindowHandle -ne 0 } | Select -First 1`
+4. **Forzar al frente con Win32 antes de CADA tecla** (AppActivate solo no basta):
+   `[Win32]::ShowWindow($h,3); [Win32]::SetForegroundWindow($h)` (Add-Type con user32.dll)
+5. **Escritura lenta**: SendKeys letra por letra con `Start-Sleep -Milliseconds 100`, escapando `+^%~(){}[]` con llaves.
+6. **Lectura final**: `$voz.Speak()` de cada renglón (Speak bloquea = sincroniza solo).
+7. **Escenas >30 segundos**: SIEMPRE lanzarlas como proceso aparte (script por base64 → `$env:TEMP\escena.ps1` → `Start-Process powershell -WindowStyle Hidden -File ...`), porque el listener mata comandos largos (ETIMEDOUT).
+
+El script completo de referencia queda en PC1: `$env:TEMP\escena6.ps1`.
+
 ## ❌ Lo que NO usar todavía
 
 - `/goal` del IDE: apunta a la base equivocada (tarea #33 pendiente).
 - Prompts AGY largos o con "espera X segundos": se caen por timeout.
+
+## 7. 🎙️ EL NARRADOR (voz de PC1) — probado ✅
+
+PC1 tiene la voz **Microsoft Sabina Desktop (es-MX)**. El Director puede narrar mientras actúa:
+
+```
+[PC1] EJECUTAR Add-Type -AssemblyName System.Speech; $voz=New-Object System.Speech.Synthesis.SpeechSynthesizer; $voz.SelectVoice('Microsoft Sabina Desktop'); $voz.Rate=0; $voz.Speak('Texto a narrar aqui'); Write-Host VOZ_OK
+```
+
+Escena narrada completa (voz → abrir ventana al frente → narrar → escribir → narrar cierre):
+usar el patrón de la prueba: `Speak(...)` antes y después de cada acción, y siempre
+`$ws.AppActivate($p.Id)` antes de cada `SendKeys` (regla 5 del recetario).
+
+- `$voz.Rate` = velocidad (-2 más lenta, 2 más rápida).
+- `Speak()` bloquea hasta terminar de hablar — sirve para sincronizar voz y acción.
+- Evitar tildes/ñ en el texto si el comando viaja por el puente (se pueden dañar en el camino).
