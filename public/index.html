@@ -2241,6 +2241,16 @@
     <pre id="equipo-term-pc2" style="display:none;max-height:110px;overflow:auto;background:#060a16;border:1px solid rgba(0,243,255,0.15);border-radius:8px;padding:6px 8px;font-size:0.58rem;line-height:1.35;color:#9fe8c0;white-space:pre-wrap;word-break:break-all;margin:6px 0 0;"></pre>
     <div id="equipo-eyeinfo-pc2" style="font-size:0.55rem;color:#5a6a80;margin-top:3px;"></div>
   </div>
+  <!-- 🎬 RODAJE / PELÍCULA -->
+  <div style="margin-top:12px;border-top:1px solid rgba(0,243,255,0.18);padding-top:10px;">
+    <div style="font-family:'Orbitron',monospace;font-size:0.66rem;letter-spacing:0.1em;color:#ffc64d;margin-bottom:6px;">🎬 RODAJE (guarda las fotos)</div>
+    <div id="rodaje-estado" style="font-size:0.62rem;color:#8c9cb2;margin-bottom:8px;">consultando…</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+      <button id="rodaje-start" style="flex:1;min-width:90px;background:linear-gradient(135deg,#1a4731,#22c55e);border:none;color:#fff;border-radius:8px;padding:7px 6px;font-size:0.62rem;font-weight:700;cursor:pointer;">▶️ Empezar</button>
+      <button id="rodaje-stop" style="flex:1;min-width:90px;background:rgba(240,160,32,0.15);border:1px solid rgba(240,160,32,0.5);color:#ffc64d;border-radius:8px;padding:7px 6px;font-size:0.62rem;font-weight:700;cursor:pointer;">⏹️ Parar</button>
+      <button id="rodaje-clear" style="flex:1;min-width:90px;background:rgba(204,0,32,0.12);border:1px solid rgba(255,51,85,0.5);color:#ff8090;border-radius:8px;padding:7px 6px;font-size:0.62rem;font-weight:700;cursor:pointer;">🗑️ Borrar</button>
+    </div>
+  </div>
   <div id="equipos-updated" style="font-size:0.58rem;color:#5a6a80;margin-top:8px;text-align:right;"></div>
 </div>
 <div id="equipo-shot-full" style="display:none;position:fixed;inset:0;z-index:9500;background:rgba(2,5,14,0.95);align-items:center;justify-content:center;cursor:zoom-out;padding:12px;">
@@ -2437,15 +2447,63 @@
     pendingRevoke = [];
   });
 
+  /* ── 🎬 RODAJE: controlar el guardado de fotos ── */
+  var rodajeTimer = null;
+  function refreshRodaje() {
+    var est = document.getElementById('rodaje-estado');
+    fetch('/api/pelicula/status', { headers: _pwdHeaders() })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (d) {
+        if (!est) return;
+        if (d.active) {
+          est.innerHTML = '🔴 Grabando · <b>' + d.count + '/' + d.max + '</b> fotos (PC1: ' + (d.byPc.PC1||0) + ', PC2: ' + (d.byPc.PC2||0) + ')';
+          est.style.color = '#22c55e';
+        } else if (d.count > 0) {
+          est.innerHTML = '⏸️ Detenido · <b>' + d.count + '/' + d.max + '</b> fotos guardadas' + (d.warned ? ' (llegó al tope)' : '');
+          est.style.color = '#ffc64d';
+        } else {
+          est.textContent = 'Sin rodaje. Pulsa "Empezar" para guardar las fotos del ojo.';
+          est.style.color = '#8c9cb2';
+        }
+      })
+      .catch(function () { if (est) { est.textContent = 'no se pudo consultar el rodaje'; est.style.color = '#ff8090'; } });
+  }
+  var rStart = document.getElementById('rodaje-start');
+  var rStop = document.getElementById('rodaje-stop');
+  var rClear = document.getElementById('rodaje-clear');
+  if (rStart) rStart.addEventListener('click', function () {
+    rStart.disabled = true;
+    fetch('/api/pelicula/start', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, _pwdHeaders()) })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d.error) alert('No se pudo empezar: ' + d.error); refreshRodaje(); })
+      .catch(function () {}).then(function () { rStart.disabled = false; });
+  });
+  if (rStop) rStop.addEventListener('click', function () {
+    rStop.disabled = true;
+    fetch('/api/pelicula/stop', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, _pwdHeaders()) })
+      .then(function () { refreshRodaje(); }).catch(function () {}).then(function () { rStop.disabled = false; });
+  });
+  if (rClear) rClear.addEventListener('click', function () {
+    if (!confirm('¿Borrar TODAS las fotos guardadas del rodaje actual? Esto no se puede deshacer.')) return;
+    rClear.disabled = true;
+    fetch('/api/pelicula/clear', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, _pwdHeaders()), body: '{}' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { if (d.borradas != null) alert('Borradas ' + d.borradas + ' fotos.'); refreshRodaje(); })
+      .catch(function () {}).then(function () { rClear.disabled = false; });
+  });
+
   fab.addEventListener('click', function () {
     var open = panel.style.display !== 'none';
     panel.style.display = open ? 'none' : 'block';
     if (!open) {
       refreshEquipos();
       refreshScreens();
+      refreshRodaje();
       timer = setInterval(refreshEquipos, 30000);
       eyeTimer = setInterval(refreshScreens, 10000);
+      rodajeTimer = setInterval(refreshRodaje, 15000);
     } else {
+      if (rodajeTimer) { clearInterval(rodajeTimer); rodajeTimer = null; }
       if (timer) { clearInterval(timer); timer = null; }
       if (eyeTimer) { clearInterval(eyeTimer); eyeTimer = null; }
       ['PC1', 'PC2'].forEach(function (pc) {
