@@ -1,6 +1,8 @@
 # 🎬 COMANDOS DEL RODAJE — Arsenal probado (16-ago-2026)
 
-Todos estos comandos fueron **probados en vivo** y funcionan. Son los que el Director
+Los comandos de las secciones 1–5 y 8–9 fueron **probados en vivo** y funcionan; el montaje
+(sección 6) está desplegado pero **pendiente de su primera corrida real en PC1** (falta
+`SUPABASE_STORAGE_KEY` en Railway — ver tarea #121). Son los que el Director
 (o cualquier agente) necesita durante el rodaje y las tareas.
 
 ## Cómo se manda un comando (regla general)
@@ -72,6 +74,7 @@ Siempre por **URL de commit exacto** (el raw de `main` cachea versiones viejas):
 [PC1] EJECUTAR Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/tahamuzza-ship-it/agy-ide/<COMMIT>/docs/<archivo>' -OutFile 'C:\Users\Roberto1\OneDrive\Desktop\GitHub\cibercode-ide\SGN_Master_Prompt\<archivo>' -UseBasicParsing; (Get-Item '<destino>').Length
 ```
 
+
 ## 6. 🎞️ MONTAJE FINAL — UN solo comando (construido en tarea #44) ✅
 
 El IDE sirve el script ya armado en `GET /montaje/pc1.ps1?pwd=<CLAVE>` (igual que el ojo).
@@ -91,6 +94,15 @@ el puente), deja copia en el Escritorio y borra los temporales. Si ffmpeg no est
 instala solo (una vez, a `%USERPROFILE%\ffmpeg`). Diario: `%USERPROFILE%\montaje.log`.
 También está en el panel 📋 COMANDOS del IDE, categoría "🎞️ Montar la película".
 ⚠️ Las fotos NO se borran solas: tras confirmar los videos, usar el botón "Borrar rodaje".
+
+### Paso previo: instalar ffmpeg en PC1 (solo la primera vez)
+
+```
+[PC1] EJECUTAR Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/tahamuzza-ship-it/agy-ide/main/tools/instalar-ffmpeg-pc1.ps1' -OutFile "$env:TEMP\instalar-ffmpeg.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\instalar-ffmpeg.ps1"
+```
+
+Respuestas posibles: `FFMPEG_YA_LISTO`, `FFMPEG_INSTALADO_WINGET`, o `FFMPEG_INSTALADO_PORTABLE`.
+Verificar: `[PC1] EJECUTAR ffmpeg -version 2>&1 | Select-Object -First 1`
 
 ### Escena narrada completa — RECETA GANADORA (toma 6, probada ✅)
 
@@ -201,6 +213,125 @@ Igual que la vigilancia de PC2 pero en Windows. Usa `python + opencv` (instalar 
 - Fotos de intrusos: `%USERPROFILE%\vigilancia_pc1\intruso_FECHA_HORA.jpg`.
 - ⚠️ REGLA DE ORO DEL PUENTE (Windows): NO mandar scripts largos en base64 dentro del comando — Windows falla con `spawnSync cmd.exe EPERM` cuando la línea pasa el límite (~8000 chars). Subir el script a GitHub y que PC1 lo baje con Invoke-WebRequest. Comandos cortos siempre.
 - ⚠️ `Start-Process` con `-RedirectStandardOutput/Error` también da EPERM en este puente: lanzar sin redirect.
+
+## 13. 🔁 AUTOARRANQUE DE LA VIGILANCIA (instalar una sola vez)
+
+Tras una caída o reinicio del PC, la vigilancia vuelve sola y avisa: **"Vigilancia RESTABLECIDA TRAS REINICIO"**.
+
+### PC1 (Windows) — tarea programada de Windows
+
+**Paso 1 — instalar la tarea (una sola vez vía puente):**
+```
+[PC1] EJECUTAR Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/tahamuzza-ship-it/agy-ide/main/tools/instalar_autostart_pc1.ps1' -OutFile "$env:TEMP\instalar_autostart_pc1.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\instalar_autostart_pc1.ps1"
+```
+Respuesta esperada: `AUTOSTART_PC1_INSTALADO: tarea 'AGY-Vigilante-PC1' registrada.`
+
+**Qué hace:**
+- Descarga `tools/autostart_pc1.ps1` al perfil del usuario.
+- Registra la tarea `AGY-Vigilante-PC1` en el Programador de tareas: se dispara `AtLogOn`.
+- Al arrancar: baja la última versión del vigilante desde GitHub y lo lanza con `--reinicio`.
+
+**Verificar que la tarea existe:**
+```
+[PC1] EJECUTAR Get-ScheduledTask -TaskName 'AGY-Vigilante-PC1' | Select TaskName, State; Write-Host TAREA_OK
+```
+
+**Eliminar la tarea (si hace falta):**
+```
+[PC1] EJECUTAR Unregister-ScheduledTask -TaskName 'AGY-Vigilante-PC1' -Confirm:$false; Write-Host TAREA_ELIMINADA
+```
+
+---
+
+### PC2 (Linux) — crontab @reboot
+
+**Paso 1 — descargar el lanzador a PC2 (una sola vez vía puente):**
+```
+[PC2] EJECUTAR curl -fsSL 'https://raw.githubusercontent.com/tahamuzza-ship-it/agy-ide/main/tools/autostart_pc2.sh' -o ~/agy-vigilante-autostart.sh && chmod +x ~/agy-vigilante-autostart.sh && echo SCRIPT_OK
+```
+
+**Paso 2 — añadir la entrada @reboot al crontab (una sola vez vía puente):**
+```
+[PC2] EJECUTAR (crontab -l 2>/dev/null | grep -v agy-vigilante-autostart; echo "@reboot bash $HOME/agy-vigilante-autostart.sh >> $HOME/vigilancia_autostart.log 2>&1") | crontab -; echo AUTOSTART_PC2_INSTALADO
+```
+Respuesta esperada: `AUTOSTART_PC2_INSTALADO`
+
+**Qué hace:**
+- Al @reboot: espera 30 s, envía "Vigilancia RESTABLECIDA TRAS REINICIO" a Telegram y lanza `~/vigilante.py`.
+
+**Verificar que está en el crontab:**
+```
+[PC2] EJECUTAR crontab -l | grep vigilante; echo CRON_OK
+```
+
+**Eliminar la entrada (si hace falta):**
+```
+[PC2] EJECUTAR crontab -l 2>/dev/null | grep -v agy-vigilante-autostart | crontab -; echo CRON_ELIMINADO
+```
+
+---
+
+### 13.1 🧪 PRUEBA DE CONFIRMACIÓN DEL AUTOARRANQUE (ejecutar tras la instalación)
+
+**Antes de reiniciar — verificar que todo está instalado:**
+```
+[PC1] EJECUTAR Get-ScheduledTask -TaskName 'AGY-Vigilante-PC1' | Select TaskName, State; Write-Host TAREA_OK
+```
+```
+[PC2] EJECUTAR crontab -l | grep agy-vigilante; echo CRON_OK
+```
+Si alguno falla, ejecutar primero los pasos de instalación del apartado anterior.
+
+---
+
+**Paso 1 — Reiniciar PC1 desde el puente:**
+```
+[PC1] EJECUTAR Restart-Computer -Force
+```
+⏳ Esperar hasta 2 minutos. La tarea `AGY-Vigilante-PC1` se dispara en el siguiente inicio de sesión (AtLogOn). Debe llegar a Telegram:
+> `PC1: Vigilancia RESTABLECIDA TRAS REINICIO — YYYY-MM-DD HH:MM:SS`
+
+**Paso 2 — Reiniciar PC2 desde el puente:**
+```
+[PC2] EJECUTAR sudo reboot
+```
+⏳ Esperar hasta 2 minutos (el script espera 30 s internamente para que la red esté lista). Debe llegar a Telegram:
+> `PC2: Vigilancia RESTABLECIDA TRAS REINICIO — YYYY-MM-DD HH:MM:SS`
+
+**Paso 3 — Confirmar que los procesos están vivos tras el reinicio:**
+```
+[PC1] EJECUTAR Get-Process python -EA SilentlyContinue | Select Id, CPU; Write-Host VIGILANTE_PC1_VIVO
+```
+```
+[PC2] EJECUTAR pgrep -a python3 | grep vigilante; echo VIGILANTE_PC2_VIVO
+```
+
+**Paso 4 — Ver el log del autostart en PC2 (si algo falla):**
+```
+[PC2] EJECUTAR tail -30 ~/vigilancia_autostart.log
+```
+
+---
+
+### 13.2 📋 RESULTADO DE LA PRUEBA PILOTO
+
+| Campo | PC1 (Windows) | PC2 (Linux) |
+|---|---|---|
+| Tarea/cron instalado | ✅ / ❌ | ✅ / ❌ |
+| Reinicio ejecutado | — | — |
+| Mensaje Telegram recibido | — | — |
+| Tiempo hasta el mensaje | — | — |
+| Proceso vivo tras reinicio | — | — |
+| Resultado final | PENDIENTE | PENDIENTE |
+
+> ⚠️ **Completar esta tabla cuando se ejecute la prueba real.** Registrar aquí la fecha, hora y cualquier ajuste necesario.
+
+**Ajustes habituales si falla:**
+- **PC1 — la tarea no se dispara:** la tarea `AGY-Vigilante-PC1` usa `AtLogOn`, no `AtStartup`; asegurarse de que el usuario hace login (no solo arranque de máquina). Si PC1 arranca sin login automático, cambiar el trigger a `-AtStartup` y reinstalar.
+- **PC2 — no llega Telegram:** revisar `~/vigilancia_autostart.log` y confirmar que `~/.env` tiene `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID` con valores correctos.
+- **PC2 — vigilante.py no arranca:** comprobar que `~/vigilante.py` existe y que `python3 -c "import cv2"` no da error.
+
+---
 
 ## ❌ Lo que NO usar todavía
 
