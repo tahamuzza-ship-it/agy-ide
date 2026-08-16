@@ -1996,6 +1996,21 @@
             cmd:  "pkill -f ffplay"
           },
         ]},
+      { cat: "🎞️ Montar la película — UN solo comando en PC1",
+        items: [
+          {
+            desc: "MONTAJE COMPLETO — Pégalo en PowerShell de PC1 (o mándalo por el puente). Baja TODAS las fotos del último rodaje, arma un video de ~3 min por PC (ffmpeg, con fundidos), lo manda a Telegram, deja copia en el Escritorio y borra los temporales. Cambia CLAVE_DEL_IDE por la clave real. Si ffmpeg no está, se instala solo la primera vez.",
+            cmd:  "$c='CLAVE_DEL_IDE'; Invoke-WebRequest -Uri (\"https://agy-ide-production.up.railway.app/montaje/pc1.ps1?pwd=$c\") -OutFile \"$env:TEMP\\montar.ps1\" -UseBasicParsing; Start-Process powershell -WindowStyle Hidden -ArgumentList '-ExecutionPolicy','Bypass','-File',\"$env:TEMP\\montar.ps1\"; Write-Host MONTAJE_LANZADO"
+          },
+          {
+            desc: "Montar una sesión ANTIGUA concreta (no la última). Añade el nombre de la sesión (rodaje-...) al final. Se ve con 'Listar fotos' o en el estado del rodaje.",
+            cmd:  "$c='CLAVE_DEL_IDE'; Invoke-WebRequest -Uri (\"https://agy-ide-production.up.railway.app/montaje/pc1.ps1?pwd=$c\") -OutFile \"$env:TEMP\\montar.ps1\" -UseBasicParsing; Start-Process powershell -WindowStyle Hidden -ArgumentList '-ExecutionPolicy','Bypass','-File',\"$env:TEMP\\montar.ps1\",'-Id','rodaje-AAAA-MM-DD...'; Write-Host MONTAJE_LANZADO"
+          },
+          {
+            desc: "Ver el diario del montaje en PC1 (qué hizo, si falló algo). Las últimas 30 líneas.",
+            cmd:  "Get-Content \"$env:USERPROFILE\\montaje.log\" -Tail 30"
+          },
+        ]},
       { cat: "📊 Estado del ecosistema — ver PC2 desde PC1 con un solo comando",
         items: [
           {
