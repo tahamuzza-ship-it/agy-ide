@@ -2278,9 +2278,16 @@
     var off = state && state.online === false;
     dot.style.background = on ? '#2ecc71' : (off ? '#ff3355' : '#f0a020');
     dot.style.boxShadow = on ? '0 0 8px #2ecc71' : (off ? '0 0 8px #ff3355' : '0 0 8px #f0a020');
+    var salud = '';
+    if (state && state.health) {
+      if (state.health.disk_pct != null) {
+        salud += ' · 💾 ' + state.health.disk_pct + '%' + (state.health.disk_pct > 90 ? ' ⚠️' : '');
+      }
+      if (state.health.ram_pct != null) salud += ' · 🧠 ' + state.health.ram_pct + '%';
+    }
     if (on) {
       var extra = state.seconds_ago != null ? ' · señal ' + fmtAgo(state.seconds_ago) : '';
-      info.textContent = 'Conectado ✅' + extra;
+      info.textContent = 'Conectado ✅' + extra + salud;
     } else if (off) {
       info.textContent = 'Sin señal ⚠️ — puede estar apagado';
     } else {

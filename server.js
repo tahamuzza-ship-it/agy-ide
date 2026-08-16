@@ -1001,10 +1001,17 @@ app.get('/api/equipos', requirePwd, (_req, res) => {
     const hb = PC_LAST_HB && PC_LAST_HB.data && PC_LAST_HB.data[pc];
     return hb && typeof hb.seconds_ago === 'number' ? hb.seconds_ago : null;
   };
+  const health = (pc) => {
+    const e = _equiposEye[pc];
+    if (!e || !e.health) return null;
+    // Salud vieja (>10 min sin reporte del ojo) no se muestra
+    if (Date.now() - e.ts > EQUIPOS_TTL_MS) return null;
+    return e.health;
+  };
   res.json({
     bridge_ok: BRIDGE_WATCH.ok,
-    PC1: { online: PC_WATCH.PC1.online, seconds_ago: ago('PC1') },
-    PC2: { online: PC_WATCH.PC2.online, seconds_ago: ago('PC2') },
+    PC1: { online: PC_WATCH.PC1.online, seconds_ago: ago('PC1'), health: health('PC1') },
+    PC2: { online: PC_WATCH.PC2.online, seconds_ago: ago('PC2'), health: health('PC2') },
     checked_at: PC_LAST_HB ? PC_LAST_HB.at : null
   });
 });
@@ -1018,6 +1025,19 @@ app.get('/api/equipos', requirePwd, (_req, res) => {
 const _equiposEye = {};
 const _eyePaused = {}; // 'PC1'|'PC2' -> true si el dueño pausó el ojo // 'PC1'|'PC2' -> { shot(Buffer), mime, terminal, ts }
 const EQUIPOS_REPORT_KEY = process.env.EQUIPOS_REPORT_KEY || AGY_IDE_PWD;
+/* Alerta de disco lleno (>90%) con histéresis: una alerta al superar 90%,
+   otra al bajar de 85%. Sin spam. */
+const DISK_ALERT = { PC1: false, PC2: false };
+function _checkDiskAlert(pc, diskPct) {
+  if (typeof diskPct !== 'number' || !Number.isFinite(diskPct)) return;
+  if (diskPct > 90 && !DISK_ALERT[pc]) {
+    DISK_ALERT[pc] = true;
+    tgSend(`🟠 <b>${pc}</b>: el disco está al <b>${Math.round(diskPct)}%</b> (más del 90%). Conviene liberar espacio pronto.`).catch(() => {});
+  } else if (diskPct < 85 && DISK_ALERT[pc]) {
+    DISK_ALERT[pc] = false;
+    tgSend(`🟢 <b>${pc}</b>: el disco bajó al ${Math.round(diskPct)}%. Espacio recuperado.`).catch(() => {});
+  }
+}
 const EQUIPOS_TTL_MS = 10 * 60 * 1000; // retención corta: 10 minutos
 
 /* ── RODAJE / PELÍCULA ──
@@ -1101,6 +1121,15 @@ app.post('/api/equipos/report', (req, res) => {
   }
   if (typeof terminal === 'string') {
     entry.terminal = terminal.split('\n').slice(-80).join('\n').slice(-12000);
+  }
+  const h = req.body && req.body.health;
+  if (h && typeof h === 'object') {
+    const dpct = Number(h.disk_pct), rpct = Number(h.ram_pct);
+    entry.health = {
+      disk_pct: Number.isFinite(dpct) ? Math.max(0, Math.min(100, Math.round(dpct))) : null,
+      ram_pct:  Number.isFinite(rpct) ? Math.max(0, Math.min(100, Math.round(rpct))) : null
+    };
+    if (entry.health.disk_pct != null) _checkDiskAlert(id, entry.health.disk_pct);
   }
   entry.ts = Date.now();
   _equiposEye[id] = entry;
@@ -1205,6 +1234,10 @@ const PC1_EYE_PS1 = [
 "    $bmp.Save($ms,$enc,$ep)",
 "    $shot=[Convert]::ToBase64String($ms.ToArray())",
 "    $g.Dispose();$bmp.Dispose();$ms.Dispose()",
+"    $os=Get-CimInstance Win32_OperatingSystem",
+"    $ramPct=[math]::Round((1-($os.FreePhysicalMemory/$os.TotalVisibleMemorySize))*100)",
+"    $d=Get-PSDrive C",
+"    $diskPct=[math]::Round(($d.Used/($d.Used+$d.Free))*100)",
 "    $t=@()",
 "    $log=$env:USERPROFILE+'\\pc1-term.log'",
 "    if(Test-Path $log){",
@@ -1218,12 +1251,10 @@ const PC1_EYE_PS1 = [
 "    $t+='== RED (conexiones activas) =='",
 "    $t+=(Get-NetTCPConnection -State Established -ErrorAction SilentlyContinue|Select-Object -First 6|ForEach-Object{($_.RemoteAddress+':'+$_.RemotePort)})",
 "    $t+='== SISTEMA =='",
-"    $os=Get-CimInstance Win32_OperatingSystem",
 "    $t+=('RAM libre: '+[math]::Round($os.FreePhysicalMemory/1KB)+' MB de '+[math]::Round($os.TotalVisibleMemorySize/1KB)+' MB')",
-"    $d=Get-PSDrive C",
 "    $t+=('Disco C libre: '+[math]::Round($d.Free/1GB,1)+' GB')",
 "    }",
-"    $body=@{pc='PC1';shot=$shot;terminal=($t -join [Environment]::NewLine)}|ConvertTo-Json -Compress",
+"    $body=@{pc='PC1';shot=$shot;terminal=($t -join [Environment]::NewLine);health=@{disk_pct=$diskPct;ram_pct=$ramPct}}|ConvertTo-Json -Compress",
 "    Invoke-RestMethod -Uri $U -Method Post -Headers @{'x-equipos-key'=$K} -ContentType 'application/json' -Body $body|Out-Null",
 "    Write-Host ('[EYE-PC1] enviado '+(Get-Date -Format 'HH:mm:ss'))",
 "  }catch{ Write-Host ('[EYE-PC1] error: '+$_.Exception.Message) }",
