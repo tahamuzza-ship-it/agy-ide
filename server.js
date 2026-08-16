@@ -1044,15 +1044,19 @@ async function _peliculaEnsureBucket() {
 
 async function _peliculaUpload(pc, buf, mime) {
   if (!SUPABASE_URL || !SUPABASE_KEY) return;
+  const sid = _film.id; // sesión a la que pertenece esta foto (queda fija aunque cambie el estado)
   const ext = mime === 'image/png' ? 'png' : 'jpg';
-  const seq = String(_film.count + 1).padStart(4, '0');
-  const path = `${_film.id}/${seq}-${pc}.${ext}`;
+  // Nombre único (tiempo + azar): PC1 y PC2 suben a la vez, un contador compartido colisionaría.
+  // El prefijo de tiempo ordena las fotos cronológicamente para el montaje.
+  const stamp = Date.now().toString().padStart(14, '0') + '-' + Math.random().toString(36).slice(2, 7);
+  const path = `${sid}/${stamp}-${pc}.${ext}`;
   const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}/${path}`, {
     method: 'POST',
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': mime, 'x-upsert': 'true' },
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': mime, 'x-upsert': 'false' },
     body: buf
   });
   if (!r.ok) throw new Error(`storage: ${r.status} ${await r.text()}`);
+  if (_film.id !== sid) return;
   _film.count += 1;
   _film.byPc[pc] = (_film.byPc[pc] || 0) + 1;
   if (_film.count >= PELICULA_MAX && !_film.warned) {
@@ -1132,6 +1136,7 @@ app.get('/api/pelicula/list', requirePwd, async (req, res) => {
       method: 'POST', headers: { ...sbHeaders() },
       body: JSON.stringify({ prefix: id + '/', limit: 1000, sortBy: { column: 'name', order: 'asc' } })
     });
+    if (!r.ok) return res.status(502).json({ error: 'no se pudo listar: ' + await r.text() });
     const rows = await r.json();
     const files = Array.isArray(rows) ? rows.map(f => id + '/' + f.name) : [];
     res.json({ id, count: files.length, files });
@@ -1163,12 +1168,14 @@ app.post('/api/pelicula/clear', requirePwd, async (req, res) => {
       method: 'POST', headers: { ...sbHeaders() },
       body: JSON.stringify({ prefix: id + '/', limit: 1000 })
     });
+    if (!lr.ok) return res.status(502).json({ error: 'no se pudo listar para borrar: ' + await lr.text() });
     const rows = await lr.json();
     const names = Array.isArray(rows) ? rows.map(f => id + '/' + f.name) : [];
     if (names.length) {
-      await fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}`, {
+      const dr = await fetch(`${SUPABASE_URL}/storage/v1/object/${PELICULA_BUCKET}`, {
         method: 'DELETE', headers: { ...sbHeaders() }, body: JSON.stringify({ prefixes: names })
       });
+      if (!dr.ok) return res.status(502).json({ error: 'no se pudo borrar: ' + await dr.text() });
     }
     if (_film.id === id) { _film.active = false; _film.count = 0; _film.byPc = { PC1: 0, PC2: 0 }; _film.warned = false; }
     res.json({ ok: true, id, borradas: names.length });
