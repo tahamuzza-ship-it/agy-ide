@@ -100,6 +100,7 @@
         <button class="hbtn" id="btn-comandos" onclick="toggleComandos()" style="background:linear-gradient(135deg,#1a4731,#22c55e);color:#fff;border:none;font-weight:700;">📋 COMANDOS</button>
         <button class="hbtn" id="btn-files" style="background:linear-gradient(135deg,#0a1f3a,#1a4700);color:#86efac;border:1px solid rgba(134,239,172,0.4);font-weight:700;">📁 ARCHIVOS</button>
         <button class="hbtn" id="btn-chats" style="background:linear-gradient(135deg,#0a1f3a,#0055cc);color:#00f3ff;border:1px solid rgba(0,243,255,0.4);font-weight:700;">💬 CHATS</button>
+        <button class="hbtn" id="btn-mailbox" style="background:linear-gradient(135deg,#25003f,#72008f);color:#f3b7ff;border:1px solid rgba(240,0,255,0.55);font-weight:700;box-shadow:0 0 14px rgba(240,0,255,0.12);">📬 BUZÓN AGY</button>
         <a href="https://cibercode-ide-production.up.railway.app/editor.html?project=mi-primer-proyecto" target="_blank"
            style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:linear-gradient(135deg,#001a0a,#003320);border:1px solid rgba(0,255,120,0.45);border-radius:6px;color:#00ff78;font-size:0.7rem;font-weight:700;letter-spacing:0.06em;transition:all 0.2s;"
            title="Abrir CiberCode — Agente generador de apps">
@@ -291,6 +292,82 @@
   </div>
 </div>
 <!-- /CHATS MODAL -->
+
+<!-- BUZÓN AGY — visor de metadatos seguros de PC1 -->
+<div id="mailbox-modal" role="dialog" aria-modal="true" aria-labelledby="mailbox-title" style="display:none;position:fixed;inset:0;background:rgba(2,5,14,0.94);z-index:9800;align-items:center;justify-content:center;backdrop-filter:blur(7px);padding:12px;box-sizing:border-box;">
+  <div style="width:min(980px,98vw);max-height:92vh;background:linear-gradient(145deg,#080e1d,#0d1328);border:1px solid rgba(240,0,255,0.42);border-radius:16px;box-shadow:0 0 70px rgba(240,0,255,0.12),0 0 28px rgba(0,243,255,0.08);overflow:hidden;display:flex;flex-direction:column;font-family:'Inter',sans-serif;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 18px;border-bottom:1px solid rgba(240,0,255,0.18);background:rgba(5,10,24,0.96);">
+      <div>
+        <div id="mailbox-title" style="font-family:'Orbitron',monospace;font-size:0.98rem;font-weight:900;color:#f3b7ff;letter-spacing:0.08em;">📬 BUZÓN AGY</div>
+        <div style="font-size:0.62rem;color:#6f8099;margin-top:4px;letter-spacing:0.08em;">CANAL PC1 · SOLO METADATOS SEGUROS</div>
+      </div>
+      <button id="mailbox-close" type="button" aria-label="Cerrar buzón" style="background:rgba(255,255,255,0.04);border:1px solid rgba(140,156,178,0.25);color:#9aabc2;border-radius:8px;font-size:1.05rem;cursor:pointer;padding:5px 10px;">✕</button>
+    </div>
+
+    <div id="mailbox-auth-view" style="padding:34px 22px 38px;overflow:auto;">
+      <div style="max-width:420px;margin:0 auto;text-align:center;">
+        <div style="width:64px;height:64px;margin:0 auto 16px;border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:1.8rem;background:rgba(240,0,255,0.08);border:1px solid rgba(240,0,255,0.3);box-shadow:inset 0 0 24px rgba(240,0,255,0.08);">🔐</div>
+        <div style="font-family:'Orbitron',monospace;color:#e7efff;font-size:0.8rem;letter-spacing:0.08em;margin-bottom:7px;">ACCESO PROTEGIDO</div>
+        <p style="color:#7e8ea6;font-size:0.75rem;line-height:1.55;margin:0 0 18px;">Introduce el PIN del IDE. La autorización dura 2 horas en memoria y se pierde si el servidor reinicia.</p>
+        <form id="mailbox-login-form" autocomplete="off">
+          <input id="mailbox-pin" type="password" maxlength="256" inputmode="text" autocomplete="current-password" placeholder="PIN de acceso" aria-label="PIN de acceso al buzón"
+            style="width:100%;box-sizing:border-box;background:#07101f;border:1px solid rgba(0,243,255,0.34);border-radius:9px;color:#e8f0ff;padding:11px 13px;font-size:0.84rem;outline:none;margin-bottom:10px;">
+          <button id="mailbox-login" type="submit" style="width:100%;background:linear-gradient(135deg,#00d9e8,#00f3ff);color:#021019;border:none;border-radius:9px;padding:11px 14px;font-family:'Orbitron',monospace;font-size:0.7rem;font-weight:900;letter-spacing:0.08em;cursor:pointer;">DESBLOQUEAR BUZÓN</button>
+        </form>
+        <div id="mailbox-login-error" role="alert" style="min-height:18px;color:#ff758c;font-size:0.71rem;margin-top:11px;"></div>
+      </div>
+    </div>
+
+    <div id="mailbox-main-view" style="display:none;min-height:0;flex:1;flex-direction:column;overflow:hidden;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:11px 16px;border-bottom:1px solid rgba(0,243,255,0.12);background:rgba(6,12,28,0.82);">
+        <div id="mailbox-tabs" role="tablist" aria-label="Dirección del buzón" style="display:flex;gap:7px;flex-wrap:wrap;">
+          <button id="mailbox-tab-in" type="button" role="tab" data-direction="replit-to-agy" aria-selected="true" style="background:rgba(0,243,255,0.12);border:1px solid rgba(0,243,255,0.5);color:#80f8ff;border-radius:8px;padding:8px 12px;font-size:0.7rem;font-weight:700;cursor:pointer;">⬇ Entrada PC1</button>
+          <button id="mailbox-tab-out" type="button" role="tab" data-direction="agy-to-replit" aria-selected="false" style="background:rgba(240,0,255,0.05);border:1px solid rgba(240,0,255,0.25);color:#c8a2d6;border-radius:8px;padding:8px 12px;font-size:0.7rem;font-weight:700;cursor:pointer;">⬆ Salida PC1</button>
+        </div>
+        <div id="mailbox-session-label" style="font-size:0.62rem;color:#61738c;">● SESIÓN TEMPORAL ACTIVA</div>
+      </div>
+
+      <div style="padding:13px 16px;overflow:auto;min-height:0;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+          <div>
+            <div id="mailbox-direction-title" style="font-family:'Orbitron',monospace;font-size:0.72rem;color:#00f3ff;letter-spacing:0.07em;">ENTRADA PC1</div>
+            <div id="mailbox-summary" aria-live="polite" style="font-size:0.65rem;color:#71839c;margin-top:3px;">Listo para consultar.</div>
+          </div>
+          <button id="mailbox-refresh" type="button" style="background:rgba(0,243,255,0.08);border:1px solid rgba(0,243,255,0.35);color:#80f8ff;border-radius:8px;padding:8px 11px;font-size:0.67rem;font-weight:700;cursor:pointer;">🔄 REFRESCAR BUZÓN</button>
+        </div>
+
+        <div style="overflow-x:auto;border:1px solid rgba(0,243,255,0.13);border-radius:10px;background:rgba(3,8,20,0.72);">
+          <table style="width:100%;min-width:720px;border-collapse:collapse;font-size:0.7rem;">
+            <thead>
+              <tr style="color:#7890ab;text-align:left;border-bottom:1px solid rgba(0,243,255,0.13);">
+                <th style="padding:10px 11px;font-weight:600;">ARCHIVO</th>
+                <th style="padding:10px 11px;font-weight:600;">ESTADO</th>
+                <th style="padding:10px 11px;font-weight:600;">TAMAÑO</th>
+                <th style="padding:10px 11px;font-weight:600;">FECHA</th>
+                <th style="padding:10px 11px;font-weight:600;">ACCIÓN</th>
+              </tr>
+            </thead>
+            <tbody id="mailbox-list">
+              <tr><td colspan="5" style="padding:28px 12px;text-align:center;color:#64748b;">Esperando consulta segura…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div id="mailbox-preview" style="display:none;margin-top:12px;border:1px solid rgba(240,0,255,0.22);border-radius:10px;background:rgba(40,5,58,0.12);padding:12px 14px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:9px;">
+            <div style="font-family:'Orbitron',monospace;font-size:0.67rem;color:#f3b7ff;letter-spacing:0.06em;">👁 PREVISUALIZACIÓN SEGURA</div>
+            <button id="mailbox-preview-close" type="button" aria-label="Cerrar previsualización" style="background:none;border:none;color:#7f8da4;cursor:pointer;">✕</button>
+          </div>
+          <div id="mailbox-preview-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;"></div>
+          <div style="font-size:0.61rem;color:#687990;margin-top:10px;">Solo se muestran metadatos validados. Nunca se carga contenido, rutas, comandos, claves ni secretos.</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:9px 16px;border-top:1px solid rgba(240,0,255,0.12);background:#060b18;color:#53647c;font-size:0.59rem;text-align:center;letter-spacing:0.03em;">LECTURA FIJA Y SANITIZADA · LÍMITE 100 ARCHIVOS / 128 KB</div>
+  </div>
+</div>
+<!-- /BUZÓN AGY -->
 
 
     <script>
@@ -2235,6 +2312,10 @@
 <div id="equipos-fab" style="position:fixed;right:12px;bottom:170px;z-index:9000;width:46px;height:46px;border-radius:50%;background:linear-gradient(135deg,#0c1225,#1a2340);border:1px solid rgba(0,243,255,0.4);color:#00f3ff;font-size:1.2rem;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,0.5);user-select:none;">🖥️</div>
 <div id="equipos-panel" style="display:none;position:fixed;right:12px;bottom:224px;z-index:9001;width:min(340px,92vw);max-height:min(70vh,560px);overflow-y:auto;background:#0c1225;border:1px solid rgba(0,243,255,0.3);border-radius:14px;padding:12px;font-family:'Inter',sans-serif;box-shadow:0 8px 30px rgba(0,0,0,0.6);">
   <div style="font-family:'Orbitron',monospace;font-size:0.7rem;letter-spacing:0.12em;color:#00f3ff;margin-bottom:10px;">🖥️ MIS EQUIPOS</div>
+  <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid rgba(240,0,255,0.18);">
+    <div style="font-family:'Orbitron',monospace;font-size:0.64rem;letter-spacing:0.1em;color:#f3b7ff;margin-bottom:7px;">🎮 CENTRO SGN</div>
+    <button id="btn-mailbox-centro" type="button" style="width:100%;background:linear-gradient(135deg,rgba(37,0,63,0.92),rgba(114,0,143,0.82));color:#f3b7ff;border:1px solid rgba(240,0,255,0.45);border-radius:8px;padding:8px 10px;font-size:0.66rem;font-weight:700;cursor:pointer;letter-spacing:0.04em;">📬 BUZÓN AGY</button>
+  </div>
   <div class="equipo-card" id="equipo-card-pc1" style="display:flex;align-items:center;gap:10px;background:rgba(0,85,204,0.12);border:1px solid rgba(0,85,204,0.35);border-radius:10px;padding:10px;margin-bottom:8px;">
     <span id="equipo-dot-pc1" style="width:12px;height:12px;border-radius:50%;background:#555;flex-shrink:0;"></span>
     <div style="min-width:0;">
@@ -2540,6 +2621,288 @@
         _revokeShot(pc);
       });
     }
+  });
+})();
+</script>
+<script>
+(function () {
+  'use strict';
+
+  var modal = document.getElementById('mailbox-modal');
+  var authView = document.getElementById('mailbox-auth-view');
+  var mainView = document.getElementById('mailbox-main-view');
+  var loginForm = document.getElementById('mailbox-login-form');
+  var pinInput = document.getElementById('mailbox-pin');
+  var loginButton = document.getElementById('mailbox-login');
+  var loginError = document.getElementById('mailbox-login-error');
+  var listBody = document.getElementById('mailbox-list');
+  var summary = document.getElementById('mailbox-summary');
+  var directionTitle = document.getElementById('mailbox-direction-title');
+  var refreshButton = document.getElementById('mailbox-refresh');
+  var preview = document.getElementById('mailbox-preview');
+  var previewGrid = document.getElementById('mailbox-preview-grid');
+  var token = '';
+  var expiresAt = 0;
+  var direction = 'replit-to-agy';
+  var items = [];
+  var loading = false;
+  var requestSequence = 0;
+
+  function hasSession() {
+    return Boolean(token) && Date.now() < expiresAt;
+  }
+
+  function setUnlocked(unlocked) {
+    authView.style.display = unlocked ? 'none' : 'block';
+    mainView.style.display = unlocked ? 'flex' : 'none';
+    if (!unlocked) {
+      token = '';
+      expiresAt = 0;
+      items = [];
+      preview.style.display = 'none';
+    }
+  }
+
+  function openMailbox() {
+    modal.style.display = 'flex';
+    if (hasSession()) {
+      setUnlocked(true);
+      loadMailbox();
+    } else {
+      setUnlocked(false);
+      loginError.textContent = '';
+      setTimeout(function () { pinInput.focus(); }, 50);
+    }
+  }
+
+  function closeMailbox() {
+    modal.style.display = 'none';
+    pinInput.value = '';
+  }
+
+  function setCell(row, text, style) {
+    var cell = document.createElement('td');
+    cell.textContent = text;
+    cell.style.cssText = 'padding:10px 11px;border-bottom:1px solid rgba(0,243,255,0.07);vertical-align:middle;' + (style || '');
+    row.appendChild(cell);
+    return cell;
+  }
+
+  function formatSize(bytes) {
+    if (!Number.isFinite(bytes) || bytes < 0) return '—';
+    if (bytes < 1024) return bytes + ' B';
+    return (bytes / 1024).toFixed(bytes < 10240 ? 1 : 0) + ' KB';
+  }
+
+  function formatDate(value) {
+    var date = new Date(value);
+    if (isNaN(date.getTime())) return '—';
+    try {
+      return new Intl.DateTimeFormat('es-CO', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: 'America/Bogota'
+      }).format(date);
+    } catch (_) {
+      return date.toLocaleString('es-CO');
+    }
+  }
+
+  function statusStyle(status) {
+    if (status === 'COMPLETADA') return 'color:#6ee7a0;border-color:rgba(34,197,94,0.45);background:rgba(34,197,94,0.10);';
+    if (status === 'EN_PROCESO') return 'color:#6edcff;border-color:rgba(0,195,255,0.45);background:rgba(0,195,255,0.10);';
+    if (status === 'ERROR') return 'color:#ff8090;border-color:rgba(255,51,85,0.45);background:rgba(255,51,85,0.10);';
+    return 'color:#ffd36e;border-color:rgba(240,160,32,0.45);background:rgba(240,160,32,0.10);';
+  }
+
+  function showTableMessage(message, color) {
+    listBody.textContent = '';
+    var row = document.createElement('tr');
+    var cell = document.createElement('td');
+    cell.colSpan = 5;
+    cell.textContent = message;
+    cell.style.cssText = 'padding:30px 12px;text-align:center;color:' + (color || '#71839c') + ';';
+    row.appendChild(cell);
+    listBody.appendChild(row);
+  }
+
+  function showPreview(item) {
+    previewGrid.textContent = '';
+    [
+      ['Archivo', item.name],
+      ['Dirección', item.direction === 'replit-to-agy' ? 'Entrada PC1' : 'Salida PC1'],
+      ['Estado', item.status],
+      ['Tamaño', formatSize(item.sizeBytes)],
+      ['Fecha', formatDate(item.modifiedAt)]
+    ].forEach(function (pair) {
+      var box = document.createElement('div');
+      box.style.cssText = 'background:rgba(4,9,22,0.72);border:1px solid rgba(240,0,255,0.12);border-radius:8px;padding:8px 9px;min-width:0;';
+      var label = document.createElement('div');
+      label.textContent = pair[0].toUpperCase();
+      label.style.cssText = 'color:#667a95;font-size:0.56rem;letter-spacing:0.08em;margin-bottom:4px;';
+      var value = document.createElement('div');
+      value.textContent = pair[1];
+      value.style.cssText = 'color:#dce8fb;font-size:0.69rem;overflow-wrap:anywhere;';
+      box.appendChild(label);
+      box.appendChild(value);
+      previewGrid.appendChild(box);
+    });
+    preview.style.display = 'block';
+    preview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function renderItems() {
+    listBody.textContent = '';
+    preview.style.display = 'none';
+    if (!items.length) {
+      showTableMessage('Buzón vacío. No hay archivos permitidos en esta bandeja.', '#71839c');
+      return;
+    }
+    items.forEach(function (item) {
+      var row = document.createElement('tr');
+      var nameCell = setCell(row, item.name, "color:#dce8fb;font-family:'Fira Code',monospace;font-size:0.66rem;");
+      nameCell.title = item.name;
+      var statusCell = setCell(row, '');
+      var badge = document.createElement('span');
+      badge.textContent = item.status;
+      badge.style.cssText = 'display:inline-block;padding:4px 7px;border:1px solid;border-radius:999px;font-size:0.56rem;font-weight:700;letter-spacing:0.04em;' + statusStyle(item.status);
+      statusCell.appendChild(badge);
+      setCell(row, formatSize(item.sizeBytes), 'color:#9aabc2;white-space:nowrap;');
+      setCell(row, formatDate(item.modifiedAt), 'color:#9aabc2;white-space:nowrap;');
+      var actionCell = setCell(row, '');
+      var action = document.createElement('button');
+      action.type = 'button';
+      action.textContent = '👁️ PREVISUALIZAR MISIÓN';
+      action.style.cssText = 'background:rgba(240,0,255,0.07);border:1px solid rgba(240,0,255,0.3);color:#e8a8f5;border-radius:7px;padding:6px 8px;font-size:0.58rem;font-weight:700;cursor:pointer;white-space:nowrap;';
+      action.addEventListener('click', function () { showPreview(item); });
+      actionCell.appendChild(action);
+      listBody.appendChild(row);
+    });
+  }
+
+  function updateTabs() {
+    var incoming = direction === 'replit-to-agy';
+    var inTab = document.getElementById('mailbox-tab-in');
+    var outTab = document.getElementById('mailbox-tab-out');
+    inTab.setAttribute('aria-selected', incoming ? 'true' : 'false');
+    outTab.setAttribute('aria-selected', incoming ? 'false' : 'true');
+    inTab.style.background = incoming ? 'rgba(0,243,255,0.12)' : 'rgba(0,243,255,0.04)';
+    inTab.style.borderColor = incoming ? 'rgba(0,243,255,0.5)' : 'rgba(0,243,255,0.18)';
+    inTab.style.color = incoming ? '#80f8ff' : '#7392a3';
+    outTab.style.background = incoming ? 'rgba(240,0,255,0.04)' : 'rgba(240,0,255,0.12)';
+    outTab.style.borderColor = incoming ? 'rgba(240,0,255,0.18)' : 'rgba(240,0,255,0.5)';
+    outTab.style.color = incoming ? '#94769e' : '#f3b7ff';
+    directionTitle.textContent = incoming ? 'ENTRADA PC1' : 'SALIDA PC1';
+  }
+
+  async function loadMailbox() {
+    if (!hasSession()) {
+      setUnlocked(false);
+      loginError.textContent = 'La sesión expiró. Introduce el PIN de nuevo.';
+      return;
+    }
+    if (loading) return;
+    loading = true;
+    var seq = ++requestSequence;
+    refreshButton.disabled = true;
+    refreshButton.textContent = '⏳ CONSULTANDO PC1…';
+    summary.textContent = 'Leyendo únicamente metadatos permitidos…';
+    showTableMessage('Consultando el buzón seguro de PC1…', '#78dfe8');
+    preview.style.display = 'none';
+    try {
+      var response = await fetch('/api/ops/mailbox/list', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ direction: direction })
+      });
+      var data = await response.json().catch(function () { return {}; });
+      if (seq !== requestSequence) return;
+      if (response.status === 401) {
+        setUnlocked(false);
+        loginError.textContent = 'La sesión expiró. Introduce el PIN de nuevo.';
+        return;
+      }
+      if (!response.ok) {
+        var message = data.code === 'PC1_UNAVAILABLE'
+          ? 'PC1 no está disponible o no respondió. Inténtalo de nuevo cuando esté online.'
+          : (data.error || 'No fue posible leer el buzón seguro.');
+        summary.textContent = 'Consulta fallida.';
+        showTableMessage(message, '#ff8090');
+        return;
+      }
+      items = Array.isArray(data.items) ? data.items : [];
+      summary.textContent = items.length + (items.length === 1 ? ' archivo seguro encontrado.' : ' archivos seguros encontrados.');
+      renderItems();
+    } catch (_) {
+      if (seq !== requestSequence) return;
+      summary.textContent = 'Error de conexión.';
+      showTableMessage('No fue posible conectar con el buzón. Revisa la conexión e inténtalo otra vez.', '#ff8090');
+    } finally {
+      if (seq === requestSequence) {
+        loading = false;
+        refreshButton.disabled = false;
+        refreshButton.textContent = '🔄 REFRESCAR BUZÓN';
+      }
+    }
+  }
+
+  loginForm.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    var pin = pinInput.value;
+    if (!pin || loading) return;
+    loginButton.disabled = true;
+    loginButton.textContent = 'VERIFICANDO…';
+    loginError.textContent = '';
+    try {
+      var response = await fetch('/api/ops/mailbox/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pin })
+      });
+      pinInput.value = '';
+      var data = await response.json().catch(function () { return {}; });
+      if (!response.ok || typeof data.token !== 'string') {
+        loginError.textContent = data.error || 'PIN incorrecto.';
+        pinInput.focus();
+        return;
+      }
+      token = data.token;
+      expiresAt = Date.parse(data.expiresAt);
+      if (!Number.isFinite(expiresAt)) expiresAt = Date.now() + (2 * 60 * 60 * 1000);
+      setUnlocked(true);
+      updateTabs();
+      loadMailbox();
+    } catch (_) {
+      pinInput.value = '';
+      loginError.textContent = 'No fue posible validar el PIN. Revisa la conexión.';
+    } finally {
+      loginButton.disabled = false;
+      loginButton.textContent = 'DESBLOQUEAR BUZÓN';
+    }
+  });
+
+  document.getElementById('btn-mailbox').addEventListener('click', openMailbox);
+  document.getElementById('btn-mailbox-centro').addEventListener('click', openMailbox);
+  document.getElementById('mailbox-close').addEventListener('click', closeMailbox);
+  document.getElementById('mailbox-preview-close').addEventListener('click', function () { preview.style.display = 'none'; });
+  refreshButton.addEventListener('click', loadMailbox);
+  document.querySelectorAll('#mailbox-tabs [data-direction]').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      if (loading || tab.getAttribute('data-direction') === direction) return;
+      direction = tab.getAttribute('data-direction');
+      items = [];
+      updateTabs();
+      loadMailbox();
+    });
+  });
+  modal.addEventListener('click', function (event) {
+    if (event.target === modal) closeMailbox();
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && modal.style.display === 'flex') closeMailbox();
   });
 })();
 </script>

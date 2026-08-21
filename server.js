@@ -1578,6 +1578,407 @@ app.get('/api/equipos/screens/:pc/shot', requirePwd, (req, res) => {
   res.send(e.shot);
 });
 
+/* ══════════════════════════════════════════
+   BUZÓN AGY — metadatos seguros desde PC1
+══════════════════════════════════════════ */
+const MAILBOX_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+const MAILBOX_MAX_SESSIONS = 256;
+const MAILBOX_MAX_ITEMS = 100;
+const MAILBOX_MAX_RESULT_BYTES = 128000;
+const MAILBOX_LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const MAILBOX_LOGIN_BLOCK_MS = 15 * 60 * 1000;
+const MAILBOX_LOGIN_MAX_FAILURES = 5;
+const MAILBOX_READ_CACHE_MS = 5000;
+const MAILBOX_ROOT = 'C:\\Users\\Roberto1\\OneDrive\\Desktop\\comunicacion entre apps en nube y en local';
+const MAILBOX_DIRECTIONS = Object.freeze({
+  'replit-to-agy': Object.freeze({
+    folder: 'misiones_de_replit_para_agy',
+    prefix: 'MISION',
+    readme: 'README_BUZON_REPLIT_A_AGY.md'
+  }),
+  'agy-to-replit': Object.freeze({
+    folder: 'misiones_de_agy_para_replit',
+    prefix: 'ORDEN_NUBE',
+    readme: 'README_BUZON_AGY_A_REPLIT.md'
+  })
+});
+
+const _mailboxSessions = new Map();
+const _mailboxLoginAttempts = new Map();
+const _mailboxInFlightReads = new Map();
+const _mailboxRecentReads = new Map();
+
+function _mailboxPruneSessions(now = Date.now()) {
+  for (const [token, expiresAt] of _mailboxSessions) {
+    if (expiresAt <= now) _mailboxSessions.delete(token);
+  }
+  while (_mailboxSessions.size >= MAILBOX_MAX_SESSIONS) {
+    const oldest = _mailboxSessions.keys().next().value;
+    if (!oldest) break;
+    _mailboxSessions.delete(oldest);
+  }
+}
+
+function _mailboxPasswordMatches(provided) {
+  if (!AGY_IDE_PWD || typeof provided !== 'string') return false;
+  const providedBuffer = Buffer.from(provided, 'utf8');
+  const expectedBuffer = Buffer.from(AGY_IDE_PWD, 'utf8');
+  return providedBuffer.length === expectedBuffer.length &&
+    crypto.timingSafeEqual(providedBuffer, expectedBuffer);
+}
+
+function _mailboxSameOriginAllowed(req) {
+  const fetchSite = req.headers['sec-fetch-site'];
+  if (fetchSite && fetchSite !== 'same-origin') return false;
+
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  const host = req.headers.host;
+  if (!host) return false;
+  const forwardedProtocol = String(req.headers['x-forwarded-proto'] || '')
+    .split(',')[0]
+    .trim();
+  const protocol =
+    forwardedProtocol === 'https' || forwardedProtocol === 'http'
+      ? forwardedProtocol
+      : req.protocol === 'https'
+        ? 'https'
+        : 'http';
+  try {
+    return new URL(origin).origin === `${protocol}://${host}`;
+  } catch {
+    return false;
+  }
+}
+
+function _mailboxLoginKey(req) {
+  return String(req.ip || req.socket.remoteAddress || 'unknown').slice(0, 120);
+}
+
+function _mailboxLoginRetryAfterMs(key, now = Date.now()) {
+  const entry = _mailboxLoginAttempts.get(key);
+  if (!entry) return 0;
+  if (entry.blockedUntil > now) return entry.blockedUntil - now;
+  if (entry.windowEndsAt <= now) {
+    _mailboxLoginAttempts.delete(key);
+    return 0;
+  }
+  return 0;
+}
+
+function _mailboxRegisterLoginFailure(key, now = Date.now()) {
+  if (_mailboxLoginAttempts.size >= 1024 && !_mailboxLoginAttempts.has(key)) {
+    for (const [entryKey, entry] of _mailboxLoginAttempts) {
+      if (entry.windowEndsAt <= now && entry.blockedUntil <= now) {
+        _mailboxLoginAttempts.delete(entryKey);
+      }
+    }
+    if (_mailboxLoginAttempts.size >= 1024) {
+      const oldestKey = _mailboxLoginAttempts.keys().next().value;
+      if (oldestKey) _mailboxLoginAttempts.delete(oldestKey);
+    }
+  }
+
+  const current = _mailboxLoginAttempts.get(key);
+  const entry =
+    current && current.windowEndsAt > now
+      ? current
+      : {
+          failures: 0,
+          windowEndsAt: now + MAILBOX_LOGIN_WINDOW_MS,
+          blockedUntil: 0
+        };
+  entry.failures += 1;
+  if (entry.failures >= MAILBOX_LOGIN_MAX_FAILURES) {
+    entry.blockedUntil = now + MAILBOX_LOGIN_BLOCK_MS;
+  }
+  _mailboxLoginAttempts.set(key, entry);
+}
+
+function _mailboxReadSession(req) {
+  const authorization = String(req.headers.authorization || '');
+  const match = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(authorization);
+  if (!match) return 'missing';
+
+  const token = match[1];
+  const expiresAt = _mailboxSessions.get(token);
+  if (!expiresAt) return 'missing';
+  if (expiresAt <= Date.now()) {
+    _mailboxSessions.delete(token);
+    return 'expired';
+  }
+  return 'valid';
+}
+
+function _mailboxIsDirection(value) {
+  return value === 'replit-to-agy' || value === 'agy-to-replit';
+}
+
+function _mailboxBuildEncodedCommand(direction) {
+  const config = MAILBOX_DIRECTIONS[direction];
+  const filePattern =
+    config.prefix === 'MISION'
+      ? '^MISION_\\d{8}_\\d{3}\\.md$'
+      : '^ORDEN_NUBE_\\d{8}_\\d{3}\\.md$';
+
+  const script = [
+    "$ErrorActionPreference='Stop'",
+    `$f=Join-Path '${MAILBOX_ROOT}' '${config.folder}'`,
+    `$r='${config.readme}'`,
+    `$p='${filePattern}'`,
+    "if(!(Test-Path -LiteralPath $f -PathType Container)){throw 'MAILBOX_UNAVAILABLE'}",
+    "function q($h){$z=[regex]::Match(($h -join \"`n\"),'(?mi)^-\\s*\\*\\*Estado:\\*\\*\\s*(PENDIENTE|EN_PROCESO|COMPLETADA|ERROR)\\s*$');if($z.Success){return $z.Groups[1].Value.ToUpperInvariant()};return $null}",
+    '$a=@()',
+    "Get-ChildItem -LiteralPath $f -File -Filter '*.md'|Where-Object{$_.Name -eq $r -or $_.Name -match $p}|Sort-Object LastWriteTime -Descending|Select-Object -First 100|ForEach-Object{",
+    '$h=@(Get-Content -LiteralPath $_.FullName -TotalCount 10 -Encoding UTF8)',
+    '$s=q $h',
+    "if($_.Name -eq $r){$s='COMPLETADA'}elseif($s -notin @('PENDIENTE','EN_PROCESO','COMPLETADA','ERROR')){$s='ERROR'}",
+    "$a+=([pscustomobject]@{name=$_.Name;status=$s;sizeBytes=[int64]$_.Length;modifiedAt=$_.LastWriteTimeUtc.ToString('o')})",
+    '}',
+    '[pscustomobject]@{items=@($a);total=@($a).Count;truncated=$false}|ConvertTo-Json -Depth 4 -Compress'
+  ].join(';');
+
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const instruction = `[PC1] EJECUTAR powershell -NoProfile -EncodedCommand ${encoded}`;
+  if (instruction.length > 7500) throw new Error('MAILBOX_COMMAND_TOO_LONG');
+  return instruction;
+}
+
+async function _mailboxDispatchRead(direction) {
+  const instruction = _mailboxBuildEncodedCommand(direction);
+  const sendResponse = await fetch(`${REPLIT_API}/api/antigravity/send`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-antigravity-key': AGY_KEY
+    },
+    body: JSON.stringify({
+      instruction,
+      target: 'PC1',
+      confirmed: true
+    }),
+    signal: AbortSignal.timeout(12000)
+  });
+
+  if (!sendResponse.ok) throw new Error('BRIDGE_SEND_REJECTED');
+  const sent = await sendResponse.json();
+  if (!sent.ok || typeof sent.id !== 'string') {
+    throw new Error('BRIDGE_SEND_INVALID');
+  }
+
+  const deadline = Date.now() + 45000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const statusResponse = await fetch(
+        `${REPLIT_API}/api/antigravity/status/${encodeURIComponent(sent.id)}`,
+        {
+          headers: { 'x-antigravity-key': AGY_KEY },
+          signal: AbortSignal.timeout(8000)
+        }
+      );
+      if (!statusResponse.ok) continue;
+      const row = await statusResponse.json();
+      if (row.status === 'done' || row.status === 'error') {
+        return {
+          status: row.status,
+          result: typeof row.result === 'string' ? row.result : null
+        };
+      }
+    } catch {
+      // El timeout global decide; cortes breves del puente no abortan el sondeo.
+    }
+  }
+  return { status: 'timeout', result: null };
+}
+
+function _mailboxRead(direction) {
+  const cached = _mailboxRecentReads.get(direction);
+  if (cached && Date.now() - cached.completedAt < MAILBOX_READ_CACHE_MS) {
+    return Promise.resolve(cached.outcome);
+  }
+
+  const existing = _mailboxInFlightReads.get(direction);
+  if (existing) return existing;
+
+  const request = _mailboxDispatchRead(direction)
+    .then((outcome) => {
+      if (outcome.status === 'done') {
+        _mailboxRecentReads.set(direction, {
+          completedAt: Date.now(),
+          outcome
+        });
+      }
+      return outcome;
+    })
+    .finally(() => {
+      _mailboxInFlightReads.delete(direction);
+    });
+  _mailboxInFlightReads.set(direction, request);
+  return request;
+}
+
+function _mailboxParseResult(raw, direction) {
+  if (Buffer.byteLength(raw, 'utf8') > MAILBOX_MAX_RESULT_BYTES) {
+    throw new Error('MAILBOX_RESULT_TOO_LARGE');
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('MAILBOX_RESULT_INVALID_JSON');
+  }
+
+  const candidate =
+    parsed && typeof parsed === 'object' && 'items' in parsed
+      ? parsed.items
+      : parsed;
+  if (!Array.isArray(candidate)) {
+    throw new Error('MAILBOX_RESULT_INVALID_SHAPE');
+  }
+
+  const config = MAILBOX_DIRECTIONS[direction];
+  const prefixPattern =
+    config.prefix === 'MISION'
+      ? /^MISION_\d{8}_\d{3}\.md$/
+      : /^ORDEN_NUBE_\d{8}_\d{3}\.md$/;
+  const allowedStatuses = new Set([
+    'PENDIENTE',
+    'EN_PROCESO',
+    'COMPLETADA',
+    'ERROR'
+  ]);
+
+  const items = [];
+  for (const entry of candidate.slice(0, MAILBOX_MAX_ITEMS)) {
+    if (!entry || typeof entry !== 'object') continue;
+    const name = typeof entry.name === 'string' ? entry.name : '';
+    if (name !== config.readme && !prefixPattern.test(name)) continue;
+    if (name.includes('/') || name.includes('\\') || name.length > 180) continue;
+
+    const status = entry.status;
+    if (typeof status !== 'string' || !allowedStatuses.has(status)) continue;
+
+    const sizeBytes = Number(entry.sizeBytes);
+    if (!Number.isSafeInteger(sizeBytes) || sizeBytes < 0) continue;
+
+    const date = new Date(String(entry.modifiedAt || ''));
+    if (Number.isNaN(date.getTime())) continue;
+
+    items.push({
+      name,
+      direction,
+      status,
+      sizeBytes,
+      modifiedAt: date.toISOString()
+    });
+  }
+  return items;
+}
+
+app.post('/api/ops/mailbox/session', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!_mailboxSameOriginAllowed(req)) {
+    return res.status(403).json({ error: 'Origen no autorizado' });
+  }
+  if (!AGY_IDE_PWD) {
+    return res.status(503).json({ error: 'Acceso al buzón no configurado' });
+  }
+
+  const key = _mailboxLoginKey(req);
+  const retryAfterMs = _mailboxLoginRetryAfterMs(key);
+  if (retryAfterMs > 0) {
+    res.set('Retry-After', String(Math.ceil(retryAfterMs / 1000)));
+    return res.status(429).json({
+      error: 'Demasiados intentos. Espera antes de volver a probar.'
+    });
+  }
+
+  const pin = req.body && req.body.pin;
+  if (
+    typeof pin !== 'string' ||
+    pin.length === 0 ||
+    Buffer.byteLength(pin, 'utf8') > 256 ||
+    !_mailboxPasswordMatches(pin)
+  ) {
+    _mailboxRegisterLoginFailure(key);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    console.warn('[mailbox] intento de acceso rechazado');
+    return res.status(401).json({ error: 'PIN incorrecto' });
+  }
+
+  _mailboxPruneSessions();
+  _mailboxLoginAttempts.delete(key);
+  const token = crypto.randomBytes(32).toString('base64url');
+  const expiresAt = Date.now() + MAILBOX_SESSION_TTL_MS;
+  _mailboxSessions.set(token, expiresAt);
+  return res.json({
+    token,
+    expiresAt: new Date(expiresAt).toISOString()
+  });
+});
+
+app.post('/api/ops/mailbox/list', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const sessionState = _mailboxReadSession(req);
+  if (sessionState !== 'valid') {
+    return res.status(401).json({
+      error:
+        sessionState === 'expired'
+          ? 'La sesión del buzón expiró'
+          : 'Sesión del buzón no válida',
+      code: sessionState === 'expired' ? 'SESSION_EXPIRED' : 'UNAUTHORIZED'
+    });
+  }
+
+  const direction = req.body && req.body.direction;
+  if (!_mailboxIsDirection(direction)) {
+    return res.status(400).json({ error: 'Dirección de buzón no válida' });
+  }
+  if (!AGY_KEY) {
+    return res.status(503).json({ error: 'Conexión con PC1 no configurada' });
+  }
+
+  try {
+    const outcome = await _mailboxRead(direction);
+    if (outcome.status === 'timeout') {
+      return res.status(504).json({
+        error: 'PC1 no respondió a tiempo. Comprueba que el cartero esté ONLINE.',
+        code: 'PC1_TIMEOUT'
+      });
+    }
+    if (outcome.status === 'error' || !outcome.result) {
+      console.warn('[mailbox] PC1 no pudo leer', direction);
+      return res.status(502).json({
+        error: 'PC1 no pudo leer el buzón solicitado',
+        code: 'PC1_READ_ERROR'
+      });
+    }
+
+    const items = _mailboxParseResult(outcome.result, direction);
+    return res.json({
+      direction,
+      items,
+      fetchedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'UNKNOWN';
+    console.error('[mailbox] error de lectura', direction, reason);
+    const unavailable =
+      reason.startsWith('BRIDGE_') ||
+      reason === 'TimeoutError' ||
+      reason === 'The operation was aborted due to timeout';
+    return res.status(unavailable ? 502 : 422).json({
+      error: unavailable
+        ? 'El puente no está disponible en este momento'
+        : 'PC1 devolvió metadatos de buzón no válidos',
+      code: unavailable ? 'BRIDGE_UNAVAILABLE' : 'INVALID_MAILBOX_RESPONSE'
+    });
+  }
+});
+/* /BUZÓN AGY */
+
 app.listen(PORT, async () => {
   console.log(`AGY-IDE ▶  puerto ${PORT} | /goal mode ACTIVO`);
   await reconcileInterruptedSessions();
