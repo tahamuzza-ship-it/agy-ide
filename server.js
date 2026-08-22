@@ -1581,6 +1581,8 @@ app.get('/api/equipos/screens/:pc/shot', requirePwd, (req, res) => {
 /* ══════════════════════════════════════════
    BUZÓN AGY — metadatos seguros desde PC1
 ══════════════════════════════════════════ */
+const MAILBOX_BRIDGE_URL = process.env.MAILBOX_BRIDGE_URL ||
+  'https://workspaceapi-server-production-0f24.up.railway.app';
 const MAILBOX_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const MAILBOX_MAX_SESSIONS = 256;
 const MAILBOX_MAX_ITEMS = 100;
@@ -1746,7 +1748,7 @@ function _mailboxBuildEncodedCommand(direction) {
 
 async function _mailboxDispatchRead(direction) {
   const instruction = _mailboxBuildEncodedCommand(direction);
-  const sendResponse = await fetch(`${REPLIT_API}/api/antigravity/send`, {
+  const sendResponse = await fetch(`${MAILBOX_BRIDGE_URL}/api/antigravity/send`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -1771,7 +1773,7 @@ async function _mailboxDispatchRead(direction) {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     try {
       const statusResponse = await fetch(
-        `${REPLIT_API}/api/antigravity/status/${encodeURIComponent(sent.id)}`,
+        `${MAILBOX_BRIDGE_URL}/api/antigravity/status/${encodeURIComponent(sent.id)}`,
         {
           headers: { 'x-antigravity-key': AGY_KEY },
           signal: AbortSignal.timeout(8000)
