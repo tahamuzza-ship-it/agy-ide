@@ -1955,15 +1955,50 @@ function _mailboxRead(direction) {
 
 function _mailboxSanitizePreviewText(value, maxBytes) {
   if (typeof value !== 'string') return null;
+  const sensitiveKeyName =
+    '(?:(?:[a-z0-9][a-z0-9.-]*)[_-])*(?:' +
+    'api[_-]?key|secret(?:[_-]?key)?|token|password|passwd|pwd|' +
+    'private[_-]?key|service[_-]?role[_-]?key|client[_-]?secret|' +
+    'access[_-]?key|auth(?:orization)?|bot[_-]?token|' +
+    'connection[_-]?(?:string|url)|database[_-]?url|chat[_-]?id|key' +
+    ')(?:[_-][a-z0-9.-]+)*';
+  const yamlSecretBlock = new RegExp(
+    `(^[ \\t]*(?:["'\`]?)${sensitiveKeyName}(?:["'\`]?)\\s*:\\s*[|>][-+]?\\s*)\\n(?:^[ \\t]+.*(?:\\n|$))*`,
+    'gim'
+  );
+  const secretAssignment = new RegExp(
+    `(^|[^a-z0-9_-])((?:["'\`]?)${sensitiveKeyName}(?:["'\`]?)\\s*[:=])[^\\r\\n]*`,
+    'gim'
+  );
+  const cliSecret = new RegExp(
+    `(^|\\s)(--?${sensitiveKeyName})(?:\\s+|=)[^\\s]+`,
+    'gim'
+  );
   const normalized = value
     .normalize('NFC')
     .replace(/\r\n?/g, '\n')
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
     .replace(
-      /\b((?:api[_ -]?key|token|password|passwd|secret|authorization)\b\s*[:=]\s*)(?:"[^"]*"|'[^']*'|\S+)/gi,
-      '$1[REDACTADO]'
+      /-----BEGIN ((?:[A-Z0-9]+ )*PRIVATE KEY|PGP PRIVATE KEY BLOCK)-----[\s\S]*?-----END \1-----/gi,
+      '[BLOQUE PRIVADO REDACTADO]'
     )
-    .replace(/\bBearer\s+[A-Za-z0-9._~+\/=-]{12,}/gi, 'Bearer [REDACTADO]')
+    .replace(yamlSecretBlock, '$1\n  [REDACTADO]\n')
+    .replace(secretAssignment, '$1$2 [REDACTADO]')
+    .replace(cliSecret, '$1$2 [REDACTADO]')
+    .replace(
+      /\b([a-z][a-z0-9+.-]*:\/\/)([^/\s:@]+):([^@\s/]+)@/gi,
+      '$1[REDACTADO]@'
+    )
+    .replace(
+      /\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+\/=-]{8,}/gi,
+      '[AUTORIZACIÓN REDACTADA]'
+    )
+    .replace(
+      /\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{16,}|(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}|sk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,}|sk-ant-api\d{2}-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|npm_[A-Za-z0-9]{20,}|hf_[A-Za-z0-9]{20,}|pypi-[A-Za-z0-9_-]{20,}|sb_secret_[A-Za-z0-9_-]{16,}|gsk_[A-Za-z0-9]{20,}|rpt_[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{25,})\b/gi,
+      '[TOKEN REDACTADO]'
+    )
+    .replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g, '[CLAVE REDACTADA]')
+    .replace(/\b\d{7,12}:[A-Za-z0-9_-]{30,}\b/g, '[TOKEN REDACTADO]')
     .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]{10,})?/g, '[JWT REDACTADO]')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{4,}/g, '\n\n\n')
