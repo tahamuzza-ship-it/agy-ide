@@ -1638,7 +1638,7 @@ function _mailboxHeaderAuthenticated(req) {
   return (
     typeof provided === 'string' &&
     Buffer.byteLength(provided, 'utf8') <= 256 &&
-    _mailboxPasswordMatches(provided)
+    _pwdOk(provided)
   );
 }
 
@@ -2133,6 +2133,16 @@ app.post('/api/ops/mailbox/voice/command', async (req, res) => {
     const mission = _mailboxNormalizeVoiceMission(req.body && req.body.mission);
     if (!mission) {
       return res.status(400).json({ error: 'El dictado de la mision no es valido' });
+    }
+    try {
+      _mailboxBuildEncodedCreateCommand(_mailboxCreateMissionMarkdown(mission));
+    } catch (error) {
+      if (error instanceof Error && error.message === 'MAILBOX_COMMAND_TOO_LONG') {
+        return res.status(400).json({
+          error: 'La mision dictada es demasiado larga para enviarla a PC1'
+        });
+      }
+      throw error;
     }
     _mailboxPruneVoiceProposals();
     const proposalId = crypto.randomBytes(24).toString('base64url');
