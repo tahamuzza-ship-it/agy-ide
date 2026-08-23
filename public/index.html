@@ -810,6 +810,10 @@
       }
       return { type: 'draft-help' };
     }
+    var asksPc1Pending = /\bque\s+(?:tareas?|misiones?)\s+(?:tiene|debe)\s+pc1\b|\b(?:tareas?|misiones?)\s+(?:pendientes?|para)\s+(?:de\s+)?pc1\b|\bque\s+tiene\s+que\s+hacer\s+pc1\b/.test(normalized);
+    if (asksPc1Pending) {
+      return { type: 'list' };
+    }
 
     // "Buzón" es una palabra de control, no contenido para el chat IA.
     // Sin un destino inequívoco, la lectura AGY → Replit es el valor seguro:
