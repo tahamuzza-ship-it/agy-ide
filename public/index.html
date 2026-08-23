@@ -788,6 +788,9 @@
 
     function _mailboxVoiceIntent(text) {
     var normalized = _normalizeVoiceOrder(text);
+    if (/^(?:agy )?(?:buzon\s*(?:1|uno|pc\s*1|ps\s*1|agy)|misiones)$/.test(normalized)) {
+      return { type: 'list-agy-to-replit' };
+    }
     if (/^(?:agy )?(?:consulta|consultar|revisa|revisar|mira|mirar|lee|leer) (?:el )?buzon (?:uno|1)$/.test(normalized)) {
       return { type: 'list' };
     }
@@ -821,6 +824,9 @@
     if (intent.type === 'list') {
       return _mailboxVoiceRequest('/api/ops/mailbox/voice/command', { action: 'list' });
     }
+    if (intent.type === 'list-agy-to-replit') {
+      return _mailboxVoiceRequest('/api/ops/mailbox/voice/command', { action: 'list-agy-to-replit' });
+    }
     if (intent.type === 'draft') {
       return _mailboxVoiceRequest('/api/ops/mailbox/voice/command', {
         action: 'draft',
@@ -835,6 +841,7 @@
     }
     throw new Error('Orden de voz no valida');
     }
+    window._runMailboxVoiceIntent = _runMailboxVoiceIntent;
 
     async function pollStatus(id, maxMs) {
     maxMs = maxMs || 180000;

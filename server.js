@@ -2115,24 +2115,27 @@ app.post('/api/ops/mailbox/voice/command', async (req, res) => {
   }
 
   const action = req.body && req.body.action;
-  if (action === 'list') {
+  if (action === 'list' || action === 'list-agy-to-replit') {
     try {
-      const outcome = await _mailboxRead('replit-to-agy');
+      const direction = action === 'list-agy-to-replit' ? 'agy-to-replit' : 'replit-to-agy';
+      const mailbox = MAILBOX_DIRECTIONS[direction];
+      const mailboxName = direction === 'agy-to-replit' ? 'Buzon de AGY para Replit' : 'Buzon 1';
+      const outcome = await _mailboxRead(direction);
       if (outcome.status === 'timeout') {
         return res.status(504).json({ error: 'PC1 no respondio a tiempo' });
       }
       if (outcome.status !== 'done' || !outcome.result) {
-        return res.status(502).json({ error: 'PC1 no pudo leer el Buzon 1' });
+        return res.status(502).json({ error: 'PC1 no pudo leer el buzon solicitado' });
       }
-      const items = _mailboxParseResult(outcome.result, 'replit-to-agy');
-      const missions = items.filter((item) => item.name !== MAILBOX_DIRECTIONS['replit-to-agy'].readme);
+      const items = _mailboxParseResult(outcome.result, direction);
+      const missions = items.filter((item) => item.name !== mailbox.readme);
       const pending = missions.filter((item) => item.status === 'PENDIENTE').length;
       const processing = missions.filter((item) => item.status === 'EN_PROCESO').length;
       const completed = missions.filter((item) => item.status === 'COMPLETADA').length;
       const errored = missions.filter((item) => item.status === 'ERROR').length;
       const recent = missions.slice(0, 5).map((item) => `${item.name}: ${item.status}`);
       const summary = [
-        `Buzon 1 consultado. Hay ${missions.length} misiones.`,
+        `${mailboxName} consultado. Hay ${missions.length} archivos de misión.`,
         `${pending} pendientes, ${processing} en proceso, ${completed} completadas y ${errored} con error.`,
         recent.length ? `Las mas recientes son: ${recent.join('; ')}.` : 'No hay misiones registradas.'
       ].join(' ');
