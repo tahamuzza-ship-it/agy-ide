@@ -82,13 +82,16 @@
         <li>Para dictado normal, revisa el texto que quedó escrito y envíalo con <strong>➤</strong>.</li>
       </ol>
       <h3>Órdenes de voz del Buzón 1</h3>
-      <p>Habla con naturalidad. Estas órdenes crean la misión inmediatamente:</p>
-      <div class="phrase">“Consulta el Buzón 1.”</div>
+      <p><strong>Para enviar una tarea</strong>, habla con naturalidad. Estas órdenes crean la misión inmediatamente:</p>
       <div class="phrase">“AGY, dile a PC1 que revise el disco.”</div>
       <div class="phrase">“Misión para PC1: revisa el disco.”</div>
       <div class="phrase">“Manda a PC1 a revisar el disco.”</div>
       <div class="phrase">“PC1, revisa el disco.”</div>
       <p>AGY responde: <strong>“Entendido, orden enviada a PC1.”</strong></p>
+      <p><strong>Para ver pendientes</strong>, pregunta:</p>
+      <div class="phrase">“¿Qué tareas tiene PC1 pendientes?”</div>
+      <div class="phrase">“Muéstrame las misiones pendientes de PC1.”</div>
+      <div class="phrase">“Consulta el Buzón 1.”</div>
     </section>
 
     <section>
@@ -102,18 +105,19 @@
           <div class="pc1-command">“Misión para PC1: revisar el disco.”</div>
           <div class="pc1-command">“Manda a PC1 a comprobar el listener.”</div>
           <div class="pc1-command">“PC1, revisa la memoria.”</div>
-          <p class="pc1-result"><strong>Resultado:</strong> la tarea queda en <strong>Entrada PC1</strong>, esperando a que PC1 la haga.</p>
+          <p class="pc1-result"><strong>Resultado:</strong> AGY responde “Entendido, orden enviada a PC1.” y la tarea queda en <strong>Entrada PC1</strong> como <strong>PENDIENTE</strong>.</p>
         </article>
         <article class="pc1-card review">
           <h3>2. VER MISIONES PENDIENTES DE PC1</h3>
           <span class="pc1-label">Di o escribe</span>
           <div class="pc1-command">“¿Qué tareas tiene PC1 pendientes?”</div>
           <span class="pc1-label">También puedes decir</span>
-          <div class="pc1-command">“Muéstrame las misiones para PC1.”</div>
-          <p class="pc1-result"><strong>Resultado:</strong> ves las tareas que PC1 todavía tiene por hacer en <strong>Entrada PC1</strong>.</p>
+          <div class="pc1-command">“Muéstrame las misiones pendientes de PC1.”</div>
+          <div class="pc1-command">“Consulta el Buzón 1.”</div>
+          <p class="pc1-result"><strong>Resultado:</strong> ves la lista real de tareas de <strong>Entrada PC1</strong>, con su estado: PENDIENTE, EN_PROCESO, COMPLETADA o ERROR.</p>
         </article>
       </div>
-      <p class="safe"><strong>Sin frases especiales:</strong> cualquiera de esas formas crea la misión inmediatamente.</p>
+      <p class="safe"><strong>Regla fácil:</strong> una orden crea una tarea; una pregunta por pendientes solo muestra la lista.</p>
     </section>
 
     <section>
