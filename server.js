@@ -39,7 +39,8 @@ const SUPABASE_URL = (process.env.SUPABASE_URL_2 || 'https://lxlcivzuevowckbcxcz
 const SUPABASE_KEY = process.env.SUPABASE_KEY_2 || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 const GEMINI_KEY          = process.env.GEMINI_API_KEY;
 const GROQ_KEY   = process.env.GROQ_API_KEY;
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_MODEL = 'llama-3.1-70b-versatile';
+const GROQ_FALLBACK_MODEL = 'llama-3.1-8b-instant';
 const GROQ_URL   = 'https://api.groq.com/openai/v1/chat/completions';
 
 const IDE_SYSTEM = 'Eres un asistente de programacion en un IDE online. ' +
@@ -82,20 +83,33 @@ async function callAI(userMsg) {
     }
   }
 
-  const groqCall = fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + GROQ_KEY, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: CFG.modelos.groq,
-      messages: [{ role: 'system', content: buildSystemPrompt('chat') }, { role: 'user', content: userMsg }],
-      max_tokens: CFG.limites.chat_max_tokens
-    })
-  });
-  const r = await Promise.race([groqCall, aiTimeout()]);
-  const d = await r.json();
-  console.log('[callAI] Groq status:', r.status);
-  if (!r.ok) throw new Error((d.error && d.error.message) || 'Groq error ' + r.status);
-  return (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || '(sin respuesta)';
+  const groqModels = [...new Set([CFG.modelos.groq || GROQ_MODEL, GROQ_FALLBACK_MODEL])];
+  let groqErr;
+  for (let i = 0; i < groqModels.length; i++) {
+    const model = groqModels[i];
+    try {
+      const groqCall = fetch(GROQ_URL, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + GROQ_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: 'system', content: buildSystemPrompt('chat') }, { role: 'user', content: userMsg }],
+          max_tokens: CFG.limites.chat_max_tokens
+        })
+      });
+      const r = await Promise.race([groqCall, aiTimeout()]);
+      const d = await r.json();
+      console.log('[callAI] Groq status:', r.status, 'model:', model);
+      if (!r.ok) throw new Error((d.error && d.error.message) || 'Groq error ' + r.status);
+      return (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || '(sin respuesta)';
+    } catch (err) {
+      groqErr = err;
+      if (i + 1 < groqModels.length) {
+        console.warn('[callAI] Groq falló con ' + model + '; reintentando con ' + groqModels[i + 1] + ':', err.message);
+      }
+    }
+  }
+  throw groqErr;
 }
 const TG_TOKEN            = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT_ID          = process.env.TELEGRAM_LEAD_ARCHITECT_CHAT_ID;
