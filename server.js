@@ -1981,7 +1981,8 @@ function _mailboxLegacyChatIntent(instruction) {
   const mentionsMailbox = /\bbuzon\b/.test(normalized);
   const asksToCreate = /\b(?:dejar|deja|dejando|enviar|envia|enviando|manda|mandar|mandando|crea|crear|creando|prepara|preparar|preparando|nueva)\b/.test(normalized)
     && /\bmision(?:es)?\b/.test(normalized);
-  if (asksToCreate) return { kind: 'creation' };
+  const quickMission = /^(?:(?:agy|agi) )?pc1\s+.+\s+confirmo$/.test(normalized);
+  if (asksToCreate || quickMission) return { kind: 'creation' };
   const asksPc1Pending = /\bque\s+(?:tareas?|misiones?)\s+(?:tiene|debe)\s+pc1\b|\b(?:tareas?|misiones?)\s+(?:pendientes?|para)\s+(?:de\s+)?pc1\b|\bque\s+tiene\s+que\s+hacer\s+pc1\b/.test(normalized);
   if (asksPc1Pending) return { kind: 'read', direction: 'replit-to-agy' };
   if (!mentionsMailbox) return null;
