@@ -1970,14 +1970,40 @@ function _mailboxParseResult(raw, direction) {
   return items;
 }
 
-function _mailboxLegacyChatIntent(instruction) {
-  const normalized = String(instruction || '')
+function _mailboxNormalizeInstruction(instruction) {
+  return String(instruction || '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[¿?¡!.,;:]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function _mailboxForcedMission(instruction) {
+  const raw = String(instruction || '').trim();
+  const normalized = _mailboxNormalizeInstruction(raw);
+  if (!raw || !/\b(?:pc1|mision(?:es)?|revis(?:a|ar|e|ion)|buzon|dile\s+a\s+pc1)\b/.test(normalized)) {
+    return null;
+  }
+  const extractors = [
+    /^(?:agy|agi)[\s,]+dile\s+a\s+pc1\s+que\s+(.+)$/i,
+    /^misi[oó]n\s+para\s+pc1\s*[:,-]?\s*(.+)$/i,
+    /^(?:(?:agy|agi)[\s,]+)?manda\s+a\s+pc1\s+a\s+(.+)$/i,
+    /^(?:(?:agy|agi)[\s,]+)?pc1[\s,:-]+(.+)$/i
+  ];
+  for (const pattern of extractors) {
+    const match = raw.match(pattern);
+    if (match && match[1] && match[1].trim()) {
+      const mission = _mailboxNormalizeVoiceMission(match[1]);
+      if (mission) return mission;
+    }
+  }
+  return _mailboxNormalizeVoiceMission(raw);
+}
+
+function _mailboxLegacyChatIntent(instruction) {
+  const normalized = _mailboxNormalizeInstruction(instruction);
   const mentionsMailbox = /\bbuzon\b/.test(normalized);
   const asksToCreate = /\b(?:dejar|deja|dejando|enviar|envia|enviando|manda|mandar|mandando|crea|crear|creando|prepara|preparar|preparando|nueva)\b/.test(normalized)
     && /\bmision(?:es)?\b/.test(normalized);
@@ -2008,7 +2034,10 @@ function _mailboxLegacyChatIntent(instruction) {
 }
 
 async function _mailboxLegacyChatFallback(instruction) {
-  const intent = _mailboxLegacyChatIntent(instruction);
+  const forcedMission = _mailboxForcedMission(instruction);
+  const intent = forcedMission
+    ? { kind: 'immediate-creation', mission: forcedMission }
+    : _mailboxLegacyChatIntent(instruction);
   if (!intent) return null;
 
   const id = `mailbox_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -2051,6 +2080,7 @@ async function _mailboxLegacyChatFallback(instruction) {
         ok: true,
         id,
         source: 'mailbox',
+        message: 'Entendido, orden enviada a PC1.',
         riskLevel: 0,
         result: 'Entendido, orden enviada a PC1.'
       };
@@ -2331,7 +2361,10 @@ app.post('/api/ops/mailbox/voice/command', async (req, res) => {
     return res.status(503).json({ error: 'Conexion con PC1 no configurada' });
   }
 
-  const action = req.body && req.body.action;
+  const forcedMission = _mailboxForcedMission(
+    req.body && (req.body.instruction || req.body.text || req.body.mission)
+  );
+  const action = forcedMission ? 'create' : req.body && req.body.action;
   if (action === 'list' || action === 'list-agy-to-replit') {
     try {
       const direction = action === 'list-agy-to-replit' ? 'agy-to-replit' : 'replit-to-agy';
@@ -2396,7 +2429,7 @@ app.post('/api/ops/mailbox/voice/command', async (req, res) => {
   }
 
   if (action === 'create') {
-    const mission = _mailboxNormalizeVoiceMission(req.body && req.body.mission);
+    const mission = forcedMission || _mailboxNormalizeVoiceMission(req.body && req.body.mission);
     if (!mission) {
       return res.status(400).json({ error: 'La orden para PC1 no es valida' });
     }
@@ -2423,6 +2456,7 @@ app.post('/api/ops/mailbox/voice/command', async (req, res) => {
       _mailboxRecentReads.delete('replit-to-agy');
       return res.json({
         kind: 'created',
+        source: 'mailbox',
         name: created.name,
         status: 'PENDIENTE',
         message: 'Entendido, orden enviada a PC1.'
