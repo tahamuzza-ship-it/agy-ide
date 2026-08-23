@@ -2635,24 +2635,37 @@
           .trim();
       }
 
+      function voiceFragmentCompactKey(value) {
+        return voiceFragmentKey(value).replace(/[^a-z0-9ñ]/g, '');
+      }
+
       function addVoiceFragment(parts, value) {
         var text = String(value || '').replace(/\s+/g, ' ').trim();
         var key = voiceFragmentKey(text);
-        if (!key) return;
+        var compactKey = voiceFragmentCompactKey(text);
+        if (!key || !compactKey) return;
 
         for (var i = 0; i < parts.length; i++) {
           var known = parts[i].key;
+          var knownCompact = parts[i].compactKey || voiceFragmentCompactKey(known);
           // Android/Chrome puede devolver la misma frase con puntuación,
-          // mayúsculas o espacios distintos; es una sola frase, no dos órdenes.
-          if (key === known || known.indexOf(key + ' ') === 0) return;
+          // mayúsculas, espacios distintos o "P S1"/"PS1"; es una sola orden.
+          if (
+            key === known ||
+            compactKey === knownCompact ||
+            knownCompact.indexOf(compactKey) === 0
+          ) return;
           // A veces el evento siguiente repite la frase anterior y le añade
           // unas palabras: sustituirla evita "abre X abre X ahora".
-          if (key.indexOf(known + ' ') === 0) {
-            parts[i] = { key: key, text: text };
+          if (
+            key.indexOf(known + ' ') === 0 ||
+            compactKey.indexOf(knownCompact) === 0
+          ) {
+            parts[i] = { key: key, compactKey: compactKey, text: text };
             return;
           }
         }
-        parts.push({ key: key, text: text });
+        parts.push({ key: key, compactKey: compactKey, text: text });
       }
 
       function voiceFragmentsText(parts) {
