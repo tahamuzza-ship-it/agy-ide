@@ -2586,10 +2586,11 @@ app.post('/api/ops/mailbox/voice/command', async (req, res) => {
     return res.status(503).json({ error: 'Conexion con PC1 no configurada' });
   }
 
+  const requestedAction = req.body && req.body.action;
   const inputText = req.body && (req.body.instruction || req.body.text || req.body.mission);
-  const readDirection = _mailboxReadDirection(inputText);
-  const forcedMission = readDirection ? null : _mailboxForcedMission(inputText);
-  const action = forcedMission ? 'create' : (readDirection ? 'list' : req.body && req.body.action);
+  const readDirection = requestedAction ? null : _mailboxReadDirection(inputText);
+  const forcedMission = requestedAction ? null : (readDirection ? null : _mailboxForcedMission(inputText));
+  const action = requestedAction || (forcedMission ? 'create' : (readDirection ? 'list' : null));
   if (action === 'list' || action === 'list-agy-to-replit') {
     try {
       const direction = action === 'list-agy-to-replit' ? 'agy-to-replit' : 'replit-to-agy';

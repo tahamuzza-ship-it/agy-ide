@@ -809,6 +809,24 @@
       return { type: 'cancel-only', utterance: utterance };
     }
 
+    var pc1Target = '(?:p\\s*[cs]\\s*(?:1|uno)|pe\\s+(?:ce|ese)\\s+uno)';
+    var directedMissionPatterns = [
+      new RegExp('^(?:(?:agy|agi)[\\s,]+)?' + pc1Target + '[\\s,:-]+(.+)$', 'i'),
+      new RegExp('^(?:agy|agi)[\\s,]+dile\\s+a\\s+' + pc1Target + '\\s+que\\s+(.+)$', 'i'),
+      new RegExp('^misi[oó]n\\s+para\\s+' + pc1Target + '\\s*[:,-]?\\s*(.+)$', 'i'),
+      new RegExp('^(?:(?:agy|agi)[\\s,]+)?manda\\s+a\\s+' + pc1Target + '\\s+a\\s+(.+)$', 'i')
+    ];
+    for (var directedIndex = 0; directedIndex < directedMissionPatterns.length; directedIndex++) {
+      var directedMission = raw.match(directedMissionPatterns[directedIndex]);
+      if (!directedMission || !directedMission[1]) continue;
+      var directedObjective = directedMission[1].trim().replace(/[.?!¡,;:]+$/, '').trim();
+      var directedConfirmInline = /(?:^|\s)(?:confirmo|confirmar)\s*$/i.test(directedObjective);
+      if (directedConfirmInline) directedObjective = directedObjective.replace(/(?:^|\s)(?:confirmo|confirmar)\s*$/i, '').trim();
+      return directedObjective.length >= 4
+        ? { type: 'draft', mission: directedObjective, confirmInline: directedConfirmInline, utterance: utterance }
+        : { type: 'draft-help', utterance: utterance };
+    }
+
     var groups = {
       read: ['consulta','consultar','revisa','revisar','mira','mirar','lista','listar','muestra','mostrar','dime','dame','ver','saber','comprobar','chequear'],
       create: ['crea','crear','prepara','preparar','deja','dejar','manda','mandar','envia','enviar','encarga','encargar','apunta','apuntar','anota','anotar','nueva'],
@@ -886,11 +904,13 @@
     function _mailboxVoiceIntent(text) {
     var semanticIntent = _mailboxSemanticIntent(text);
     if (semanticIntent) return semanticIntent;
+    var raw = String(text || '').trim();
     var normalized = _normalizeVoiceOrder(text);
     function immediateMissionIntent(mission) {
       var value = String(mission || '').trim();
-      value = value.replace(/(?:^|\s)(?:confirmo|confirmar)\s*$/, '').trim();
-      return value.length >= 4 ? { type: 'create', mission: value } : null;
+      var confirmInline = /(?:^|\s)(?:confirmo|confirmar)\s*$/.test(value);
+      if (confirmInline) value = value.replace(/(?:^|\s)(?:confirmo|confirmar)\s*$/, '').trim();
+      return value.length >= 4 ? { type: 'draft', mission: value, confirmInline: confirmInline, utterance: raw } : null;
     }
     function draftIntent(mission) {
       var value = String(mission || '').trim();
