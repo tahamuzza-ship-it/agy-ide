@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Manual de uso — AGY IDE</title>
+  <style>
+    :root { color-scheme: dark; --cyan:#00f3ff; --green:#86efac; --yellow:#ffe08a; --ink:#08101f; --panel:#0d1830; --muted:#a7b5cc; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; background:radial-gradient(circle at top right,rgba(0,243,255,.12),transparent 32rem),linear-gradient(145deg,#050913,#0b1528 55%,#090b17); color:#f4f8ff; font:16px/1.55 Inter,Segoe UI,Arial,sans-serif; }
+    main { width:min(920px,calc(100% - 32px)); margin:0 auto; padding:36px 0 64px; }
+    .back { display:inline-flex; align-items:center; gap:8px; margin-bottom:24px; color:var(--cyan); text-decoration:none; font-weight:800; letter-spacing:.03em; }
+    header { padding:30px; border:1px solid rgba(0,243,255,.26); border-radius:20px; background:linear-gradient(135deg,rgba(11,31,57,.96),rgba(20,17,54,.9)); box-shadow:0 18px 60px rgba(0,0,0,.3); }
+    h1,h2,h3 { margin:0; font-family:Orbitron,Segoe UI,Arial,sans-serif; }
+    h1 { color:var(--cyan); font-size:clamp(1.7rem,5vw,2.7rem); letter-spacing:.035em; }
+    .lead { color:var(--muted); max-width:700px; margin:12px 0 0; }
+    .notice { margin-top:22px; padding:14px 16px; border-left:4px solid var(--yellow); border-radius:8px; background:rgba(255,203,64,.09); color:#fff2bb; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(255px,1fr)); gap:16px; margin:24px 0; }
+    section { margin-top:20px; padding:24px; border:1px solid rgba(150,180,220,.16); border-radius:16px; background:rgba(13,24,48,.82); }
+    h2 { color:var(--green); font-size:1.12rem; letter-spacing:.045em; }
+    h3 { color:var(--yellow); font-size:.9rem; margin:18px 0 7px; letter-spacing:.025em; }
+    p { margin:9px 0; }
+    ul,ol { padding-left:22px; margin:10px 0; }
+    li { margin:7px 0; }
+    .phrase { margin:11px 0; padding:12px 14px; border:1px solid rgba(0,243,255,.22); border-radius:9px; background:#071225; color:var(--cyan); font-family:"Fira Code",Consolas,monospace; font-size:.91rem; }
+    .tag { display:inline-block; margin-bottom:8px; padding:4px 8px; border-radius:999px; background:rgba(0,243,255,.12); color:var(--cyan); font-size:.73rem; font-weight:800; letter-spacing:.06em; }
+    .safe { color:#ffd0d0; }
+    footer { color:#7f91ad; text-align:center; font-size:.85rem; margin-top:30px; }
+    @media (max-width:560px) { main { width:min(100% - 20px,920px); padding-top:18px; } header,section { padding:19px; border-radius:13px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="back" href="./">← Volver a AGY IDE</a>
+    <header>
+      <h1>📖 Manual de uso de AGY IDE</h1>
+      <p class="lead">Guía rápida para hablar con AGY, escribirle, trabajar con código y enviar misiones seguras a PC1.</p>
+      <div class="notice"><strong>Regla sencilla:</strong> si algo te genera duda, no confirmes una acción. Puedes decir o escribir <strong>“cancelar”</strong>.</div>
+    </header>
+
+    <div class="grid">
+      <section>
+        <span class="tag">EN 30 SEGUNDOS</span>
+        <h2>Lo esencial</h2>
+        <ol>
+          <li>Elige el equipo destino: <strong>PC1</strong>, <strong>PC2</strong> o <strong>Cualquiera</strong>.</li>
+          <li>Escribe una instrucción en el chat o toca el micrófono.</li>
+          <li>Revisa lo que AGY responde antes de ejecutar o confirmar.</li>
+        </ol>
+      </section>
+      <section>
+        <span class="tag">BOTÓN DE SEGURIDAD</span>
+        <h2>Cancelar siempre es válido</h2>
+        <p>Para detener algo que corre en una terminal, usa <strong>Ctrl+C</strong>. Para no crear una misión propuesta, di <strong>“Cancelar”</strong>.</p>
+      </section>
+    </div>
+
+    <section>
+      <h2>⌨️ Usar AGY por texto</h2>
+      <p>Escribe en la caja de chat y pulsa la flecha <strong>➤</strong> para enviarlo. Puedes pedir explicaciones, pasos o ayuda con un archivo.</p>
+      <div class="phrase">“Explícame qué hace este código antes de cambiarlo.”</div>
+      <div class="phrase">“Dame los pasos para comprobar si PC1 está conectado.”</div>
+      <div class="phrase">“Ayúdame a corregir este error sin borrar mi trabajo.”</div>
+      <p>El dictado normal también deja el texto en la caja de chat: revísalo y envíalo manualmente cuando estés conforme.</p>
+    </section>
+
+    <section>
+      <h2>🎤 Usar AGY por voz</h2>
+      <ol>
+        <li>Toca el botón <strong>🎤</strong> junto al chat.</li>
+        <li>Habla con normalidad.</li>
+        <li>Para dictado normal, revisa el texto que quedó escrito y envíalo con <strong>➤</strong>.</li>
+      </ol>
+      <h3>Órdenes de voz del Buzón 1</h3>
+      <p>Estas frases sí se envían automáticamente porque activan un proceso con confirmación:</p>
+      <div class="phrase">“Consulta el Buzón 1.”</div>
+      <div class="phrase">“Crea una misión para PC1: revisa si el listener está conectado y avísame.”</div>
+      <p>AGY te leerá un resumen de la misión. Solo después di:</p>
+      <div class="phrase">“Confirmo.”</div>
+      <p>Si cambias de idea, guardas silencio, respondes algo poco claro o vuelves a tocar el micrófono, la propuesta se cancela. También puedes decir:</p>
+      <div class="phrase">“Cancelar.”</div>
+    </section>
+
+    <section>
+      <h2>📬 Buzón 1: misiones para PC1</h2>
+      <p>El Buzón es para dejar misiones pendientes a PC1 de forma ordenada. La misión <strong>no se crea</strong> mientras solo la estás dictando: se prepara, se revisa y requiere tu confirmación inequívoca.</p>
+      <ul>
+        <li>Las propuestas duran 60 segundos.</li>
+        <li>Una confirmación solo puede usarse una vez.</li>
+        <li>Las misiones se guardan con fecha y número, sin sobrescribir otras.</li>
+        <li>Las órdenes normales del chat no pueden escribir directamente en el Buzón.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>💻 Trabajar con código</h2>
+      <h3>Editor</h3>
+      <p>El panel izquierdo es el editor. Abre o selecciona archivos desde <strong>📁 ARCHIVOS</strong>, haz tus cambios y revisa antes de ejecutar.</p>
+      <h3>Ejecutar</h3>
+      <p>El botón <strong>▶ EJECUTAR</strong> corre el contenido actual para el equipo seleccionado. El resultado aparece en <strong>OUTPUT — AGY</strong>.</p>
+      <p class="safe"><strong>Antes de ejecutar:</strong> confirma que elegiste PC1 o PC2 correctamente y revisa cualquier comando que modifique archivos, servicios o configuraciones.</p>
+      <h3>Ayuda con comandos</h3>
+      <p>El botón <strong>📋 COMANDOS</strong> muestra comandos frecuentes y permite copiarlos. El botón <strong>💻 CIBERCODE</strong> abre el entorno especializado para crear aplicaciones.</p>
+    </section>
+
+    <section>
+      <h2>🎯 Modo /goal</h2>
+      <p>Usa <strong>/goal</strong> cuando quieras que AGY convierta una meta grande en pasos. Explica el resultado que buscas, revisa el plan y mantén el control de lo que se ejecuta.</p>
+      <div class="phrase">“Quiero comprobar que PC1 y PC2 están conectados y recibir un resumen.”</div>
+    </section>
+
+    <section>
+      <h2>🧭 Si no sabes qué decir</h2>
+      <p>Empieza por una de estas frases:</p>
+      <div class="phrase">“Recuérdame cómo usar el Buzón 1 por voz.”</div>
+      <div class="phrase">“¿Qué puedo hacer desde esta pantalla?”</div>
+      <div class="phrase">“Explícame el siguiente paso con palabras sencillas.”</div>
+    </section>
+
+    <footer>AGY IDE · Manual de uso rápido</footer>
+  </main>
+</body>
+</html>
