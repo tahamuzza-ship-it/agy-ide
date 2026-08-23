@@ -676,6 +676,11 @@ app.post('/api/send', requirePwd, async (req, res) => {
     const { instruction, target = 'PC1' } = req.body;
     if (!instruction) return res.status(400).json({ error: 'instruction requerida' });
 
+    // Defensa en servidor para clientes con HTML/JS antiguo en caché:
+    // "buzón" nunca puede caer al modelo conversacional.
+    const mailboxFallback = await _mailboxLegacyChatFallback(instruction);
+    if (mailboxFallback) return res.json(mailboxFallback);
+
     const isExecution = instruction.trimStart().startsWith('EJECUTAR');
 
     if (!isExecution && (GEMINI_KEY || GROQ_KEY)) {
@@ -1963,6 +1968,107 @@ function _mailboxParseResult(raw, direction) {
     });
   }
   return items;
+}
+
+function _mailboxLegacyChatIntent(instruction) {
+  const normalized = String(instruction || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[¿?¡!.,;:]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!/\bbuzon\b/.test(normalized)) return null;
+
+  const asksToCreate = /\b(?:crea|crear|prepara|preparar|nueva)\b/.test(normalized)
+    && /\bmision(?:es)?\b/.test(normalized);
+  if (asksToCreate) return { kind: 'creation' };
+
+  const asksBuzonOne = /\b(?:buzon\s*(?:1|uno)|entrada\s+pc1)\b/.test(normalized)
+    && !/\b(?:agy|misiones?\s+pendientes?)\b/.test(normalized);
+  return {
+    kind: 'read',
+    direction: asksBuzonOne ? 'replit-to-agy' : 'agy-to-replit'
+  };
+}
+
+async function _mailboxLegacyChatFallback(instruction) {
+  const intent = _mailboxLegacyChatIntent(instruction);
+  if (!intent) return null;
+
+  const id = `mailbox_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  if (intent.kind === 'creation') {
+    return {
+      ok: true,
+      id,
+      source: 'mailbox',
+      riskLevel: 0,
+      result: 'Detecté una misión para el Buzón 1. No la enviaré sin confirmación. Recarga AGY IDE y repite la orden para preparar la propuesta y decir “confirmo”.'
+    };
+  }
+
+  if (!AGY_KEY) {
+    return {
+      ok: false,
+      id,
+      source: 'mailbox',
+      riskLevel: 0,
+      result: 'Detecté la consulta del buzón, pero la conexión con PC1 no está configurada.'
+    };
+  }
+
+  const direction = intent.direction;
+  const mailbox = MAILBOX_DIRECTIONS[direction];
+  const mailboxName = direction === 'agy-to-replit' ? 'Buzón de AGY para Replit' : 'Buzón 1';
+  try {
+    const outcome = await _mailboxRead(direction);
+    if (outcome.status === 'timeout') {
+      return {
+        ok: false,
+        id,
+        source: 'mailbox',
+        riskLevel: 0,
+        result: `Detecté la consulta de ${mailboxName}, pero PC1 no respondió a tiempo. Comprueba que el cartero esté ONLINE.`
+      };
+    }
+    if (outcome.status !== 'done' || !outcome.result) {
+      return {
+        ok: false,
+        id,
+        source: 'mailbox',
+        riskLevel: 0,
+        result: `Detecté la consulta de ${mailboxName}, pero PC1 no pudo leerlo ahora mismo.`
+      };
+    }
+
+    const missions = _mailboxParseResult(outcome.result, direction)
+      .filter((item) => item.name !== mailbox.readme);
+    const pending = missions.filter((item) => item.status === 'PENDIENTE').length;
+    const processing = missions.filter((item) => item.status === 'EN_PROCESO').length;
+    const completed = missions.filter((item) => item.status === 'COMPLETADA').length;
+    const errored = missions.filter((item) => item.status === 'ERROR').length;
+    const recent = missions.slice(0, 5).map((item) => `${item.name}: ${item.status}`);
+    return {
+      ok: true,
+      id,
+      source: 'mailbox',
+      riskLevel: 0,
+      result: [
+        `${mailboxName} consultado en tiempo real. Hay ${missions.length} archivos de misión.`,
+        `${pending} pendientes, ${processing} en proceso, ${completed} completadas y ${errored} con error.`,
+        recent.length ? `Las más recientes son: ${recent.join('; ')}.` : 'No hay misiones registradas.'
+      ].join(' ')
+    };
+  } catch (error) {
+    console.error('[mailbox-chat-fallback] error de lectura', error instanceof Error ? error.message : 'UNKNOWN');
+    return {
+      ok: false,
+      id,
+      source: 'mailbox',
+      riskLevel: 0,
+      result: `Detecté la consulta de ${mailboxName}, pero no pude leerlo ahora mismo.`
+    };
+  }
 }
 
 function _mailboxNormalizeVoiceMission(value) {
