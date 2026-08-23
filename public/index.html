@@ -335,7 +335,10 @@
             <div id="mailbox-direction-title" style="font-family:'Orbitron',monospace;font-size:0.72rem;color:#00f3ff;letter-spacing:0.07em;">ENTRADA PC1</div>
             <div id="mailbox-summary" aria-live="polite" style="font-size:0.65rem;color:#71839c;margin-top:3px;">Listo para consultar.</div>
           </div>
-          <button id="mailbox-refresh" type="button" style="background:rgba(0,243,255,0.08);border:1px solid rgba(0,243,255,0.35);color:#80f8ff;border-radius:8px;padding:8px 11px;font-size:0.67rem;font-weight:700;cursor:pointer;">🔄 REFRESCAR BUZÓN</button>
+          <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;">
+            <button id="mailbox-refresh" type="button" style="background:rgba(0,243,255,0.08);border:1px solid rgba(0,243,255,0.35);color:#80f8ff;border-radius:8px;padding:8px 11px;font-size:0.67rem;font-weight:700;cursor:pointer;">🔄 REFRESCAR BUZÓN</button>
+            <button id="mailbox-clean-completed" type="button" style="background:rgba(34,197,94,0.08);border:1px solid rgba(110,231,160,0.38);color:#9af5bd;border-radius:8px;padding:8px 11px;font-size:0.67rem;font-weight:700;cursor:pointer;">🧹 LIMPIAR COMPLETADAS</button>
+          </div>
         </div>
 
         <div style="overflow-x:auto;border:1px solid rgba(0,243,255,0.13);border-radius:10px;background:rgba(3,8,20,0.72);">
@@ -361,12 +364,13 @@
             <button id="mailbox-preview-close" type="button" aria-label="Cerrar previsualización" style="background:none;border:none;color:#7f8da4;cursor:pointer;">✕</button>
           </div>
           <div id="mailbox-preview-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px;"></div>
-          <div style="font-size:0.61rem;color:#687990;margin-top:10px;">Solo se muestran metadatos validados. Nunca se carga contenido, rutas, comandos, claves ni secretos.</div>
+          <div id="mailbox-preview-detail" style="display:grid;gap:8px;margin-top:8px;"></div>
+          <div style="font-size:0.61rem;color:#687990;margin-top:10px;">Vista limitada y sanitizada: muestra únicamente objetivo, resultado y fechas. Las credenciales reconocibles se ocultan automáticamente.</div>
         </div>
       </div>
     </div>
 
-    <div style="padding:9px 16px;border-top:1px solid rgba(240,0,255,0.12);background:#060b18;color:#53647c;font-size:0.59rem;text-align:center;letter-spacing:0.03em;">LECTURA FIJA Y SANITIZADA · LÍMITE 100 ARCHIVOS / 128 KB</div>
+    <div style="padding:9px 16px;border-top:1px solid rgba(240,0,255,0.12);background:#060b18;color:#53647c;font-size:0.59rem;text-align:center;letter-spacing:0.03em;">LECTURA FIJA Y SANITIZADA · 10 MISIONES RECIENTES · 128 KB</div>
   </div>
 </div>
 <!-- /BUZÓN AGY -->
@@ -2916,27 +2920,70 @@
   var summary = document.getElementById('mailbox-summary');
   var directionTitle = document.getElementById('mailbox-direction-title');
   var refreshButton = document.getElementById('mailbox-refresh');
+  var cleanCompletedButton = document.getElementById('mailbox-clean-completed');
   var preview = document.getElementById('mailbox-preview');
   var previewGrid = document.getElementById('mailbox-preview-grid');
+  var previewDetail = document.getElementById('mailbox-preview-detail');
   var token = '';
   var expiresAt = 0;
   var direction = 'replit-to-agy';
   var items = [];
+  var totalItems = 0;
+  var listTruncated = false;
   var loading = false;
+  var cleaning = false;
+  var flashMessage = '';
   var requestSequence = 0;
+  var sessionExpiryTimer = null;
 
   function hasSession() {
     return Boolean(token) && Date.now() < expiresAt;
+  }
+
+  function clearSessionExpiryTimer() {
+    if (sessionExpiryTimer) {
+      clearTimeout(sessionExpiryTimer);
+      sessionExpiryTimer = null;
+    }
+  }
+
+  function scheduleSessionExpiry() {
+    clearSessionExpiryTimer();
+    if (!hasSession()) return;
+    sessionExpiryTimer = setTimeout(function () {
+      requestSequence += 1;
+      loading = false;
+      cleaning = false;
+      refreshButton.disabled = false;
+      refreshButton.textContent = '🔄 REFRESCAR BUZÓN';
+      cleanCompletedButton.textContent = '🧹 LIMPIAR COMPLETADAS';
+      setUnlocked(false);
+      loginError.textContent = 'La sesión expiró. Introduce el PIN de nuevo.';
+    }, Math.max(0, expiresAt - Date.now()));
   }
 
   function setUnlocked(unlocked) {
     authView.style.display = unlocked ? 'none' : 'block';
     mainView.style.display = unlocked ? 'flex' : 'none';
     if (!unlocked) {
+      clearSessionExpiryTimer();
+      requestSequence += 1;
+      loading = false;
+      cleaning = false;
       token = '';
       expiresAt = 0;
       items = [];
+      totalItems = 0;
+      listTruncated = false;
+      previewGrid.textContent = '';
+      previewDetail.textContent = '';
       preview.style.display = 'none';
+      refreshButton.disabled = false;
+      refreshButton.textContent = '🔄 REFRESCAR BUZÓN';
+      cleanCompletedButton.textContent = '🧹 LIMPIAR COMPLETADAS';
+      updateCleanButton();
+    } else {
+      scheduleSessionExpiry();
     }
   }
 
@@ -2992,6 +3039,18 @@
     return 'color:#ffd36e;border-color:rgba(240,160,32,0.45);background:rgba(240,160,32,0.10);';
   }
 
+  function updateCleanButton() {
+    if (!cleanCompletedButton) return;
+    var incoming = direction === 'replit-to-agy';
+    cleanCompletedButton.style.display = incoming ? 'inline-block' : 'none';
+    cleanCompletedButton.disabled = !incoming || loading || cleaning;
+    cleanCompletedButton.title = incoming
+      ? 'Elimina solo las misiones que PC1 confirme como COMPLETADA.'
+      : '';
+    cleanCompletedButton.style.opacity = cleanCompletedButton.disabled ? '0.55' : '1';
+    cleanCompletedButton.style.cursor = cleanCompletedButton.disabled ? 'wait' : 'pointer';
+  }
+
   function showTableMessage(message, color) {
     listBody.textContent = '';
     var row = document.createElement('tr');
@@ -3003,27 +3062,48 @@
     listBody.appendChild(row);
   }
 
+  function appendPreviewBox(container, labelText, valueText, wide) {
+    var box = document.createElement('div');
+    box.style.cssText = 'background:rgba(4,9,22,0.72);border:1px solid rgba(240,0,255,0.12);border-radius:8px;padding:8px 9px;min-width:0;' + (wide ? 'grid-column:1 / -1;' : '');
+    var label = document.createElement('div');
+    label.textContent = labelText.toUpperCase();
+    label.style.cssText = 'color:#667a95;font-size:0.56rem;letter-spacing:0.08em;margin-bottom:4px;';
+    var value = document.createElement('div');
+    value.textContent = valueText;
+    value.style.cssText = 'color:#dce8fb;font-size:0.69rem;overflow-wrap:anywhere;white-space:pre-wrap;line-height:1.48;';
+    box.appendChild(label);
+    box.appendChild(value);
+    container.appendChild(box);
+  }
+
   function showPreview(item) {
     previewGrid.textContent = '';
+    previewDetail.textContent = '';
     [
       ['Archivo', item.name],
       ['Dirección', item.direction === 'replit-to-agy' ? 'Entrada PC1' : 'Salida PC1'],
       ['Estado', item.status],
       ['Tamaño', formatSize(item.sizeBytes)],
-      ['Fecha', formatDate(item.modifiedAt)]
+      ['Creación', item.createdAt ? formatDate(item.createdAt) : 'No registrada en esta misión'],
+      ['Cierre', item.closedAt
+        ? formatDate(item.closedAt) + (item.closedAtEstimated ? ' (última actualización del archivo)' : '')
+        : 'Aún no registrada'],
+      ['Última actualización', formatDate(item.modifiedAt)]
     ].forEach(function (pair) {
-      var box = document.createElement('div');
-      box.style.cssText = 'background:rgba(4,9,22,0.72);border:1px solid rgba(240,0,255,0.12);border-radius:8px;padding:8px 9px;min-width:0;';
-      var label = document.createElement('div');
-      label.textContent = pair[0].toUpperCase();
-      label.style.cssText = 'color:#667a95;font-size:0.56rem;letter-spacing:0.08em;margin-bottom:4px;';
-      var value = document.createElement('div');
-      value.textContent = pair[1];
-      value.style.cssText = 'color:#dce8fb;font-size:0.69rem;overflow-wrap:anywhere;';
-      box.appendChild(label);
-      box.appendChild(value);
-      previewGrid.appendChild(box);
+      appendPreviewBox(previewGrid, pair[0], pair[1], false);
     });
+    appendPreviewBox(
+      previewDetail,
+      '🎯 Objetivo de la misión',
+      item.objective || 'No disponible: esta misión antigua no conserva un objetivo legible.',
+      true
+    );
+    appendPreviewBox(
+      previewDetail,
+      '📊 Resultado real de PC1',
+      item.pc1Result || 'PC1 todavía no registró un resultado para esta misión.',
+      true
+    );
     preview.style.display = 'block';
     preview.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
@@ -3033,6 +3113,7 @@
     preview.style.display = 'none';
     if (!items.length) {
       showTableMessage('Buzón vacío. No hay archivos permitidos en esta bandeja.', '#71839c');
+      updateCleanButton();
       return;
     }
     items.forEach(function (item) {
@@ -3055,6 +3136,7 @@
       actionCell.appendChild(action);
       listBody.appendChild(row);
     });
+    updateCleanButton();
   }
 
   function updateTabs() {
@@ -3070,6 +3152,7 @@
     outTab.style.borderColor = incoming ? 'rgba(240,0,255,0.18)' : 'rgba(240,0,255,0.5)';
     outTab.style.color = incoming ? '#94769e' : '#f3b7ff';
     directionTitle.textContent = incoming ? 'ENTRADA PC1' : 'SALIDA PC1';
+    updateCleanButton();
   }
 
   async function loadMailbox() {
@@ -3083,7 +3166,8 @@
     var seq = ++requestSequence;
     refreshButton.disabled = true;
     refreshButton.textContent = '⏳ CONSULTANDO PC1…';
-    summary.textContent = 'Leyendo únicamente metadatos permitidos…';
+    updateCleanButton();
+    summary.textContent = 'Leyendo las 10 misiones recientes y sus datos permitidos…';
     showTableMessage('Consultando el buzón seguro de PC1…', '#78dfe8');
     preview.style.display = 'none';
     try {
@@ -3111,7 +3195,15 @@
         return;
       }
       items = Array.isArray(data.items) ? data.items : [];
-      summary.textContent = items.length + (items.length === 1 ? ' archivo seguro encontrado.' : ' archivos seguros encontrados.');
+      totalItems = Number.isSafeInteger(data.total) && data.total >= items.length
+        ? data.total
+        : items.length;
+      listTruncated = data.truncated === true || totalItems > items.length;
+      var countText = listTruncated
+        ? 'Mostrando las ' + items.length + ' más recientes de ' + totalItems + ' misiones.'
+        : items.length + (items.length === 1 ? ' misión segura encontrada.' : ' misiones seguras encontradas.');
+      summary.textContent = (flashMessage ? flashMessage + ' · ' : '') + countText;
+      flashMessage = '';
       renderItems();
     } catch (_) {
       if (seq !== requestSequence) return;
@@ -3122,8 +3214,53 @@
         loading = false;
         refreshButton.disabled = false;
         refreshButton.textContent = '🔄 REFRESCAR BUZÓN';
+        updateCleanButton();
       }
     }
+  }
+
+  async function cleanCompletedMissions() {
+    if (direction !== 'replit-to-agy' || !hasSession() || loading || cleaning) return;
+    if (!window.confirm('¿Eliminar las misiones COMPLETADAS de Entrada PC1? Esta acción no se puede deshacer. PC1 volverá a comprobar el estado antes de borrar cada archivo.')) {
+      return;
+    }
+    cleaning = true;
+    refreshButton.disabled = true;
+    cleanCompletedButton.disabled = true;
+    cleanCompletedButton.textContent = '⏳ LIMPIANDO…';
+    summary.textContent = 'PC1 está comprobando y limpiando solo las misiones completadas…';
+    try {
+      var response = await fetch('/api/ops/mailbox/clean-completed', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: '{}'
+      });
+      var data = await response.json().catch(function () { return {}; });
+      if (response.status === 401) {
+        setUnlocked(false);
+        loginError.textContent = 'La sesión expiró. Introduce el PIN de nuevo.';
+        return;
+      }
+      if (!response.ok) {
+        summary.textContent = data.error || 'No fue posible limpiar las misiones completadas.';
+        return;
+      }
+      var deleted = Number.isSafeInteger(data.deletedCount) ? data.deletedCount : 0;
+      flashMessage = deleted
+        ? 'Se eliminaron ' + deleted + (deleted === 1 ? ' misión completada.' : ' misiones completadas.')
+        : 'No había misiones completadas para eliminar.';
+    } catch (_) {
+      summary.textContent = 'No fue posible conectar con PC1 para limpiar las misiones.';
+      return;
+    } finally {
+      cleaning = false;
+      cleanCompletedButton.textContent = '🧹 LIMPIAR COMPLETADAS';
+      updateCleanButton();
+    }
+    await loadMailbox();
   }
 
   loginForm.addEventListener('submit', async function (event) {
@@ -3166,9 +3303,10 @@
   document.getElementById('mailbox-close').addEventListener('click', closeMailbox);
   document.getElementById('mailbox-preview-close').addEventListener('click', function () { preview.style.display = 'none'; });
   refreshButton.addEventListener('click', loadMailbox);
+  cleanCompletedButton.addEventListener('click', cleanCompletedMissions);
   document.querySelectorAll('#mailbox-tabs [data-direction]').forEach(function (tab) {
     tab.addEventListener('click', function () {
-      if (loading || tab.getAttribute('data-direction') === direction) return;
+      if (loading || cleaning || tab.getAttribute('data-direction') === direction) return;
       direction = tab.getAttribute('data-direction');
       items = [];
       updateTabs();

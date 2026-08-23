@@ -1653,8 +1653,10 @@ const MAILBOX_BRIDGE_URL = process.env.MAILBOX_BRIDGE_URL ||
   'https://workspaceapi-server-production-0f24.up.railway.app';
 const MAILBOX_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const MAILBOX_MAX_SESSIONS = 256;
-const MAILBOX_MAX_ITEMS = 100;
+const MAILBOX_MAX_ITEMS = 10;
 const MAILBOX_MAX_RESULT_BYTES = 128000;
+const MAILBOX_MAX_OBJECTIVE_BYTES = 4000;
+const MAILBOX_MAX_PC1_RESULT_BYTES = 12000;
 const MAILBOX_LOGIN_WINDOW_MS = 10 * 60 * 1000;
 const MAILBOX_LOGIN_BLOCK_MS = 15 * 60 * 1000;
 const MAILBOX_LOGIN_MAX_FAILURES = 5;
@@ -1814,18 +1816,29 @@ function _mailboxBuildEncodedCommand(direction) {
   const script = [
     "$ErrorActionPreference='Stop'",
     `$f=Join-Path '${MAILBOX_ROOT}' '${config.folder}'`,
-    `$r='${config.readme}'`,
     `$p='${filePattern}'`,
     "if(!(Test-Path -LiteralPath $f -PathType Container)){throw 'MAILBOX_UNAVAILABLE'}",
-    "function q($h){$z=[regex]::Match(($h -join \"`n\"),'(?mi)^-\\s*\\*\\*Estado:\\*\\*\\s*(PENDIENTE|EN_PROCESO|COMPLETADA|ERROR)\\s*$');if($z.Success){return $z.Groups[1].Value.ToUpperInvariant()};return $null}",
+    "function r($p,$n){$x=[IO.File]::OpenRead($p);try{$l=[Math]::Min([int64]$n,$x.Length);$b=New-Object byte[] $l;[void]$x.Read($b,0,$l);return [Text.Encoding]::UTF8.GetString($b)}finally{$x.Dispose()}}",
+    "function q($t){$z=[regex]::Match($t,'(?mi)^-\\s*\\*\\*Estado:\\*\\*\\s*(PENDIENTE|EN_PROCESO|COMPLETADA|ERROR)\\s*$');if($z.Success){return $z.Groups[1].Value.ToUpperInvariant()};return $null}",
+    "function s($t,$p,$n){$m=[regex]::Match($t,\"(?ims)^##\\s+(?:$p)\\s*\\r?\\n+(.*?)(?=^##\\s+|\\z)\");if(!$m.Success){return $null};$v=$m.Groups[1].Value.Trim();if($v.Length -gt $n){$v=$v.Substring(0,$n)};return $v}",
+    "function v($t,$p,$n){$m=[regex]::Match($t,\"(?mi)^-\\s*\\*\\*(?:$p):\\*\\*\\s*(.+?)\\s*$\");if(!$m.Success){return $null};$x=$m.Groups[1].Value.Trim();if($x.Length -gt $n){$x=$x.Substring(0,$n)};return $x}",
+    "$g=@(Get-ChildItem -LiteralPath $f -File -Filter '*.md'|Where-Object{$_.Name -match $p}|Sort-Object LastWriteTime -Descending)",
+    '$n=$g.Count',
     '$a=@()',
-    "Get-ChildItem -LiteralPath $f -File -Filter '*.md'|Where-Object{$_.Name -eq $r -or $_.Name -match $p}|Sort-Object LastWriteTime -Descending|Select-Object -First 100|ForEach-Object{",
-    '$h=@(Get-Content -LiteralPath $_.FullName -TotalCount 10 -Encoding UTF8)',
-    '$s=q $h',
-    "if($_.Name -eq $r){$s='COMPLETADA'}elseif($s -notin @('PENDIENTE','EN_PROCESO','COMPLETADA','ERROR')){$s='ERROR'}",
-    "$a+=([pscustomobject]@{name=$_.Name;status=$s;sizeBytes=[int64]$_.Length;modifiedAt=$_.LastWriteTimeUtc.ToString('o')})",
+    '@($g|Select-Object -First 10)|ForEach-Object{',
+    '$c=r $_.FullName 65536',
+    '$st=q $c',
+    "if($st -notin @('PENDIENTE','EN_PROCESO','COMPLETADA','ERROR')){$st='ERROR'}",
+    "$o=s $c 'Objetivo|Misi[oó]n|Orden' 2000",
+    "$z=s $c 'Resultado(?:\\s+(?:de\\s+)?PC1)?|Respuesta(?:\\s+(?:de\\s+)?PC1)?|Resultado\\s+real|Ejecuci[oó]n' 6000",
+    "if(!$z){$z=v $c 'Resultado(?:\\s+(?:de\\s+)?PC1)?|Respuesta(?:\\s+(?:de\\s+)?PC1)?' 6000}",
+    "$cr=v $c 'Creada|Creado|Fecha\\s+de\\s+creaci[oó]n' 120",
+    "$cl=v $c 'Cerrada|Cierre|Completada|Finalizada' 120",
+    '$ce=$false',
+    "if(!$cl -and $st -eq 'COMPLETADA'){$cl=$_.LastWriteTimeUtc.ToString('o');$ce=$true}",
+    "$a+=([pscustomobject]@{name=$_.Name;status=$st;sizeBytes=[int64]$_.Length;modifiedAt=$_.LastWriteTimeUtc.ToString('o');createdAt=$cr;closedAt=$cl;closedAtEstimated=$ce;objective=$o;pc1Result=$z})",
     '}',
-    '[pscustomobject]@{items=@($a);total=@($a).Count;truncated=$false}|ConvertTo-Json -Depth 4 -Compress'
+    '[pscustomobject]@{items=@($a);total=$n;truncated=($n -gt 10)}|ConvertTo-Json -Depth 5 -Compress'
   ].join(';');
 
   const encoded = Buffer.from(script, 'utf16le').toString('base64');
@@ -1885,6 +1898,29 @@ async function _mailboxDispatchRead(direction) {
   return _mailboxDispatch(_mailboxBuildEncodedCommand(direction));
 }
 
+function _mailboxBuildEncodedCleanCommand() {
+  const config = MAILBOX_DIRECTIONS['replit-to-agy'];
+  const script = [
+    "$ErrorActionPreference='Stop'",
+    `$f=Join-Path '${MAILBOX_ROOT}' '${config.folder}'`,
+    "$p='^MISION_\\d{8}_\\d{3}\\.md$'",
+    "if(!(Test-Path -LiteralPath $f -PathType Container)){throw 'MAILBOX_UNAVAILABLE'}",
+    "function r($p,$n){$x=[IO.File]::OpenRead($p);try{$l=[Math]::Min([int64]$n,$x.Length);$b=New-Object byte[] $l;[void]$x.Read($b,0,$l);return [Text.Encoding]::UTF8.GetString($b)}finally{$x.Dispose()}}",
+    '$a=@()',
+    "Get-ChildItem -LiteralPath $f -File -Filter '*.md'|Where-Object{$_.Name -match $p}|ForEach-Object{",
+    '$h=r $_.FullName 65536',
+    "$m=[regex]::Match($h,'(?mi)^-\\s*\\*\\*Estado:\\*\\*\\s*(PENDIENTE|EN_PROCESO|COMPLETADA|ERROR)\\s*$')",
+    "$s=if($m.Success){$m.Groups[1].Value.ToUpperInvariant()}else{'ERROR'}",
+    "if($s -eq 'COMPLETADA' -and (($_.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)){Remove-Item -LiteralPath $_.FullName -Force;$a+=$_.Name}",
+    '}',
+    '[pscustomobject]@{deletedNames=@($a);deletedCount=@($a).Count}|ConvertTo-Json -Depth 3 -Compress'
+  ].join(';');
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const instruction = `[PC1] EJECUTAR powershell -NoProfile -EncodedCommand ${encoded}`;
+  if (instruction.length > 7500) throw new Error('MAILBOX_COMMAND_TOO_LONG');
+  return instruction;
+}
+
 function _mailboxRead(direction) {
   const cached = _mailboxRecentReads.get(direction);
   if (cached && Date.now() - cached.completedAt < MAILBOX_READ_CACHE_MS) {
@@ -1909,6 +1945,37 @@ function _mailboxRead(direction) {
     });
   _mailboxInFlightReads.set(direction, request);
   return request;
+}
+
+function _mailboxSanitizePreviewText(value, maxBytes) {
+  if (typeof value !== 'string') return null;
+  const normalized = value
+    .normalize('NFC')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .replace(
+      /\b((?:api[_ -]?key|token|password|passwd|secret|authorization)\b\s*[:=]\s*)(?:"[^"]*"|'[^']*'|\S+)/gi,
+      '$1[REDACTADO]'
+    )
+    .replace(/\bBearer\s+[A-Za-z0-9._~+\/=-]{12,}/gi, 'Bearer [REDACTADO]')
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}(?:\.[A-Za-z0-9_-]{10,})?/g, '[JWT REDACTADO]')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{4,}/g, '\n\n\n')
+    .trim();
+  if (!normalized) return null;
+  const bytes = Buffer.from(normalized, 'utf8');
+  if (bytes.length <= maxBytes) return normalized;
+  return bytes
+    .subarray(0, maxBytes)
+    .toString('utf8')
+    .replace(/\uFFFD+$/g, '')
+    .trim();
+}
+
+function _mailboxParseOptionalDate(value) {
+  if (typeof value !== 'string' || value.length > 160) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
 function _mailboxParseResult(raw, direction) {
@@ -1964,10 +2031,56 @@ function _mailboxParseResult(raw, direction) {
       direction,
       status,
       sizeBytes,
-      modifiedAt: date.toISOString()
+      modifiedAt: date.toISOString(),
+      createdAt: _mailboxParseOptionalDate(entry.createdAt),
+      closedAt: _mailboxParseOptionalDate(entry.closedAt),
+      closedAtEstimated: entry.closedAtEstimated === true,
+      objective: _mailboxSanitizePreviewText(
+        entry.objective,
+        MAILBOX_MAX_OBJECTIVE_BYTES
+      ),
+      pc1Result: _mailboxSanitizePreviewText(
+        entry.pc1Result,
+        MAILBOX_MAX_PC1_RESULT_BYTES
+      )
     });
   }
-  return items;
+  const parsedTotal = Number(parsed && parsed.total);
+  const total =
+    Number.isSafeInteger(parsedTotal) && parsedTotal >= items.length
+      ? Math.min(parsedTotal, 9999)
+      : items.length;
+  return {
+    items,
+    total,
+    truncated: Boolean(parsed && parsed.truncated) || total > items.length
+  };
+}
+
+function _mailboxParseCleanResult(raw) {
+  if (Buffer.byteLength(raw, 'utf8') > MAILBOX_MAX_RESULT_BYTES) {
+    throw new Error('MAILBOX_RESULT_TOO_LARGE');
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('MAILBOX_CLEAN_INVALID_JSON');
+  }
+  const candidate = parsed && Array.isArray(parsed.deletedNames)
+    ? parsed.deletedNames
+    : [];
+  const deletedNames = [];
+  for (const value of candidate.slice(0, 999)) {
+    if (
+      typeof value === 'string' &&
+      /^MISION_\d{8}_\d{3}\.md$/.test(value) &&
+      !deletedNames.includes(value)
+    ) {
+      deletedNames.push(value);
+    }
+  }
+  return deletedNames;
 }
 
 function _mailboxNormalizeInstruction(instruction) {
@@ -2144,8 +2257,8 @@ async function _mailboxLegacyChatFallback(instruction) {
       };
     }
 
-    const missions = _mailboxParseResult(outcome.result, direction)
-      .filter((item) => item.name !== mailbox.readme);
+    const mailboxResult = _mailboxParseResult(outcome.result, direction);
+    const missions = mailboxResult.items.filter((item) => item.name !== mailbox.readme);
     const pending = missions.filter((item) => item.status === 'PENDIENTE').length;
     const processing = missions.filter((item) => item.status === 'EN_PROCESO').length;
     const completed = missions.filter((item) => item.status === 'COMPLETADA').length;
@@ -2157,10 +2270,13 @@ async function _mailboxLegacyChatFallback(instruction) {
       source: 'mailbox',
       riskLevel: 0,
       result: [
-        `${mailboxName} consultado en tiempo real. Hay ${missions.length} archivos de misión.`,
+        `${mailboxName} consultado en tiempo real. Hay ${mailboxResult.total} archivos de misión.`,
         `${pending} pendientes, ${processing} en proceso, ${completed} completadas y ${errored} con error.`,
+        mailboxResult.truncated
+          ? `La vista incluye las ${missions.length} más recientes.`
+          : null,
         recent.length ? `Las más recientes son: ${recent.join('; ')}.` : 'No hay misiones registradas.'
-      ].join(' ')
+      ].filter(Boolean).join(' ')
     };
   } catch (error) {
     console.error('[mailbox-chat-fallback] error de lectura', error instanceof Error ? error.message : 'UNKNOWN');
@@ -2334,10 +2450,12 @@ app.post('/api/ops/mailbox/list', async (req, res) => {
       });
     }
 
-    const items = _mailboxParseResult(outcome.result, direction);
+    const mailboxResult = _mailboxParseResult(outcome.result, direction);
     return res.json({
       direction,
-      items,
+      items: mailboxResult.items,
+      total: mailboxResult.total,
+      truncated: mailboxResult.truncated,
       fetchedAt: new Date().toISOString()
     });
   } catch (error) {
@@ -2352,6 +2470,61 @@ app.post('/api/ops/mailbox/list', async (req, res) => {
         ? 'El puente no está disponible en este momento'
         : 'PC1 devolvió metadatos de buzón no válidos',
       code: unavailable ? 'BRIDGE_UNAVAILABLE' : 'INVALID_MAILBOX_RESPONSE'
+    });
+  }
+});
+
+app.post('/api/ops/mailbox/clean-completed', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!_mailboxSameOriginAllowed(req)) {
+    return res.status(403).json({ error: 'Origen no autorizado' });
+  }
+  const sessionState = _mailboxReadSession(req);
+  if (sessionState !== 'valid') {
+    return res.status(401).json({
+      error:
+        sessionState === 'expired'
+          ? 'La sesión del buzón expiró'
+          : 'Sesión del buzón no válida',
+      code: sessionState === 'expired' ? 'SESSION_EXPIRED' : 'UNAUTHORIZED'
+    });
+  }
+  if (!AGY_KEY) {
+    return res.status(503).json({ error: 'Conexión con PC1 no configurada' });
+  }
+
+  try {
+    const outcome = await _mailboxDispatch(_mailboxBuildEncodedCleanCommand());
+    if (outcome.status === 'timeout') {
+      return res.status(504).json({
+        error: 'PC1 no respondió a tiempo. No se eliminó ninguna misión.',
+        code: 'PC1_TIMEOUT'
+      });
+    }
+    if (outcome.status !== 'done' || !outcome.result) {
+      return res.status(502).json({
+        error: 'PC1 no pudo limpiar las misiones completadas',
+        code: 'PC1_CLEAN_ERROR'
+      });
+    }
+    const deletedNames = _mailboxParseCleanResult(outcome.result);
+    _mailboxRecentReads.delete('replit-to-agy');
+    return res.json({
+      deletedCount: deletedNames.length,
+      deletedNames
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'UNKNOWN';
+    console.error('[mailbox] error de limpieza', reason);
+    const unavailable =
+      reason.startsWith('BRIDGE_') ||
+      reason === 'TimeoutError' ||
+      reason === 'The operation was aborted due to timeout';
+    return res.status(unavailable ? 502 : 422).json({
+      error: unavailable
+        ? 'El puente no está disponible en este momento'
+        : 'PC1 devolvió una respuesta de limpieza no válida',
+      code: unavailable ? 'BRIDGE_UNAVAILABLE' : 'INVALID_CLEAN_RESPONSE'
     });
   }
 });
@@ -2388,7 +2561,8 @@ app.post('/api/ops/mailbox/voice/command', async (req, res) => {
       if (outcome.status !== 'done' || !outcome.result) {
         return res.status(502).json({ error: 'PC1 no pudo leer el buzon solicitado' });
       }
-      const items = _mailboxParseResult(outcome.result, direction);
+      const mailboxResult = _mailboxParseResult(outcome.result, direction);
+      const items = mailboxResult.items;
       const missions = items.filter((item) => item.name !== mailbox.readme);
       const pending = missions.filter((item) => item.status === 'PENDIENTE').length;
       const processing = missions.filter((item) => item.status === 'EN_PROCESO').length;
@@ -2396,10 +2570,13 @@ app.post('/api/ops/mailbox/voice/command', async (req, res) => {
       const errored = missions.filter((item) => item.status === 'ERROR').length;
       const recent = missions.slice(0, 5).map((item) => `${item.name}: ${item.status}`);
       const summary = [
-        `${mailboxName} consultado. Hay ${missions.length} archivos de misión.`,
+        `${mailboxName} consultado. Hay ${mailboxResult.total} archivos de misión.`,
         `${pending} pendientes, ${processing} en proceso, ${completed} completadas y ${errored} con error.`,
+        mailboxResult.truncated
+          ? `La vista incluye las ${missions.length} más recientes.`
+          : null,
         recent.length ? `Las mas recientes son: ${recent.join('; ')}.` : 'No hay misiones registradas.'
-      ].join(' ');
+      ].filter(Boolean).join(' ');
       return res.json({ kind: 'list', message: summary, items });
     } catch (error) {
       console.error('[mailbox-voice] error de lectura', error instanceof Error ? error.message : 'UNKNOWN');
