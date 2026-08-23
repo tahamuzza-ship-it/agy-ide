@@ -5,7 +5,7 @@
 modelos:
   gemini_chat: gemini-2.5-flash        # chat normal del IDE
   gemini_goal: gemini-2.0-flash        # planificación y auto-healer del modo /goal
-  groq: llama-3.3-70b-versatile        # respaldo cuando Gemini falla
+  groq: llama-3.1-70b-versatile        # respaldo cuando Gemini falla; si falla, usa llama-3.1-8b-instant
 
 limites:
   chat_max_tokens: 4096
