@@ -1980,9 +1980,20 @@ function _mailboxNormalizeInstruction(instruction) {
     .trim();
 }
 
+function _mailboxReadDirection(instruction) {
+  const normalized = _mailboxNormalizeInstruction(instruction);
+  const asksPc1Pending =
+    /\bque\s+(?:tareas?|misiones?)\s+(?:tiene|debe)\s+pc1\b|\b(?:tareas?|misiones?)\s+(?:pendientes?|para)\s+(?:de\s+)?pc1\b|\bque\s+tiene\s+que\s+hacer\s+pc1\b/.test(normalized);
+  const asksMailboxRead =
+    /\b(?:consulta|consultar|ver|muestra|muestrame|mostrar|lista|listar)\b.*\bbuzon\b/.test(normalized) ||
+    /\b(?:ver|muestra|muestrame|mostrar|lista|listar|consulta|consultar)\b.*\b(?:pendientes?|tareas?|misiones?)\b/.test(normalized);
+  return asksPc1Pending || asksMailboxRead ? 'replit-to-agy' : null;
+}
+
 function _mailboxForcedMission(instruction) {
   const raw = String(instruction || '').trim();
   const normalized = _mailboxNormalizeInstruction(raw);
+  if (_mailboxReadDirection(raw)) return null;
   if (!raw || !/\b(?:pc1|mision(?:es)?|revis(?:a|ar|e|ion)|buzon|dile\s+a\s+pc1)\b/.test(normalized)) {
     return null;
   }
@@ -2007,8 +2018,8 @@ function _mailboxLegacyChatIntent(instruction) {
   const mentionsMailbox = /\bbuzon\b/.test(normalized);
   const asksToCreate = /\b(?:dejar|deja|dejando|enviar|envia|enviando|manda|mandar|mandando|crea|crear|creando|prepara|preparar|preparando|nueva)\b/.test(normalized)
     && /\bmision(?:es)?\b/.test(normalized);
-  const asksPc1Pending = /\bque\s+(?:tareas?|misiones?)\s+(?:tiene|debe)\s+pc1\b|\b(?:tareas?|misiones?)\s+(?:pendientes?|para)\s+(?:de\s+)?pc1\b|\bque\s+tiene\s+que\s+hacer\s+pc1\b/.test(normalized);
-  if (asksPc1Pending) return { kind: 'read', direction: 'replit-to-agy' };
+  const readDirection = _mailboxReadDirection(instruction);
+  if (readDirection) return { kind: 'read', direction: readDirection };
   const naturalMissionPatterns = [
     /^(?:agy|agi) dile a pc1 que (.+)$/,
     /^mision para pc1 (.+)$/,
@@ -2361,10 +2372,10 @@ app.post('/api/ops/mailbox/voice/command', async (req, res) => {
     return res.status(503).json({ error: 'Conexion con PC1 no configurada' });
   }
 
-  const forcedMission = _mailboxForcedMission(
-    req.body && (req.body.instruction || req.body.text || req.body.mission)
-  );
-  const action = forcedMission ? 'create' : req.body && req.body.action;
+  const inputText = req.body && (req.body.instruction || req.body.text || req.body.mission);
+  const readDirection = _mailboxReadDirection(inputText);
+  const forcedMission = readDirection ? null : _mailboxForcedMission(inputText);
+  const action = forcedMission ? 'create' : (readDirection ? 'list' : req.body && req.body.action);
   if (action === 'list' || action === 'list-agy-to-replit') {
     try {
       const direction = action === 'list-agy-to-replit' ? 'agy-to-replit' : 'replit-to-agy';
