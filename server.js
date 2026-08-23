@@ -1591,6 +1591,9 @@ const MAILBOX_LOGIN_WINDOW_MS = 10 * 60 * 1000;
 const MAILBOX_LOGIN_BLOCK_MS = 15 * 60 * 1000;
 const MAILBOX_LOGIN_MAX_FAILURES = 5;
 const MAILBOX_READ_CACHE_MS = 5000;
+const MAILBOX_VOICE_PROPOSAL_TTL_MS = 60 * 1000;
+const MAILBOX_VOICE_MAX_PROPOSALS = 256;
+const MAILBOX_VOICE_MAX_MISSION_BYTES = 4000;
 const MAILBOX_ROOT = 'C:\\Users\\Roberto1\\OneDrive\\Desktop\\comunicacion entre apps en nube y en local';
 const MAILBOX_DIRECTIONS = Object.freeze({
   'replit-to-agy': Object.freeze({
@@ -1609,6 +1612,7 @@ const _mailboxSessions = new Map();
 const _mailboxLoginAttempts = new Map();
 const _mailboxInFlightReads = new Map();
 const _mailboxRecentReads = new Map();
+const _mailboxVoiceProposals = new Map();
 
 function _mailboxPruneSessions(now = Date.now()) {
   for (const [token, expiresAt] of _mailboxSessions) {
@@ -1627,6 +1631,22 @@ function _mailboxPasswordMatches(provided) {
   const expectedBuffer = Buffer.from(AGY_IDE_PWD, 'utf8');
   return providedBuffer.length === expectedBuffer.length &&
     crypto.timingSafeEqual(providedBuffer, expectedBuffer);
+}
+
+function _mailboxHeaderAuthenticated(req) {
+  const provided = req.headers['x-agyide-pwd'];
+  return (
+    typeof provided === 'string' &&
+    Buffer.byteLength(provided, 'utf8') <= 256 &&
+    _mailboxPasswordMatches(provided)
+  );
+}
+
+function _mailboxVoiceSession(req) {
+  const value = req.headers['x-agy-voice-session'];
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{24,120}$/.test(value)
+    ? value
+    : null;
 }
 
 function _mailboxSameOriginAllowed(req) {
@@ -1746,8 +1766,7 @@ function _mailboxBuildEncodedCommand(direction) {
   return instruction;
 }
 
-async function _mailboxDispatchRead(direction) {
-  const instruction = _mailboxBuildEncodedCommand(direction);
+async function _mailboxDispatch(instruction) {
   const sendResponse = await fetch(`${MAILBOX_BRIDGE_URL}/api/antigravity/send`, {
     method: 'POST',
     headers: {
@@ -1792,6 +1811,10 @@ async function _mailboxDispatchRead(direction) {
     }
   }
   return { status: 'timeout', result: null };
+}
+
+async function _mailboxDispatchRead(direction) {
+  return _mailboxDispatch(_mailboxBuildEncodedCommand(direction));
 }
 
 function _mailboxRead(direction) {
@@ -1877,6 +1900,87 @@ function _mailboxParseResult(raw, direction) {
     });
   }
   return items;
+}
+
+function _mailboxNormalizeVoiceMission(value) {
+  if (typeof value !== 'string') return null;
+  const normalized = value
+    .normalize('NFC')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  if (
+    normalized.length < 4 ||
+    Buffer.byteLength(normalized, 'utf8') > MAILBOX_VOICE_MAX_MISSION_BYTES
+  ) {
+    return null;
+  }
+  return normalized;
+}
+
+function _mailboxPruneVoiceProposals(now = Date.now()) {
+  for (const [id, proposal] of _mailboxVoiceProposals) {
+    if (proposal.expiresAt <= now) _mailboxVoiceProposals.delete(id);
+  }
+  while (_mailboxVoiceProposals.size >= MAILBOX_VOICE_MAX_PROPOSALS) {
+    const oldest = _mailboxVoiceProposals.keys().next().value;
+    if (!oldest) break;
+    _mailboxVoiceProposals.delete(oldest);
+  }
+}
+
+function _mailboxCreateMissionMarkdown(mission) {
+  const now = new Date().toISOString();
+  return [
+    '# MISION DE REPLIT PARA AGY',
+    '',
+    `- **Estado:** PENDIENTE`,
+    `- **Creada:** ${now}`,
+    '- **Origen:** Comando de voz confirmado en AGY IDE',
+    '',
+    '## Objetivo',
+    '',
+    mission,
+    '',
+    '## Seguridad',
+    '',
+    '- Esta mision fue creada como archivo nuevo despues de una confirmacion verbal.',
+    '- No sobrescribir ni borrar archivos existentes.',
+    ''
+  ].join('\n');
+}
+
+function _mailboxBuildEncodedCreateCommand(markdown) {
+  const contentBase64 = Buffer.from(markdown, 'utf8').toString('base64');
+  const folder = MAILBOX_DIRECTIONS['replit-to-agy'].folder;
+  const script = [
+    "$ErrorActionPreference='Stop'",
+    `$f=Join-Path '${MAILBOX_ROOT}' '${folder}'`,
+    "if(!(Test-Path -LiteralPath $f -PathType Container)){throw 'MAILBOX_UNAVAILABLE'}",
+    `$b='${contentBase64}'`,
+    '$c=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b))',
+    '$d=Get-Date -Format yyyyMMdd',
+    '$n=$null',
+    'for($i=1;$i -le 999;$i++){',
+    '$x=("MISION_{0}_{1:D3}.md" -f $d,$i)',
+    '$p=Join-Path $f $x',
+    'try{',
+    '$u=New-Object Text.UTF8Encoding($false)',
+    '$w=New-Object IO.StreamWriter((New-Object IO.FileStream($p,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)),$u)',
+    'try{$w.Write($c)}finally{$w.Dispose()}',
+    '$n=$x',
+    'break',
+    "}catch [IO.IOException]{if(Test-Path -LiteralPath $p){continue};throw}",
+    '}',
+    "if(!$n){throw 'MAILBOX_FULL'}",
+    "[pscustomobject]@{name=$n;status='PENDIENTE'}|ConvertTo-Json -Compress"
+  ].join(';');
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const instruction = `[PC1] EJECUTAR powershell -NoProfile -EncodedCommand ${encoded}`;
+  if (instruction.length > 7500) throw new Error('MAILBOX_COMMAND_TOO_LONG');
+  return instruction;
 }
 
 app.post('/api/ops/mailbox/session', async (req, res) => {
@@ -1977,6 +2081,157 @@ app.post('/api/ops/mailbox/list', async (req, res) => {
         : 'PC1 devolvió metadatos de buzón no válidos',
       code: unavailable ? 'BRIDGE_UNAVAILABLE' : 'INVALID_MAILBOX_RESPONSE'
     });
+  }
+});
+
+app.post('/api/ops/mailbox/voice/command', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!_mailboxSameOriginAllowed(req)) {
+    return res.status(403).json({ error: 'Origen no autorizado' });
+  }
+  if (!_mailboxHeaderAuthenticated(req)) {
+    return res.status(401).json({ error: 'Acceso no autorizado' });
+  }
+  const voiceSession = _mailboxVoiceSession(req);
+  if (!voiceSession) {
+    return res.status(400).json({ error: 'Sesion de voz no valida' });
+  }
+  if (!AGY_KEY) {
+    return res.status(503).json({ error: 'Conexion con PC1 no configurada' });
+  }
+
+  const action = req.body && req.body.action;
+  if (action === 'list') {
+    try {
+      const outcome = await _mailboxRead('replit-to-agy');
+      if (outcome.status === 'timeout') {
+        return res.status(504).json({ error: 'PC1 no respondio a tiempo' });
+      }
+      if (outcome.status !== 'done' || !outcome.result) {
+        return res.status(502).json({ error: 'PC1 no pudo leer el Buzon 1' });
+      }
+      const items = _mailboxParseResult(outcome.result, 'replit-to-agy');
+      const missions = items.filter((item) => item.name !== MAILBOX_DIRECTIONS['replit-to-agy'].readme);
+      const pending = missions.filter((item) => item.status === 'PENDIENTE').length;
+      const processing = missions.filter((item) => item.status === 'EN_PROCESO').length;
+      const completed = missions.filter((item) => item.status === 'COMPLETADA').length;
+      const errored = missions.filter((item) => item.status === 'ERROR').length;
+      const recent = missions.slice(0, 5).map((item) => `${item.name}: ${item.status}`);
+      const summary = [
+        `Buzon 1 consultado. Hay ${missions.length} misiones.`,
+        `${pending} pendientes, ${processing} en proceso, ${completed} completadas y ${errored} con error.`,
+        recent.length ? `Las mas recientes son: ${recent.join('; ')}.` : 'No hay misiones registradas.'
+      ].join(' ');
+      return res.json({ kind: 'list', message: summary, items });
+    } catch (error) {
+      console.error('[mailbox-voice] error de lectura', error instanceof Error ? error.message : 'UNKNOWN');
+      return res.status(502).json({ error: 'No pude consultar el Buzon 1 ahora mismo' });
+    }
+  }
+
+  if (action === 'draft') {
+    const mission = _mailboxNormalizeVoiceMission(req.body && req.body.mission);
+    if (!mission) {
+      return res.status(400).json({ error: 'El dictado de la mision no es valido' });
+    }
+    _mailboxPruneVoiceProposals();
+    const proposalId = crypto.randomBytes(24).toString('base64url');
+    const expiresAt = Date.now() + MAILBOX_VOICE_PROPOSAL_TTL_MS;
+    _mailboxVoiceProposals.set(proposalId, {
+      voiceSession,
+      mission,
+      expiresAt
+    });
+    return res.json({
+      kind: 'proposal',
+      proposalId,
+      expiresAt: new Date(expiresAt).toISOString(),
+      mission,
+      message: `Voy a crear una mision nueva en el Buzon 1 con este objetivo: ${mission}. Di confirmo para crearla o cancelar para no hacer nada.`
+    });
+  }
+
+  return res.status(400).json({ error: 'Comando de voz de Buzon 1 no valido' });
+});
+
+app.post('/api/ops/mailbox/voice/confirm', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!_mailboxSameOriginAllowed(req)) {
+    return res.status(403).json({ error: 'Origen no autorizado' });
+  }
+  if (!_mailboxHeaderAuthenticated(req)) {
+    return res.status(401).json({ error: 'Acceso no autorizado' });
+  }
+  const voiceSession = _mailboxVoiceSession(req);
+  if (!voiceSession) {
+    return res.status(400).json({ error: 'Sesion de voz no valida' });
+  }
+
+  const proposalId = req.body && req.body.proposalId;
+  const decision = req.body && req.body.decision;
+  if (
+    typeof proposalId !== 'string' ||
+    !/^[A-Za-z0-9_-]{24,120}$/.test(proposalId) ||
+    (decision !== 'confirm' && decision !== 'cancel')
+  ) {
+    return res.status(400).json({ error: 'Confirmacion no valida' });
+  }
+
+  const proposal = _mailboxVoiceProposals.get(proposalId);
+  if (!proposal || proposal.voiceSession !== voiceSession || proposal.expiresAt <= Date.now()) {
+    if (proposal) _mailboxVoiceProposals.delete(proposalId);
+    return res.status(410).json({
+      error: 'La propuesta ya no esta disponible. Vuelve a dictar la mision.'
+    });
+  }
+  _mailboxVoiceProposals.delete(proposalId);
+
+  if (decision === 'cancel') {
+    return res.json({
+      kind: 'cancelled',
+      message: 'Propuesta cancelada. No se creo ningun archivo.'
+    });
+  }
+  if (!AGY_KEY) {
+    return res.status(503).json({ error: 'Conexion con PC1 no configurada' });
+  }
+
+  try {
+    const markdown = _mailboxCreateMissionMarkdown(proposal.mission);
+    const instruction = _mailboxBuildEncodedCreateCommand(markdown);
+    const outcome = await _mailboxDispatch(instruction);
+    if (outcome.status === 'timeout') {
+      return res.status(504).json({ error: 'PC1 no respondio a tiempo' });
+    }
+    if (outcome.status !== 'done' || !outcome.result) {
+      return res.status(502).json({ error: 'PC1 no pudo crear la mision' });
+    }
+
+    let created;
+    try {
+      created = JSON.parse(outcome.result);
+    } catch {
+      return res.status(502).json({ error: 'PC1 devolvio una respuesta no valida' });
+    }
+    if (
+      !created ||
+      typeof created !== 'object' ||
+      typeof created.name !== 'string' ||
+      !/^MISION_\d{8}_\d{3}\.md$/.test(created.name) ||
+      created.status !== 'PENDIENTE'
+    ) {
+      return res.status(502).json({ error: 'PC1 devolvio una respuesta no valida' });
+    }
+    _mailboxRecentReads.delete('replit-to-agy');
+    return res.json({
+      kind: 'created',
+      name: created.name,
+      status: 'PENDIENTE',
+      message: `Mision creada en el Buzon 1: ${created.name}. Quedo en estado pendiente.`
+    });
+  } catch (error) {
+    console.error('[mailbox-voice] error de creacion', error instanceof Error ? error.message : 'UNKNOWN');
+    return res.status(502).json({ error: 'No pude crear la mision en PC1' });
   }
 });
 /* /BUZÓN AGY */

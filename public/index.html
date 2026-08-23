@@ -547,8 +547,8 @@
         try { if (_ttsAudio) { _ttsAudio.pause(); _ttsAudio = null; } } catch(e) {}
         try { window.speechSynthesis.cancel(); } catch(e) {}
       }
-      function _speakBrowser(clean) {
-        if (!('speechSynthesis' in window)) return;
+      function _speakBrowser(clean, afterSpeech) {
+        if (!('speechSynthesis' in window)) return false;
         try {
           window.speechSynthesis.cancel();
           var u = new SpeechSynthesisUtterance(clean);
@@ -557,8 +557,21 @@
           if (best) u.voice = best;
           u.rate = 1.0;
           u.pitch = 1.05;
+          if (typeof afterSpeech === 'function') {
+            var done = false;
+            var finish = function() {
+              if (done) return;
+              done = true;
+              afterSpeech();
+            };
+            u.onend = finish;
+            u.onerror = finish;
+          }
           window.speechSynthesis.speak(u);
-        } catch(e) {}
+          return true;
+        } catch(e) {
+          return false;
+        }
       }
       /* Limpieza amistosa: convierte la respuesta en texto natural, como si lo leyera una persona */
     function _cleanForSpeech(text) {
@@ -596,11 +609,11 @@
         .slice(0, 1200);
       return t;
     }
-    function _speak(text, force) {
-      if ((!_ttsOn && !force) || !('speechSynthesis' in window)) return;
+    function _speak(text, force, afterSpeech) {
+      if ((!_ttsOn && !force) || !('speechSynthesis' in window)) return false;
         // no leer bloques de archivos ni codigo
         var clean = _cleanForSpeech(text);
-        if (!clean.trim()) return;
+        if (!clean.trim()) return false;
         _ttsStop();
         // Voz premium con IA (Gemini TTS); si falla, cae al lector del navegador
         fetch('/api/tts', {
@@ -611,15 +624,26 @@
           if (!r.ok) throw new Error('tts ' + r.status);
           return r.blob();
         }).then(function(blob) {
-          if (!_ttsOn) return;
+          if (!_ttsOn && !force) return;
           var url = URL.createObjectURL(blob);
           _ttsStop();
           _ttsAudio = new Audio(url);
-          _ttsAudio.onended = function() { URL.revokeObjectURL(url); };
+          var done = false;
+          var finish = function() {
+            if (done) return;
+            done = true;
+            URL.revokeObjectURL(url);
+            if (typeof afterSpeech === 'function') afterSpeech();
+          };
+          _ttsAudio.onended = finish;
+          _ttsAudio.onerror = finish;
           return _ttsAudio.play();
         }).catch(function() {
-          if (_ttsOn) _speakBrowser(clean);
+          if ((_ttsOn || force) && !_speakBrowser(clean, afterSpeech) && typeof afterSpeech === 'function') {
+            afterSpeech();
+          }
         });
+        return true;
       }
     document.addEventListener('DOMContentLoaded', function() {
       var b = document.getElementById('btn-tts');
@@ -649,7 +673,7 @@
     return { wrap, bubble };
     }
 
-    function finalizeThinking(wrap, bubble, text) {
+    function finalizeThinking(wrap, bubble, text, afterSpeech) {
     var parsed = _parseFileBlocks(text);
     var display = parsed.clean;
     bubble.className = 'msg-bubble';
@@ -661,8 +685,10 @@
     wrap.appendChild(meta);
     chatHistory.push({ role: 'agt', text: display, time: meta.textContent });
     saveHistory(chatHistory);
-    if (window._agySpeakNext) { window._agySpeakNext = false; _speak(display, true); }
-    else _speak(display);
+    var spoke;
+    if (window._agySpeakNext) { window._agySpeakNext = false; spoke = _speak(display, true, afterSpeech); }
+    else spoke = _speak(display, false, afterSpeech);
+    if (typeof afterSpeech === 'function' && !spoke) window.setTimeout(afterSpeech, 0);
     const box = document.getElementById('chat-messages');
     box.scrollTop = box.scrollHeight;
     if (parsed.files.length > 0) {
@@ -731,6 +757,80 @@
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     return r.json();
+    }
+
+    function _voiceSessionId() {
+    var key = 'agyide_voice_session';
+    var value = '';
+    try { value = sessionStorage.getItem(key) || ''; } catch (_) {}
+    if (!/^[A-Za-z0-9_-]{24,120}$/.test(value)) {
+      var bytes = new Uint8Array(24);
+      window.crypto.getRandomValues(bytes);
+      value = Array.prototype.map.call(bytes, function(b) {
+        return b.toString(16).padStart(2, '0');
+      }).join('');
+      try { sessionStorage.setItem(key, value); } catch (_) {}
+    }
+    return value;
+    }
+
+    function _normalizeVoiceOrder(text) {
+    return String(text || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[¿?¡!.,;:]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    }
+
+    function _mailboxVoiceIntent(text) {
+    var normalized = _normalizeVoiceOrder(text);
+    if (/^(?:agy )?(?:consulta|consultar|revisa|revisar|mira|mirar|lee|leer) (?:el )?buzon (?:uno|1)$/.test(normalized)) {
+      return { type: 'list' };
+    }
+    var match = /^(?:agy )?(?:crea|crear|prepara|preparar) (?:una )?mision (?:en|para) (?:el )?buzon (?:uno|1)(?: con (?:el )?objetivo)? (.+)$/.exec(normalized);
+    if (!match) {
+      match = /^(?:agy )?(?:crea|crear|prepara|preparar) (?:en )?(?:el )?buzon (?:uno|1) (?:una )?mision(?: con (?:el )?objetivo)? (.+)$/.exec(normalized);
+    }
+    if (match && match[1] && match[1].trim().length >= 4) {
+      return { type: 'draft', mission: match[1].trim() };
+    }
+    return null;
+    }
+
+    async function _mailboxVoiceRequest(path, payload) {
+    var response = await fetch(path, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-agyide-pwd': _getPwd(),
+        'x-agy-voice-session': _voiceSessionId()
+      },
+      body: JSON.stringify(payload)
+    });
+    var data = await response.json().catch(function() { return {}; });
+    if (!response.ok) throw new Error(data.error || ('HTTP ' + response.status));
+    return data;
+    }
+
+    async function _runMailboxVoiceIntent(intent) {
+    if (intent.type === 'list') {
+      return _mailboxVoiceRequest('/api/ops/mailbox/voice/command', { action: 'list' });
+    }
+    if (intent.type === 'draft') {
+      return _mailboxVoiceRequest('/api/ops/mailbox/voice/command', {
+        action: 'draft',
+        mission: intent.mission
+      });
+    }
+    if (intent.type === 'confirm') {
+      return _mailboxVoiceRequest('/api/ops/mailbox/voice/confirm', {
+        proposalId: intent.proposalId,
+        decision: intent.decision
+      });
+    }
+    throw new Error('Orden de voz no valida');
     }
 
     async function pollStatus(id, maxMs) {
@@ -829,7 +929,8 @@
       } catch (e) { return ''; }
     }
 
-    async function sendChat(raw) {
+    async function sendChat(raw, opts) {
+    opts = opts || {};
     const msg = raw.trim();
     if (!msg) return;
 
@@ -843,6 +944,19 @@
     const { wrap, bubble } = appendThinking();
 
     try {
+      if (opts.mailboxVoiceIntent) {
+        const voiceResult = await _runMailboxVoiceIntent(opts.mailboxVoiceIntent);
+        const armConfirmation = voiceResult.kind === 'proposal'
+          ? function() {
+            if (typeof window._agyAwaitVoiceConfirmation === 'function') {
+              window._agyAwaitVoiceConfirmation(voiceResult.proposalId);
+            }
+          }
+          : null;
+        finalizeThinking(wrap, bubble, voiceResult.message || 'Comando de voz completado.', armConfirmation);
+        void autoSaveChat();
+        return;
+      }
       const fileCtx = await _buildFileContext(msg);
       if (_ctxTruncatedFiles.length > 0) {
         showDiffToast('\u26A0 ' + _ctxTruncatedFiles.join(', ') + ' es muy largo: AGY solo leyó el comienzo. Solo podrá AGREGAR al final, no reescribirlo.', false);
@@ -2217,8 +2331,12 @@
 
       var listening      = false;
       var silenceTimer   = null;
+      var confirmationTimer = null;
       var accumulated    = '';
+      var voiceMode      = 'dictation';
+      var proposalId     = '';
       var SILENCE_MS     = 2500;  // espera 2.5s de silencio antes de detener el micrófono
+      var CONFIRMATION_MS = 12000;
 
       function setListening(v) {
         listening = v;
@@ -2226,24 +2344,87 @@
         micBtn.style.borderColor = v ? 'rgba(255,80,80,0.7)'  : 'rgba(0,243,255,0.3)';
         micBtn.style.color       = v ? '#ff5555' : '#00f3ff';
         micBtn.textContent       = v ? '🔴' : '🎤';
-        micBtn.title             = v ? 'Escuchando… clic para cancelar' : 'Hablar con AGY';
+        micBtn.title             = v
+          ? (voiceMode === 'confirmation' ? 'Escuchando confirmación…' : 'Escuchando… clic para cancelar')
+          : 'Hablar con AGY';
       }
 
-      /* La voz SOLO escribe el texto en la caja — el usuario envía manualmente con ➤ */
-        function doStop() {
-          clearTimeout(silenceTimer);
-          var text = accumulated.trim();
-          accumulated = '';
-          rec.stop();
-          if (!text) return;
-          var inp = document.getElementById('chat-input');
-          if (inp) {
-            inp.value = text;
-            inp.style.height = 'auto';
-            inp.style.height = Math.min(inp.scrollHeight, 100) + 'px';
-            inp.focus();
+      function normalizeDecision(text) {
+        return String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[.,;:!?]/g, '').replace(/\s+/g, ' ').trim();
+      }
+
+      function finishConfirmation(decision, spokenText) {
+        var id = proposalId;
+        proposalId = '';
+        voiceMode = 'dictation';
+        clearTimeout(confirmationTimer);
+        clearTimeout(silenceTimer);
+        accumulated = '';
+        if (!id) return;
+        window._agySpeakNext = true;
+        sendChat(spokenText || 'cancelar', {
+          mailboxVoiceIntent: {
+            type: 'confirm',
+            proposalId: id,
+            decision: decision
           }
+        });
+      }
+
+      window._agyAwaitVoiceConfirmation = function(id) {
+        if (!/^[A-Za-z0-9_-]{24,120}$/.test(String(id || ''))) return;
+        clearTimeout(confirmationTimer);
+        clearTimeout(silenceTimer);
+        accumulated = '';
+        proposalId = String(id);
+        voiceMode = 'confirmation';
+        try {
+          rec.start();
+          setListening(true);
+          confirmationTimer = setTimeout(function() {
+            if (voiceMode !== 'confirmation') return;
+            try { rec.stop(); } catch (_) {}
+            setListening(false);
+            finishConfirmation('cancel', 'silencio');
+          }, CONFIRMATION_MS);
+        } catch (ex) {
+          console.warn('[voz-confirmacion]', ex);
+          setListening(false);
+          finishConfirmation('cancel', 'no pude confirmar por voz');
         }
+      };
+
+      /* Las órdenes canónicas del Buzón se envían solas; el resto queda en la caja. */
+      function doStop() {
+        clearTimeout(silenceTimer);
+        var text = accumulated.trim();
+        accumulated = '';
+        try { rec.stop(); } catch (_) {}
+
+        if (voiceMode === 'confirmation') {
+          var decisionText = normalizeDecision(text);
+          var confirmed = /^(?:si )?(?:confirmo|confirmar|confirmado)$/.test(decisionText);
+          var cancelled = /^(?:no )?(?:cancelar|cancelo|cancelado)$/.test(decisionText);
+          finishConfirmation(confirmed ? 'confirm' : 'cancel', text || (cancelled ? 'cancelar' : 'respuesta ambigua'));
+          return;
+        }
+
+        if (!text) return;
+        var mailboxIntent = _mailboxVoiceIntent(text);
+        if (mailboxIntent) {
+          window._agySpeakNext = true;
+          sendChat(text, { mailboxVoiceIntent: mailboxIntent });
+          return;
+        }
+        var inp = document.getElementById('chat-input');
+        if (inp) {
+          inp.value = text;
+          inp.style.height = 'auto';
+          inp.style.height = Math.min(inp.scrollHeight, 100) + 'px';
+          inp.focus();
+        }
+        window._agySpeakNext = true;
+      }
 
       rec.onresult = function(e) {
           /* En Android el navegador repite los resultados acumulados en cada evento.
@@ -2281,7 +2462,7 @@
       };
 
       rec.onend = function() {
-          // dejar el texto pendiente en la caja — el usuario envía manualmente
+          // Los comandos del Buzón se envían; el dictado normal queda pendiente.
           if (accumulated.trim()) doStop();
           clearTimeout(silenceTimer);
           setListening(false);
@@ -2290,10 +2471,19 @@
       micBtn.addEventListener('click', function() {
         if (listening) {
           clearTimeout(silenceTimer);
+          if (voiceMode === 'confirmation') {
+            try { rec.stop(); } catch (_) {}
+            setListening(false);
+            finishConfirmation('cancel', 'cancelar');
+            return;
+          }
           accumulated = '';
-          rec.stop();
+          try { rec.stop(); } catch (_) {}
           setListening(false);
         } else {
+          voiceMode = 'dictation';
+          proposalId = '';
+          clearTimeout(confirmationTimer);
           accumulated = '';
           try {
             rec.start();
