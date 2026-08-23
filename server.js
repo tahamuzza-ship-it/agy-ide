@@ -2004,7 +2004,7 @@ async function _mailboxLegacyChatFallback(instruction) {
       id,
       source: 'mailbox',
       riskLevel: 0,
-      result: 'Detecté una misión para el Buzón 1. No la enviaré sin confirmación. Recarga AGY IDE y repite la orden para preparar la propuesta y decir “confirmo”.'
+      result: 'Detecté que quieres dejar una misión para AGY. Dime el objetivo completo. Ejemplo: “AGY, prepara una misión para el Buzón uno con el objetivo revisar PC1”. Después di “confirmo” para enviarla.'
     };
   }
 
