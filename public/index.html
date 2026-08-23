@@ -795,6 +795,16 @@
     if (match && match[1] && match[1].trim().length >= 4) {
       return { type: 'draft', mission: match[1].trim() };
     }
+    var asksToLeaveMission = /\b(?:dejar|deja|enviar|envia|enviar|manda|mandar|crear|crea|preparar|prepara)\b/.test(normalized)
+      && /\bmision(?:es)?\b/.test(normalized)
+      && /\b(?:agy|buzon\s*(?:1|uno))\b/.test(normalized);
+    if (asksToLeaveMission) {
+      var objective = /(?:con (?:el )?objetivo|objetivo|:)\s*(.+)$/.exec(normalized);
+      if (objective && objective[1] && objective[1].trim().length >= 4) {
+        return { type: 'draft', mission: objective[1].trim() };
+      }
+      return { type: 'draft-help' };
+    }
 
     // "Buzón" es una palabra de control, no contenido para el chat IA.
     // Sin un destino inequívoco, la lectura AGY → Replit es el valor seguro:
@@ -833,6 +843,12 @@
     }
 
     async function _runMailboxVoiceIntent(intent) {
+    if (intent.type === 'draft-help') {
+      return Promise.resolve({
+        kind: 'help',
+        message: 'Para dejar una misión para AGY, dime el objetivo completo. Ejemplo: “AGY, prepara una misión para el Buzón uno con el objetivo revisar PC1”. Después di “confirmo” para enviarla.'
+      });
+    }
     if (intent.type === 'list') {
       return _mailboxVoiceRequest('/api/ops/mailbox/voice/command', { action: 'list' });
     }
