@@ -798,6 +798,7 @@
     }
     return null;
     }
+    window._mailboxVoiceIntent = _mailboxVoiceIntent;
 
     async function _mailboxVoiceRequest(path, payload) {
     var response = await fetch(path, {
@@ -2410,7 +2411,7 @@
         }
 
         if (!text) return;
-        var mailboxIntent = _mailboxVoiceIntent(text);
+        var mailboxIntent = window._mailboxVoiceIntent(text);
         if (mailboxIntent) {
           window._agySpeakNext = true;
           sendChat(text, { mailboxVoiceIntent: mailboxIntent });
