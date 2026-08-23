@@ -789,7 +789,9 @@
     function _mailboxVoiceIntent(text) {
     var normalized = _normalizeVoiceOrder(text);
     var mailboxReadQuestion = /^(?:agy\s+)?(?:buzon\s*(?:1|uno|pc\s*1|ps\s*1|agy)|misiones(?:\s+pendientes)?|(?:hay|existen|consulta|consultar|revisa|revisar|mira|mirar|lista|listar|ver|verificar|muestra|muestrame|mostrar|dame|dime|quiero|necesito)\s+(?:(?:consultar|revisar|ver|listar|mostrar|decirme)\s+)?(?:(?:las?|mis)\s+)?misiones(?:\s+pendientes)?(?:\s+(?:de|para|en)\s+(?:agy|replit))?|(?:puedo|puedes)\s+(?:(?:consultar|revisar|ver|listar|mostrar|decirme)\s+)?(?:(?:las?|mis)\s+)?misiones(?:\s+pendientes)?(?:\s+(?:de|para|en)\s+(?:agy|replit))?)$/;
-    if (mailboxReadQuestion.test(normalized)) {
+    var hasMissionMailboxReference = /\b(?:misiones?\s+pendientes?|buzon)\b/.test(normalized);
+    var hasMissionReadRequest = /\b(?:hay|existen|consulta|consultar|revisa|revisar|mira|mirar|lista|listar|ver|verificar|muestra|muestrame|mostrar|dame|dime|quiero|necesito|puedo|puedes)\b/.test(normalized);
+    if (mailboxReadQuestion.test(normalized) || (hasMissionMailboxReference && hasMissionReadRequest)) {
       return { type: 'list-agy-to-replit' };
     }
     if (/^(?:agy )?(?:consulta|consultar|revisa|revisar|mira|mirar|lee|leer) (?:el )?buzon (?:uno|1)$/.test(normalized)) {
