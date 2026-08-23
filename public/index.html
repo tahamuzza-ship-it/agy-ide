@@ -790,7 +790,102 @@
       .trim();
     }
 
+    // MAILBOX_SEMANTIC_CLASSIFIER_V1
+    // Embeddings locales y deterministas: cada frase se proyecta a conceptos
+    // semánticos y se compara por coseno con ejemplos canónicos. No sale del
+    // navegador ningún dictado para clasificarlo.
+    function _mailboxSemanticIntent(text) {
+    var raw = String(text || '').trim();
+    var normalized = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+    normalized = normalized.replace(/\b(?:buson|buzom)\b/g, 'buzon').replace(/\b(?:micion|misio)\b/g, 'mision').replace(/\b(?:pe ce|pese)\s*uno\b/g, 'pc 1');
+    if (!normalized) return null;
+    var utterance = raw;
+
+    if (/^(?:confirmo|confirmar|confirmado|si confirma|si adelante|adelante|procede)$/i.test(normalized)) {
+      return { type: 'confirm-only', utterance: utterance };
+    }
+    if (/^(?:cancelar|cancela|cancelado|anula|anular|descarta|descartar|olvidalo|no lo hagas)$/i.test(normalized)
+        || /\bno\s+(?:crees?|crear|dejes?|enviar|mandes?)\b/.test(normalized)) {
+      return { type: 'cancel-only', utterance: utterance };
+    }
+
+    var groups = {
+      read: ['consulta','consultar','revisa','revisar','mira','mirar','lista','listar','muestra','mostrar','dime','dame','ver','saber','comprobar','chequear'],
+      create: ['crea','crear','prepara','preparar','deja','dejar','manda','mandar','envia','enviar','encarga','encargar','apunta','apuntar','anota','anotar','nueva'],
+      mission: ['mision','misiones','tarea','tareas','encargo','encargos','trabajo','trabajos','objetivo','objetivos'],
+      input: ['entrada','entrante','recibido','recibidos','buzon1','buzonuno','paraagy','para agy','pc1pendiente','pc uno pendiente'],
+      output: ['salida','saliente','enviado','enviados','deagy','de agy','parareplit','para replit','agy pendiente'],
+      pending: ['pendiente','pendientes','espera','esperando','cola']
+    };
+    var examples = {
+      input: ['consulta la entrada de pc1','que tareas tiene pc1 pendientes','mira el buzon uno','misiones para agy'],
+      output: ['consulta la salida de pc1','que ha enviado agy a replit','mira el buzon de agy','misiones pendientes de agy'],
+      create: ['deja una mision para agy','prepara un encargo nuevo','manda una tarea al buzon uno','anota un objetivo para pc1']
+    };
+    function embedding(value) {
+      var clean = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      var compact = clean.replace(/\s+/g, '');
+      var words = clean ? clean.split(/\s+/) : [];
+      var vector = {};
+      words.forEach(function(word) { vector['w:' + word] = (vector['w:' + word] || 0) + 0.35; });
+      Object.keys(groups).forEach(function(concept) {
+        var hit = groups[concept].some(function(alias) {
+          return alias.indexOf(' ') >= 0 ? clean.indexOf(alias) >= 0 : (words.indexOf(alias) >= 0 || compact.indexOf(alias) >= 0);
+        });
+        if (hit) vector['c:' + concept] = 1;
+      });
+      if (/\bpc\s*(?:1|uno)\b/.test(clean)) vector['c:pc1'] = 1;
+      if (/\bbuzon\b/.test(clean)) vector['c:mailbox'] = 1;
+      return vector;
+    }
+    function cosine(a, b) {
+      var dot = 0, aa = 0, bb = 0;
+      Object.keys(a).forEach(function(key) { aa += a[key] * a[key]; if (b[key]) dot += a[key] * b[key]; });
+      Object.keys(b).forEach(function(key) { bb += b[key] * b[key]; });
+      return aa && bb ? dot / Math.sqrt(aa * bb) : 0;
+    }
+    var vector = embedding(normalized);
+    function best(intent) {
+      return Math.max.apply(Math, examples[intent].map(function(example) { return cosine(vector, embedding(example)); }));
+    }
+    var scores = { input: best('input'), output: best('output'), create: best('create') };
+    var createWords = /\b(?:crea|crear|prepara|preparar|deja|dejar|manda|mandar|envia|enviar|encarga|encargar|apunta|apuntar|anota|anotar|nueva)\b/.test(normalized);
+    var missionWords = /\b(?:mision(?:es)?|tarea(?:s)?|encargo(?:s)?|objetivo(?:s)?)\b/.test(normalized);
+    if (createWords && missionWords) {
+      var objective = raw.match(/(?:con\s+(?:el\s+)?objetivo|objetivo)\s*[:\-]?\s*(.+)$/i)
+        || raw.match(/(?:misi[oó]n|tarea|encargo)\s*(?:es|que|para|de)?\s*[:\-]?\s*(.+)$/i);
+      var mission = objective && objective[1] ? objective[1].trim() : '';
+      var confirmInline = /(?:^|\s)(?:confirmo|confirmar)\s*$/i.test(mission);
+      if (confirmInline) mission = mission.replace(/(?:^|\s)(?:confirmo|confirmar)\s*$/i, '').trim();
+      return mission.length >= 4
+        ? { type: 'draft', mission: mission, confirmInline: confirmInline, utterance: utterance }
+        : { type: 'draft-help', utterance: utterance };
+    }
+
+    var explicitInput = /\bentrada(?:\s+de)?\s+pc\s*(?:1|uno)\b|\bbuzon\s*(?:1|uno)\b|\b(?:tareas?|misiones?)\s+(?:pendientes?\s+de|para)\s+pc\s*(?:1|uno)\b/.test(normalized);
+    var explicitOutput = /\bsalida(?:\s+de)?\s+pc\s*(?:1|uno)\b|\bbuzon\s+(?:de\s+)?agy\b|\b(?:tareas?|misiones?)\s+pendientes?\s+(?:de|en)\s+agy\b|\b(?:que\s+ha\s+)?(?:enviado|dejado|mandado)(?:\s+por)?\s+agy\b|\bagy\s+(?:ha\s+)?(?:enviado|dejado|mandado)\b/.test(normalized);
+    if (explicitInput && explicitOutput) return { type: 'clarify', utterance: utterance };
+    if (explicitInput) return { type: 'list', utterance: utterance };
+    if (explicitOutput) return { type: 'list-agy-to-replit', utterance: utterance };
+
+    var mailboxTopic = /\b(?:buzon|mision(?:es)?|tarea(?:s)?|encargo(?:s)?|trabajo(?:s)?|entrada|salida)\b/.test(normalized);
+    var readWords = /\b(?:consulta|consultar|revisa|revisar|mira|mirar|lista|listar|muestra|mostrar|dime|dame|ver|saber|hay|existen|pendiente|pendientes)\b/.test(normalized);
+    var ellipticalRead = /^(?:(?:las?|mis)\s+)?(?:misiones?|tareas?|encargos?|trabajos?)\b/.test(normalized);
+    if (mailboxTopic && (readWords || ellipticalRead)) {
+      var embeddedInput = vector['c:input'] === 1;
+      var embeddedOutput = vector['c:output'] === 1;
+      if (embeddedInput !== embeddedOutput && Math.max(scores.input, scores.output) >= 0.55) {
+        return { type: scores.input > scores.output ? 'list' : 'list-agy-to-replit', utterance: utterance };
+      }
+      return { type: 'clarify', utterance: utterance };
+    }
+    if (/\bbuzon\b/.test(normalized)) return { type: 'clarify', utterance: utterance };
+    return null;
+    }
+
     function _mailboxVoiceIntent(text) {
+    var semanticIntent = _mailboxSemanticIntent(text);
+    if (semanticIntent) return semanticIntent;
     var normalized = _normalizeVoiceOrder(text);
     function immediateMissionIntent(mission) {
       var value = String(mission || '').trim();
@@ -874,28 +969,41 @@
     }
 
     async function _runMailboxVoiceIntent(intent) {
+    if (intent.type === 'clarify') {
+      return {
+        kind: 'clarification',
+        message: '¿Quieres consultar la Entrada de PC1 (misiones para AGY) o la Salida de PC1 (encargos que AGY dejó para Replit)?'
+      };
+    }
+    if (intent.type === 'confirm-only' || intent.type === 'cancel-only') {
+      return {
+        kind: 'help',
+        message: 'No hay un borrador de misión esperando esa decisión. Primero dime la misión completa.'
+      };
+    }
     if (intent.type === 'draft-help') {
-      return Promise.resolve({
+      return {
         kind: 'help',
         message: 'Habla con naturalidad. Ejemplo: “AGY, dile a PC1 que revise el disco”.'
-      });
+      };
     }
     if (intent.type === 'list') {
-      return _mailboxVoiceRequest('/api/ops/mailbox/voice/command', { action: 'list' });
+      return _mailboxVoiceRequest('/api/ops/mailbox/voice/command', {
+        action: 'list',
+        utterance: intent.utterance
+      });
     }
     if (intent.type === 'list-agy-to-replit') {
-      return _mailboxVoiceRequest('/api/ops/mailbox/voice/command', { action: 'list-agy-to-replit' });
-    }
-    if (intent.type === 'create') {
       return _mailboxVoiceRequest('/api/ops/mailbox/voice/command', {
-        action: 'create',
-        mission: intent.mission
+        action: 'list-agy-to-replit',
+        utterance: intent.utterance
       });
     }
     if (intent.type === 'draft') {
       var proposal = await _mailboxVoiceRequest('/api/ops/mailbox/voice/command', {
         action: 'draft',
-        mission: intent.mission
+        mission: intent.mission,
+        utterance: intent.utterance
       });
       if (intent.confirmInline && proposal.kind === 'proposal' && proposal.proposalId) {
         return _mailboxVoiceRequest('/api/ops/mailbox/voice/confirm', {
@@ -2517,25 +2625,61 @@
         window._agySpeakNext = true;
       }
 
-      rec.onresult = function(e) {
-          /* En Android el navegador repite los resultados acumulados en cada evento.
-             Por eso NO se suma (+=): se reconstruye todo desde cero y se saltan duplicados. */
-          var finals = '', interim = '', prev = '';
-          for (var i = 0; i < e.results.length; i++) {
-            var t = e.results[i][0].transcript;
-            if (t && t === prev) continue; // duplicado exacto → ignorar
-            prev = t;
-            if (e.results[i].isFinal) {
-              finals += t;
-            } else {
-              interim += t;
-            }
+      function voiceFragmentKey(value) {
+        return String(value || '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .replace(/[.,;:!?¿¡]+/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      }
+
+      function addVoiceFragment(parts, value) {
+        var text = String(value || '').replace(/\s+/g, ' ').trim();
+        var key = voiceFragmentKey(text);
+        if (!key) return;
+
+        for (var i = 0; i < parts.length; i++) {
+          var known = parts[i].key;
+          // Android/Chrome puede devolver la misma frase con puntuación,
+          // mayúsculas o espacios distintos; es una sola frase, no dos órdenes.
+          if (key === known || known.indexOf(key + ' ') === 0) return;
+          // A veces el evento siguiente repite la frase anterior y le añade
+          // unas palabras: sustituirla evita "abre X abre X ahora".
+          if (key.indexOf(known + ' ') === 0) {
+            parts[i] = { key: key, text: text };
+            return;
           }
-          accumulated = finals;
-        // mostrar en tiempo real
+        }
+        parts.push({ key: key, text: text });
+      }
+
+      function voiceFragmentsText(parts) {
+        return parts.map(function(part) { return part.text; }).join(' ').trim();
+      }
+
+      rec.onresult = function(e) {
+        /* Android puede devolver en cada evento el historial completo y
+           duplicado. Reconstruimos desde e.results[0], sin acumular eventos. */
+        var finalParts = [];
+        var previewParts = [];
+
+        for (var i = 0; i < e.results.length; i++) {
+          var transcript = e.results[i][0].transcript;
+          if (e.results[i].isFinal) addVoiceFragment(finalParts, transcript);
+        }
+
+        previewParts = finalParts.slice();
+        for (var j = 0; j < e.results.length; j++) {
+          if (!e.results[j].isFinal) addVoiceFragment(previewParts, e.results[j][0].transcript);
+        }
+
+        accumulated = voiceFragmentsText(finalParts);
+        // mostrar en tiempo real sin convertir un resultado provisional en envío
         var inp = document.getElementById('chat-input');
         if (inp) {
-          inp.value = accumulated + interim;
+          inp.value = voiceFragmentsText(previewParts);
           inp.style.height = 'auto';
           inp.style.height = Math.min(inp.scrollHeight, 100) + 'px';
         }
