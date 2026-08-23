@@ -26,7 +26,17 @@
     .tag { display:inline-block; margin-bottom:8px; padding:4px 8px; border-radius:999px; background:rgba(0,243,255,.12); color:var(--cyan); font-size:.73rem; font-weight:800; letter-spacing:.06em; }
     .safe { color:#ffd0d0; }
     footer { color:#7f91ad; text-align:center; font-size:.85rem; margin-top:30px; }
-    @media (max-width:560px) { main { width:min(100% - 20px,920px); padding-top:18px; } header,section { padding:19px; border-radius:13px; } }
+    .pc1-table { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:16px; }
+    .pc1-card { padding:20px; border:1px solid rgba(0,243,255,.26); border-radius:14px; background:linear-gradient(145deg,rgba(4,27,48,.96),rgba(8,18,37,.94)); }
+    .pc1-card.review { border-color:rgba(134,239,172,.3); background:linear-gradient(145deg,rgba(8,44,35,.9),rgba(8,18,37,.94)); }
+    .pc1-card h3 { margin:0 0 10px; color:var(--cyan); font-size:1rem; line-height:1.35; }
+    .pc1-card.review h3 { color:var(--green); }
+    .pc1-label { display:block; margin:15px 0 5px; color:#cbd9ef; font-size:.75rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
+    .pc1-command { padding:12px 13px; border-radius:9px; background:rgba(0,0,0,.26); border-left:3px solid var(--cyan); color:#f7fbff; font-weight:700; line-height:1.5; }
+    .pc1-card.review .pc1-command { border-left-color:var(--green); }
+    .pc1-result { margin:14px 0 0; color:var(--muted); font-size:.92rem; }
+    .pc1-result strong { color:#fff; }
+    @media (max-width:560px) { main { width:min(100% - 20px,920px); padding-top:18px; } header,section { padding:19px; border-radius:13px; } .pc1-table { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
@@ -83,13 +93,26 @@
 
     <section>
       <h2>📬 Buzón 1: misiones para PC1</h2>
-      <p>El Buzón es para dejar misiones pendientes a PC1 de forma ordenada. La misión <strong>no se crea</strong> mientras solo la estás dictando: se prepara, se revisa y requiere tu confirmación inequívoca.</p>
-      <ul>
-        <li>Las propuestas duran 60 segundos.</li>
-        <li>Una confirmación solo puede usarse una vez.</li>
-        <li>Las misiones se guardan con fecha y número, sin sobrescribir otras.</li>
-        <li>Las órdenes normales del chat no pueden escribir directamente en el Buzón.</li>
-      </ul>
+      <p>Solo hay dos cosas que necesitas saber:</p>
+      <div class="pc1-table" aria-label="Comandos para PC1">
+        <article class="pc1-card">
+          <h3>1. MANDAR UNA MISIÓN A PC1</h3>
+          <span class="pc1-label">Di o escribe</span>
+          <div class="pc1-command">“AGY, deja una misión para PC1 con el objetivo revisar si la cámara funciona.”</div>
+          <span class="pc1-label">Después</span>
+          <div class="pc1-command">“Confirmo.”</div>
+          <p class="pc1-result"><strong>Resultado:</strong> la tarea queda en <strong>Entrada PC1</strong>, esperando a que PC1 la haga.</p>
+        </article>
+        <article class="pc1-card review">
+          <h3>2. VER MISIONES PENDIENTES DE PC1</h3>
+          <span class="pc1-label">Di o escribe</span>
+          <div class="pc1-command">“¿Qué tareas tiene PC1 pendientes?”</div>
+          <span class="pc1-label">También puedes decir</span>
+          <div class="pc1-command">“Muéstrame las misiones para PC1.”</div>
+          <p class="pc1-result"><strong>Resultado:</strong> ves las tareas que PC1 todavía tiene por hacer en <strong>Entrada PC1</strong>.</p>
+        </article>
+      </div>
+      <p class="safe"><strong>Importante:</strong> si no dices “Confirmo”, la misión no se crea.</p>
     </section>
 
     <section>
