@@ -42,6 +42,50 @@ const GROQ_KEY   = process.env.GROQ_API_KEY;
 const GROQ_MODEL = 'openai/gpt-oss-120b';
 const GROQ_FALLBACK_MODEL = 'openai/gpt-oss-20b';
 const GROQ_URL   = 'https://api.groq.com/openai/v1/chat/completions';
+// Groq cuenta entrada + salida contra un TPM de 8k en el modelo de respaldo.
+// AGY ya responde corto; reservar 1200 evita que el maxTokens genérico de 4096
+// convierta un prompt válido (alma + manual + historial) en una petición imposible.
+const GROQ_SAFE_MAX_TOKENS = 1200;
+const GROQ_INPUT_BUDGET_CHARS = 18_000;
+const GROQ_SYSTEM_BUDGET_CHARS = 14_000;
+
+function clipGroqText(text, maxChars) {
+  const value = String(text == null ? '' : text);
+  if (value.length <= maxChars) return value;
+  const side = Math.max(1, Math.floor((maxChars - 70) / 2));
+  return value.slice(0, side) +
+    '\n[... contexto reducido solo para el respaldo Groq ...]\n' +
+    value.slice(-side);
+}
+
+function compactGroqMessages(messages) {
+  const normalized = messages
+    .filter((message) => message && typeof message.content === 'string')
+    .map((message) => ({ role: message.role, content: message.content }));
+  const system = normalized
+    .filter((message) => message.role === 'system')
+    .map((message, index) => ({
+      ...message,
+      content: clipGroqText(
+        message.content,
+        index === 0 ? GROQ_SYSTEM_BUDGET_CHARS : 2_000
+      )
+    }));
+  let remaining = Math.max(
+    2_000,
+    GROQ_INPUT_BUDGET_CHARS -
+      system.reduce((total, message) => total + message.content.length, 0)
+  );
+  const turns = [];
+  for (let index = normalized.length - 1; index >= 0; index--) {
+    const message = normalized[index];
+    if (message.role === 'system' || remaining <= 0) continue;
+    const content = clipGroqText(message.content, remaining);
+    turns.unshift({ ...message, content });
+    remaining -= content.length;
+  }
+  return [...system, ...turns];
+}
 
 const IDE_SYSTEM = 'Eres un asistente de programacion en un IDE online. ' +
   'Cuando el usuario pida crear o generar un archivo, incluye el contenido COMPLETO usando este formato:\n' +
@@ -84,6 +128,11 @@ async function callAI(userMsg) {
   }
 
   const groqModels = [...new Set([CFG.modelos.groq || GROQ_MODEL, GROQ_FALLBACK_MODEL])];
+  const groqMessages = compactGroqMessages([
+    { role: 'system', content: buildSystemPrompt('chat') },
+    { role: 'user', content: userMsg }
+  ]);
+  const groqMaxTokens = Math.min(CFG.limites.chat_max_tokens, GROQ_SAFE_MAX_TOKENS);
   let groqErr;
   for (let i = 0; i < groqModels.length; i++) {
     const model = groqModels[i];
@@ -93,8 +142,8 @@ async function callAI(userMsg) {
         headers: { 'Authorization': 'Bearer ' + GROQ_KEY, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model,
-          messages: [{ role: 'system', content: buildSystemPrompt('chat') }, { role: 'user', content: userMsg }],
-          max_tokens: CFG.limites.chat_max_tokens
+          messages: groqMessages,
+          max_tokens: groqMaxTokens
         })
       });
       const r = await Promise.race([groqCall, aiTimeout()]);
