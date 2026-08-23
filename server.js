@@ -1981,8 +1981,11 @@ function _mailboxLegacyChatIntent(instruction) {
   const mentionsMailbox = /\bbuzon\b/.test(normalized);
   const asksToCreate = /\b(?:dejar|deja|dejando|enviar|envia|enviando|manda|mandar|mandando|crea|crear|creando|prepara|preparar|preparando|nueva)\b/.test(normalized)
     && /\bmision(?:es)?\b/.test(normalized);
-  const quickMission = /^(?:(?:agy|agi) )?pc1\s+.+\s+confirmo$/.test(normalized);
-  if (asksToCreate || quickMission) return { kind: 'creation' };
+  const quickMission = /^(?:(?:agy|agi) )?pc1\s+(.+?)\s+confirmo$/.exec(normalized);
+  if (quickMission && quickMission[1] && quickMission[1].trim().length >= 4) {
+    return { kind: 'confirmed-creation', mission: quickMission[1].trim() };
+  }
+  if (asksToCreate) return { kind: 'creation' };
   const asksPc1Pending = /\bque\s+(?:tareas?|misiones?)\s+(?:tiene|debe)\s+pc1\b|\b(?:tareas?|misiones?)\s+(?:pendientes?|para)\s+(?:de\s+)?pc1\b|\bque\s+tiene\s+que\s+hacer\s+pc1\b/.test(normalized);
   if (asksPc1Pending) return { kind: 'read', direction: 'replit-to-agy' };
   if (!mentionsMailbox) return null;
@@ -2000,6 +2003,53 @@ async function _mailboxLegacyChatFallback(instruction) {
   if (!intent) return null;
 
   const id = `mailbox_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  if (intent.kind === 'confirmed-creation') {
+    if (!AGY_KEY) {
+      return {
+        ok: false,
+        id,
+        source: 'mailbox',
+        riskLevel: 0,
+        result: 'Detecté una misión confirmada para PC1, pero la conexión con PC1 no está configurada.'
+      };
+    }
+    const mission = _mailboxNormalizeVoiceMission(intent.mission);
+    if (!mission) {
+      return {
+        ok: false,
+        id,
+        source: 'mailbox',
+        riskLevel: 0,
+        result: 'La misión confirmada no tiene un objetivo válido.'
+      };
+    }
+    try {
+      const markdown = _mailboxCreateMissionMarkdown(mission);
+      const instruction = _mailboxBuildEncodedCreateCommand(markdown);
+      const outcome = await _mailboxDispatch(instruction);
+      if (outcome.status === 'timeout') {
+        return { ok: false, id, source: 'mailbox', riskLevel: 0, result: 'PC1 no respondió a tiempo. La misión no se confirmó como creada.' };
+      }
+      if (outcome.status !== 'done' || !outcome.result) {
+        return { ok: false, id, source: 'mailbox', riskLevel: 0, result: 'PC1 no pudo crear la misión.' };
+      }
+      const created = JSON.parse(outcome.result);
+      if (!created || typeof created.name !== 'string' || !/^MISION_\d{8}_\d{3}\.md$/.test(created.name) || created.status !== 'PENDIENTE') {
+        return { ok: false, id, source: 'mailbox', riskLevel: 0, result: 'PC1 devolvió una confirmación de creación no válida.' };
+      }
+      _mailboxRecentReads.delete('replit-to-agy');
+      return {
+        ok: true,
+        id,
+        source: 'mailbox',
+        riskLevel: 0,
+        result: `Misión creada en Buzón 1: ${created.name}. Quedó en estado PENDIENTE.`
+      };
+    } catch (error) {
+      console.error('[mailbox] error creando misión confirmada', error instanceof Error ? error.message : 'UNKNOWN');
+      return { ok: false, id, source: 'mailbox', riskLevel: 0, result: 'No pude crear la misión en PC1.' };
+    }
+  }
   if (intent.kind === 'creation') {
     return {
       ok: true,
