@@ -1979,9 +1979,8 @@ function _mailboxLegacyChatIntent(instruction) {
     .replace(/\s+/g, ' ')
     .trim();
   const mentionsMailbox = /\bbuzon\b/.test(normalized);
-  const asksToCreate = /\b(?:dejar|deja|enviar|envia|manda|mandar|crea|crear|prepara|preparar|nueva)\b/.test(normalized)
-    && /\bmision(?:es)?\b/.test(normalized)
-    && /\b(?:agy|buzon\s*(?:1|uno))\b/.test(normalized);
+  const asksToCreate = /\b(?:dejar|deja|dejando|enviar|envia|enviando|manda|mandar|mandando|crea|crear|creando|prepara|preparar|preparando|nueva)\b/.test(normalized)
+    && /\bmision(?:es)?\b/.test(normalized);
   if (asksToCreate) return { kind: 'creation' };
   if (!mentionsMailbox) return null;
 
