@@ -1978,11 +1978,12 @@ function _mailboxLegacyChatIntent(instruction) {
     .replace(/[¿?¡!.,;:]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  if (!/\bbuzon\b/.test(normalized)) return null;
-
-  const asksToCreate = /\b(?:crea|crear|prepara|preparar|nueva)\b/.test(normalized)
-    && /\bmision(?:es)?\b/.test(normalized);
+  const mentionsMailbox = /\bbuzon\b/.test(normalized);
+  const asksToCreate = /\b(?:dejar|deja|enviar|envia|manda|mandar|crea|crear|prepara|preparar|nueva)\b/.test(normalized)
+    && /\bmision(?:es)?\b/.test(normalized)
+    && /\b(?:agy|buzon\s*(?:1|uno))\b/.test(normalized);
   if (asksToCreate) return { kind: 'creation' };
+  if (!mentionsMailbox) return null;
 
   const asksBuzonOne = /\b(?:buzon\s*(?:1|uno)|entrada\s+pc1)\b/.test(normalized)
     && !/\b(?:agy|misiones?\s+pendientes?)\b/.test(normalized);
