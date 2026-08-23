@@ -788,19 +788,25 @@
 
     function _mailboxVoiceIntent(text) {
     var normalized = _normalizeVoiceOrder(text);
-    var match = /^(?:agy )?(?:crea|crear|prepara|preparar) (?:una )?mision (?:en|para) (?:el )?buzon (?:uno|1)(?: con (?:el )?objetivo)? (.+)$/.exec(normalized);
+    function draftIntent(mission) {
+      var value = String(mission || '').trim();
+      var confirmInline = /(?:^|\s)(?:confirmo|confirmar)\s*$/.test(value);
+      if (confirmInline) value = value.replace(/(?:^|\s)(?:confirmo|confirmar)\s*$/, '').trim();
+      return value.length >= 4 ? { type: 'draft', mission: value, confirmInline: confirmInline } : null;
+    }
+    var match = /^(?:(?:agy|agi) )?(?:crea|crear|prepara|preparar) (?:una )?mision (?:en|para) (?:el )?buzon (?:uno|1)(?: con (?:el )?objetivo)? (.+)$/.exec(normalized);
     if (!match) {
       match = /^(?:agy )?(?:crea|crear|prepara|preparar) (?:en )?(?:el )?buzon (?:uno|1) (?:una )?mision(?: con (?:el )?objetivo)? (.+)$/.exec(normalized);
     }
     if (match && match[1] && match[1].trim().length >= 4) {
-      return { type: 'draft', mission: match[1].trim() };
+      return draftIntent(match[1]);
     }
     var asksToLeaveMission = /\b(?:dejar|deja|dejando|enviar|envia|enviando|manda|mandar|mandando|crear|crea|creando|preparar|prepara|preparando|nueva)\b/.test(normalized)
       && /\bmision(?:es)?\b/.test(normalized);
     if (asksToLeaveMission) {
       var objective = /(?:con (?:el )?objetivo|objetivo|:)\s*(.+)$/.exec(normalized);
       if (objective && objective[1] && objective[1].trim().length >= 4) {
-        return { type: 'draft', mission: objective[1].trim() };
+        return draftIntent(objective[1]);
       }
       return { type: 'draft-help' };
     }
@@ -855,10 +861,17 @@
       return _mailboxVoiceRequest('/api/ops/mailbox/voice/command', { action: 'list-agy-to-replit' });
     }
     if (intent.type === 'draft') {
-      return _mailboxVoiceRequest('/api/ops/mailbox/voice/command', {
+      var proposal = await _mailboxVoiceRequest('/api/ops/mailbox/voice/command', {
         action: 'draft',
         mission: intent.mission
       });
+      if (intent.confirmInline && proposal.kind === 'proposal' && proposal.proposalId) {
+        return _mailboxVoiceRequest('/api/ops/mailbox/voice/confirm', {
+          proposalId: proposal.proposalId,
+          decision: 'confirm'
+        });
+      }
+      return proposal;
     }
     if (intent.type === 'confirm') {
       return _mailboxVoiceRequest('/api/ops/mailbox/voice/confirm', {
