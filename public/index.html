@@ -788,16 +788,29 @@
 
     function _mailboxVoiceIntent(text) {
     var normalized = _normalizeVoiceOrder(text);
+    function immediateMissionIntent(mission) {
+      var value = String(mission || '').trim();
+      value = value.replace(/(?:^|\s)(?:confirmo|confirmar)\s*$/, '').trim();
+      return value.length >= 4 ? { type: 'create', mission: value } : null;
+    }
     function draftIntent(mission) {
       var value = String(mission || '').trim();
       var confirmInline = /(?:^|\s)(?:confirmo|confirmar)\s*$/.test(value);
       if (confirmInline) value = value.replace(/(?:^|\s)(?:confirmo|confirmar)\s*$/, '').trim();
       return value.length >= 4 ? { type: 'draft', mission: value, confirmInline: confirmInline } : null;
     }
-    var quickMission = /^(?:(?:agy|agi) )?pc1[\s,:-]+(.+)$/.exec(normalized);
-    if (quickMission && quickMission[1]) {
-      var quickDraft = draftIntent(quickMission[1]);
-      if (quickDraft && quickDraft.confirmInline) return quickDraft;
+    var naturalMissionPatterns = [
+      /^(?:agy|agi) dile a pc1 que (.+)$/,
+      /^mision para pc1 (.+)$/,
+      /^(?:(?:agy|agi) )?manda a pc1 a (.+)$/,
+      /^(?:(?:agy|agi) )?pc1 (.+)$/
+    ];
+    for (var naturalIndex = 0; naturalIndex < naturalMissionPatterns.length; naturalIndex++) {
+      var naturalMission = naturalMissionPatterns[naturalIndex].exec(normalized);
+      if (naturalMission && naturalMission[1]) {
+        var immediateIntent = immediateMissionIntent(naturalMission[1]);
+        if (immediateIntent) return immediateIntent;
+      }
     }
     var match = /^(?:(?:agy|agi) )?(?:crea|crear|prepara|preparar) (?:una )?mision (?:en|para) (?:el )?buzon (?:uno|1)(?: con (?:el )?objetivo)? (.+)$/.exec(normalized);
     if (!match) {
@@ -860,7 +873,7 @@
     if (intent.type === 'draft-help') {
       return Promise.resolve({
         kind: 'help',
-        message: 'Para dejar una misión para AGY, dime el objetivo completo. Ejemplo: “AGY, prepara una misión para el Buzón uno con el objetivo revisar PC1”. Después di “confirmo” para enviarla.'
+        message: 'Habla con naturalidad. Ejemplo: “AGY, dile a PC1 que revise el disco”.'
       });
     }
     if (intent.type === 'list') {
@@ -868,6 +881,12 @@
     }
     if (intent.type === 'list-agy-to-replit') {
       return _mailboxVoiceRequest('/api/ops/mailbox/voice/command', { action: 'list-agy-to-replit' });
+    }
+    if (intent.type === 'create') {
+      return _mailboxVoiceRequest('/api/ops/mailbox/voice/command', {
+        action: 'create',
+        mission: intent.mission
+      });
     }
     if (intent.type === 'draft') {
       var proposal = await _mailboxVoiceRequest('/api/ops/mailbox/voice/command', {
@@ -994,7 +1013,7 @@
     if (!msg) return;
     // Si el navegador dejó una orden de consulta en la caja (en vez de
     // entregarla al cierre del micrófono), no permitir que caiga al chat IA.
-    // Solo se interceptan lecturas: crear misiones sigue exigiendo voz y confirmación.
+    // Las órdenes naturales para PC1 crean una misión y nunca llegan al chat IA.
     if (!opts.mailboxVoiceIntent) {
       var pendingMailboxIntent = window._mailboxVoiceIntent(msg);
       if (pendingMailboxIntent) {
