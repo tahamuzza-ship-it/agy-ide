@@ -943,6 +943,15 @@
     opts = opts || {};
     const msg = raw.trim();
     if (!msg) return;
+    // Si el navegador dejó una orden de consulta en la caja (en vez de
+    // entregarla al cierre del micrófono), no permitir que caiga al chat IA.
+    // Solo se interceptan lecturas: crear misiones sigue exigiendo voz y confirmación.
+    if (!opts.mailboxVoiceIntent) {
+      var pendingMailboxIntent = window._mailboxVoiceIntent(msg);
+      if (pendingMailboxIntent && pendingMailboxIntent.type === 'list-agy-to-replit') {
+        opts.mailboxVoiceIntent = pendingMailboxIntent;
+      }
+    }
 
     const send = document.getElementById('chat-send');
     const inp  = document.getElementById('chat-input');
