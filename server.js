@@ -165,7 +165,13 @@ const TG_CHAT_ID          = process.env.TELEGRAM_LEAD_ARCHITECT_CHAT_ID;
 const TG_WEBHOOK_SECRET   = process.env.TELEGRAM_WEBHOOK_SECRET; // optional but recommended
 
 app.use(express.json({ limit: '8mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+  }
+}));
 
 /* ── helpers — Antigravity ── */
 async function replitPost(p, body) {
