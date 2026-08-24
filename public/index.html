@@ -1173,6 +1173,9 @@
           }
           : null;
         finalizeThinking(wrap, bubble, voiceResult.message || 'Comando de voz completado.', armConfirmation);
+        if (voiceResult.kind === 'created' && typeof window._agyMailboxMissionCreated === 'function') {
+          window._agyMailboxMissionCreated(voiceResult.name);
+        }
         void autoSaveChat();
         return;
       }
@@ -3110,6 +3113,7 @@
   var loading = false;
   var cleaning = false;
   var flashMessage = '';
+  var createdMissionRefreshPending = false;
   var requestSequence = 0;
   var sessionExpiryTimer = null;
 
@@ -3348,15 +3352,31 @@
     showTableMessage('Consultando el buzón seguro de PC1…', '#78dfe8');
     preview.style.display = 'none';
     try {
-      var response = await fetch('/api/ops/mailbox/list', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + token
-        },
-        body: JSON.stringify({ direction: direction })
-      });
-      var data = await response.json().catch(function () { return {}; });
+      var listAttempt = 0;
+      var response;
+      var data;
+      while (true) {
+        response = await fetch('/api/ops/mailbox/list', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify({ direction: direction })
+        });
+        data = await response.json().catch(function () { return {}; });
+        if (
+          response.status === 422 &&
+          data.code === 'INVALID_MAILBOX_RESPONSE' &&
+          listAttempt < 1
+        ) {
+          listAttempt += 1;
+          summary.textContent = 'PC1 terminó de escribir la misión. Reintentando la lectura…';
+          await new Promise(function (resolve) { setTimeout(resolve, 1200); });
+          continue;
+        }
+        break;
+      }
       if (seq !== requestSequence) return;
       if (response.status === 401) {
         setUnlocked(false);
@@ -3392,9 +3412,31 @@
         refreshButton.disabled = false;
         refreshButton.textContent = '🔄 REFRESCAR BUZÓN';
         updateCleanButton();
+        if (createdMissionRefreshPending && !cleaning && hasSession()) {
+          setTimeout(runPendingCreatedMissionRefresh, 1200);
+        }
       }
     }
   }
+
+  function runPendingCreatedMissionRefresh() {
+    if (!createdMissionRefreshPending || !hasSession() || loading || cleaning) return;
+    createdMissionRefreshPending = false;
+    loadMailbox();
+  }
+
+  window._agyMailboxMissionCreated = function (name) {
+    var safeName = typeof name === 'string' && /^MISION_\d{8}_\d{3}\.md$/.test(name)
+      ? name
+      : '';
+    flashMessage = safeName
+      ? 'Misión ' + safeName + ' confirmada; listado actualizado'
+      : 'Misión confirmada; listado actualizado';
+    direction = 'replit-to-agy';
+    updateTabs();
+    createdMissionRefreshPending = true;
+    if (hasSession()) setTimeout(runPendingCreatedMissionRefresh, 1200);
+  };
 
   async function cleanCompletedMissions() {
     if (direction !== 'replit-to-agy' || !hasSession() || loading || cleaning) return;
