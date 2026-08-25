@@ -36,7 +36,13 @@ const MORNING_CONTEXT_FILE = path.join(__dirname, 'morning_context_current.json'
 const MORNING_ACK_STATUS = 'INJECTED_AND_MISSIONS_VERIFIED';
 const BRIDGE_SUPABASE_URL = (process.env.SUPABASE_GOAL_URL || 'https://crpsnlonpmgwatjpyzkm.supabase.co')
   .replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
-const BRIDGE_SUPABASE_KEY = process.env.SUPABASE_GOAL_KEY;
+const BRIDGE_SUPABASE_KEYS = [
+  process.env.SUPABASE_GOAL_KEY,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  process.env.SUPABASE_SERVICE_KEY,
+  process.env.SUPABASE_KEY_2,
+  process.env.SUPABASE_KEY
+].map((key) => String(key || '').trim()).filter((key, index, keys) => key && keys.indexOf(key) === index);
 
 function _morningMissionVerification(snapshot) {
   if (!snapshot || typeof snapshot !== 'object') {
@@ -137,8 +143,8 @@ function _activeMorningPrompt() {
 }
 
 async function _queryPendingIncomingMissions() {
-  if (!BRIDGE_SUPABASE_KEY) {
-    throw new Error('SUPABASE_GOAL_KEY no configurada para verificar misiones entrantes');
+  if (!BRIDGE_SUPABASE_KEYS.length) {
+    throw new Error('No hay una credencial Supabase configurada para verificar misiones entrantes');
   }
   const endpoint = new URL(`${BRIDGE_SUPABASE_URL}/rest/v1/misiones`);
   endpoint.searchParams.set('select', 'id,titulo,instruccion,asignado_a,created_at');
@@ -147,18 +153,28 @@ async function _queryPendingIncomingMissions() {
   endpoint.searchParams.set('order', 'created_at.asc');
   const missions = [];
   let exactCount = null;
+  let verifiedKey = null;
   const pageSize = 1000;
   for (let from = 0; ; from += pageSize) {
-    const response = await fetch(endpoint, {
-      headers: {
-        apikey: BRIDGE_SUPABASE_KEY,
-        Authorization: `Bearer ${BRIDGE_SUPABASE_KEY}`,
-        Prefer: 'count=exact',
-        Range: `${from}-${from + pageSize - 1}`,
-        'Range-Unit': 'items'
-      },
-      signal: AbortSignal.timeout(30000)
-    });
+    let response = null;
+    const candidateKeys = verifiedKey ? [verifiedKey] : BRIDGE_SUPABASE_KEYS;
+    for (const key of candidateKeys) {
+      response = await fetch(endpoint, {
+        headers: {
+          apikey: key,
+          Authorization: `Bearer ${key}`,
+          Prefer: 'count=exact',
+          Range: `${from}-${from + pageSize - 1}`,
+          'Range-Unit': 'items'
+        },
+        signal: AbortSignal.timeout(30000)
+      });
+      if (response.ok) {
+        verifiedKey = key;
+        break;
+      }
+      if (![401, 403].includes(response.status)) break;
+    }
     if (!response.ok) {
       throw new Error(`Supabase rechazó la verificación de misiones (HTTP ${response.status})`);
     }
