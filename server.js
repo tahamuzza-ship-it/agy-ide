@@ -28,6 +28,104 @@ const AGY_IDE_PWD = process.env.AGY_IDE_PASSWORD;
 if (!AGY_KEY)     { console.error('FATAL: ANTIGRAVITY_KEY env var not set'); process.exit(1); }
 if (!AGY_IDE_PWD) { console.error('FATAL: AGY_IDE_PASSWORD env var not set'); process.exit(1); }
 
+/* ── Inyección de contexto matutino SGN ── */
+const MORNING_SYNC_HOST = 'https://artifact-publisher-standby-production.up.railway.app';
+const MORNING_RECIPIENT = 'agy-ide';
+const MORNING_TARGET_HOUR_UTC = 13; // 08:00 America/Bogota (UTC-5, sin DST)
+const MORNING_CONTEXT_FILE = path.join(__dirname, 'morning_context_current.json');
+
+function msUntilMorningSync() {
+  const now = new Date();
+  const next = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    MORNING_TARGET_HOUR_UTC,
+    0,
+    0,
+    0
+  ));
+  if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+  return next.getTime() - now.getTime();
+}
+
+async function sincronizarVitaminasMatutinas() {
+  const apiKey = process.env.ANTIGRAVITY_KEY || process.env.LEAD_ARCHITECT_KEY;
+  if (!apiKey) {
+    console.warn('[MORNING-SYNC] Omitido: falta ANTIGRAVITY_KEY o LEAD_ARCHITECT_KEY');
+    return;
+  }
+
+  try {
+    console.log('[MORNING-SYNC] Descargando contexto diario para agy-ide...');
+    const pull = await fetch(
+      `${MORNING_SYNC_HOST}/api/ops/morning-injection?recipient=${MORNING_RECIPIENT}`,
+      {
+        method: 'GET',
+        headers: { 'x-antigravity-key': apiKey },
+        signal: AbortSignal.timeout(30000)
+      }
+    );
+    if (!pull.ok) {
+      console.warn(`[MORNING-SYNC] Pull falló con HTTP ${pull.status}`);
+      return;
+    }
+
+    const payload = await pull.json();
+    if (!payload || !Object.prototype.hasOwnProperty.call(payload, 'snapshot')) {
+      console.warn('[MORNING-SYNC] Railway respondió sin snapshot');
+      return;
+    }
+
+    try {
+      global.SGN_MORNING_CONTEXT = payload.snapshot;
+      const temporaryFile = `${MORNING_CONTEXT_FILE}.tmp`;
+      fs.writeFileSync(temporaryFile, JSON.stringify(payload.snapshot, null, 2), 'utf8');
+      fs.renameSync(temporaryFile, MORNING_CONTEXT_FILE);
+    } catch (error) {
+      console.error('[MORNING-SYNC] No se pudo persistir; ACK cancelado:', error);
+      return;
+    }
+
+    console.log('[MORNING-SYNC] Contexto persistido en memoria y disco.');
+    const ack = await fetch(`${MORNING_SYNC_HOST}/api/ops/morning-injection/ack`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-antigravity-key': apiKey
+      },
+      body: JSON.stringify({
+        recipient: MORNING_RECIPIENT,
+        status: 'INJECTED_OK'
+      }),
+      signal: AbortSignal.timeout(30000)
+    });
+
+    if (!ack.ok) {
+      console.warn(`[MORNING-SYNC] ACK falló con HTTP ${ack.status}`);
+      return;
+    }
+    console.log('[MORNING-SYNC] ACK registrado con éxito en Railway.');
+  } catch (error) {
+    console.error('[MORNING-SYNC] Error de sincronización:', error);
+  }
+}
+
+function scheduleMorningSync() {
+  const scheduleNext = () => {
+    const delay = msUntilMorningSync();
+    console.log(`[MORNING-SYNC] Próxima ejecución: ${new Date(Date.now() + delay).toISOString()} (08:00 America/Bogota)`);
+    setTimeout(async () => {
+      try {
+        await sincronizarVitaminasMatutinas();
+      } finally {
+        scheduleNext();
+      }
+    }, delay);
+  };
+  scheduleNext();
+}
+
 /* Base del IDE (Supabase 2, donde vive cibercode_chats). Acepta SUPABASE_URL_2 o
    SUPABASE_URL si coincide con el proyecto 2. El fallback garantiza el proyecto correcto
    incluso si la variable de entorno no está seteada. Nota: SUPABASE_URL (sin sufijo _2)
@@ -2784,5 +2882,7 @@ app.post('/api/ops/mailbox/voice/confirm', async (req, res) => {
 
 app.listen(PORT, async () => {
   console.log(`AGY-IDE ▶  puerto ${PORT} | /goal mode ACTIVO`);
+  void sincronizarVitaminasMatutinas();
+  scheduleMorningSync();
   await reconcileInterruptedSessions();
 });
