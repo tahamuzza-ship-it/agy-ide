@@ -973,7 +973,14 @@ app.get('/api/alma', requirePwd, (_req, res) => {
   });
 });
 
-app.get('/api/morning/pending-missions', requirePwd, async (_req, res) => {
+function requireMorningPeer(req, res, next) {
+  const peerKey = req.headers['x-antigravity-key'];
+  const password = req.headers['x-agyide-pwd'] || req.query.pwd;
+  if ((AGY_KEY && peerKey === AGY_KEY) || _pwdOk(password)) return next();
+  return res.status(401).json({ error: 'No autorizado' });
+}
+
+app.get('/api/morning/pending-missions', requireMorningPeer, async (_req, res) => {
   try {
     res.json(await _queryPendingIncomingMissions());
   } catch (error) {
