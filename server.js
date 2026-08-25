@@ -33,6 +33,163 @@ const MORNING_SYNC_HOST = 'https://artifact-publisher-standby-production.up.rail
 const MORNING_RECIPIENT = 'agy-ide';
 const MORNING_TARGET_HOUR_UTC = 13; // 08:00 America/Bogota (UTC-5, sin DST)
 const MORNING_CONTEXT_FILE = path.join(__dirname, 'morning_context_current.json');
+const MORNING_ACK_STATUS = 'INJECTED_AND_MISSIONS_VERIFIED';
+const BRIDGE_SUPABASE_URL = (process.env.SUPABASE_GOAL_URL || 'https://crpsnlonpmgwatjpyzkm.supabase.co')
+  .replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
+const BRIDGE_SUPABASE_KEY = process.env.SUPABASE_GOAL_KEY;
+
+function _morningMissionVerification(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') {
+    throw new Error('snapshot matutino inválido');
+  }
+  const inbox = snapshot.incoming_missions;
+  if (!inbox || typeof inbox !== 'object' || inbox.source !== 'supabase.misiones' || inbox.verified !== true) {
+    throw new Error('incoming_missions no fue verificado contra supabase.misiones');
+  }
+  const missions = Array.isArray(inbox.missions) ? inbox.missions : null;
+  const pendingCount = Number(inbox.pending_count);
+  if (!missions || !Number.isInteger(pendingCount) || pendingCount < 0 || pendingCount !== missions.length) {
+    throw new Error('conteo de misiones entrantes inconsistente');
+  }
+  const normalized = missions.map((mission) => {
+    if (!mission || typeof mission !== 'object') throw new Error('misión entrante inválida');
+    const id = String(mission.id || '').trim();
+    const assignedTo = String(mission.assigned_to || '').trim().toUpperCase();
+    if (!id || !['AGY', 'PC1', 'PC2'].includes(assignedTo)) {
+      throw new Error('misión entrante sin id o destinatario válido');
+    }
+    return {
+      id,
+      title: String(mission.title || mission.instruction || 'Sin título').trim().slice(0, 240),
+      instruction: String(mission.instruction || '').trim().slice(0, 1200),
+      assigned_to: assignedTo,
+      created_at: String(mission.created_at || '')
+    };
+  });
+  return { pendingCount, missionIds: normalized.map((mission) => mission.id), missions: normalized };
+}
+
+function _buildMorningContextPrompt(snapshot) {
+  const verification = _morningMissionVerification(snapshot);
+  const missionLines = verification.missions.length
+    ? verification.missions.map((mission) =>
+        `- ${mission.id} — ${mission.title} [${mission.assigned_to}]${mission.instruction ? `: ${mission.instruction}` : ''}`
+      ).join('\n')
+    : '- No hay misiones entrantes pendientes.';
+  const compactContext = {
+    incoming_missions: snapshot.incoming_missions,
+    node_health: Array.isArray(snapshot.node_health) ? snapshot.node_health : [],
+    agent_roles: Array.isArray(snapshot.agent_roles) ? snapshot.agent_roles : [],
+    mailbox_pending: Array.isArray(snapshot.mailbox_pending) ? snapshot.mailbox_pending : [],
+    continuity_state: snapshot.continuity_state && typeof snapshot.continuity_state === 'object'
+      ? {
+          version: snapshot.continuity_state.version || null,
+          content: String(snapshot.continuity_state.content || '').slice(0, 6000)
+        }
+      : null,
+    master_prompt: snapshot.master_prompt && typeof snapshot.master_prompt === 'object'
+      ? {
+          version: snapshot.master_prompt.version || null,
+          sha256: snapshot.master_prompt.sha256 || null,
+          sections: snapshot.master_prompt.sections || []
+        }
+      : null
+  };
+  return `════════ PROTOCOLO_DESPERTAR_ACTIVO — CONTEXTO MATUTINO VERIFICADO ════════
+Este bloque es contexto operativo obligatorio del system prompt.
+ANTES de planificar o responder, reconoce y reporta las misiones entrantes pendientes dirigidas a AGY, PC1 o PC2.
+No ejecutes operaciones físicas automáticamente. Procesa una misión a la vez y respeta las autorizaciones.
+Conteo exacto de misiones entrantes pendientes: ${verification.pendingCount}
+${missionLines}
+
+CONTEXTO MATUTINO OPERATIVO:
+${JSON.stringify(compactContext)}`;
+}
+
+function _loadMorningContextSnapshot() {
+  if (global.SGN_MORNING_CONTEXT && typeof global.SGN_MORNING_CONTEXT === 'object') {
+    return global.SGN_MORNING_CONTEXT;
+  }
+  try {
+    if (!fs.existsSync(MORNING_CONTEXT_FILE)) return null;
+    const snapshot = JSON.parse(fs.readFileSync(MORNING_CONTEXT_FILE, 'utf8'));
+    global.SGN_MORNING_CONTEXT = snapshot;
+    return snapshot;
+  } catch (error) {
+    console.warn('[MORNING-SYNC] Contexto persistido inválido:', error.message);
+    return null;
+  }
+}
+
+function _activeMorningPrompt() {
+  if (typeof global.SGN_MORNING_PROMPT === 'string' && global.SGN_MORNING_PROMPT) {
+    return global.SGN_MORNING_PROMPT;
+  }
+  const snapshot = _loadMorningContextSnapshot();
+  if (!snapshot) return '';
+  try {
+    global.SGN_MORNING_PROMPT = _buildMorningContextPrompt(snapshot);
+    return global.SGN_MORNING_PROMPT;
+  } catch (error) {
+    console.warn('[MORNING-SYNC] Snapshot no apto para prompt:', error.message);
+    return '';
+  }
+}
+
+async function _queryPendingIncomingMissions() {
+  if (!BRIDGE_SUPABASE_KEY) {
+    throw new Error('SUPABASE_GOAL_KEY no configurada para verificar misiones entrantes');
+  }
+  const endpoint = new URL(`${BRIDGE_SUPABASE_URL}/rest/v1/misiones`);
+  endpoint.searchParams.set('select', 'id,titulo,instruccion,asignado_a,created_at');
+  endpoint.searchParams.set('asignado_a', 'in.(AGY,PC1,PC2)');
+  endpoint.searchParams.set('estado', 'eq.pendiente');
+  endpoint.searchParams.set('order', 'created_at.asc');
+  const missions = [];
+  let exactCount = null;
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const response = await fetch(endpoint, {
+      headers: {
+        apikey: BRIDGE_SUPABASE_KEY,
+        Authorization: `Bearer ${BRIDGE_SUPABASE_KEY}`,
+        Prefer: 'count=exact',
+        Range: `${from}-${from + pageSize - 1}`,
+        'Range-Unit': 'items'
+      },
+      signal: AbortSignal.timeout(30000)
+    });
+    if (!response.ok) {
+      throw new Error(`Supabase rechazó la verificación de misiones (HTTP ${response.status})`);
+    }
+    const rows = await response.json();
+    if (!Array.isArray(rows)) throw new Error('Supabase devolvió misiones en formato inválido');
+    if (exactCount === null) {
+      const contentRange = response.headers.get('content-range') || '';
+      const total = Number(contentRange.split('/')[1]);
+      exactCount = Number.isInteger(total) ? total : rows.length;
+    }
+    missions.push(...rows.map((row) => ({
+      id: String(row.id),
+      title: String(row.titulo || row.instruccion || 'Sin título').trim().slice(0, 240),
+      instruction: String(row.instruccion || '').trim().slice(0, 2000),
+      assigned_to: String(row.asignado_a || '').toUpperCase(),
+      created_at: String(row.created_at || '')
+    })));
+    if (rows.length < pageSize) break;
+    if (missions.length > 10000) throw new Error('Demasiadas misiones pendientes para un reporte seguro');
+  }
+  if (exactCount !== missions.length) {
+    throw new Error(`Conteo inconsistente de misiones: Supabase=${exactCount}, leídas=${missions.length}`);
+  }
+  return {
+    source: 'supabase.misiones',
+    verified: true,
+    verified_at: new Date().toISOString(),
+    pending_count: exactCount,
+    missions
+  };
+}
 
 function msUntilMorningSync() {
   const now = new Date();
@@ -50,6 +207,7 @@ function msUntilMorningSync() {
 }
 
 async function sincronizarVitaminasMatutinas() {
+  global.SGN_MORNING_LAST_ACK = null;
   const apiKey = process.env.ANTIGRAVITY_KEY || process.env.LEAD_ARCHITECT_KEY;
   if (!apiKey) {
     console.warn('[MORNING-SYNC] Omitido: falta ANTIGRAVITY_KEY o LEAD_ARCHITECT_KEY');
@@ -77,8 +235,17 @@ async function sincronizarVitaminasMatutinas() {
       return;
     }
 
+    let verification;
+    let morningPrompt;
     try {
+      verification = _morningMissionVerification(payload.snapshot);
+      morningPrompt = _buildMorningContextPrompt(payload.snapshot);
+      if (!morningPrompt.includes('PROTOCOLO_DESPERTAR_ACTIVO') ||
+          verification.missionIds.some((id) => !morningPrompt.includes(id))) {
+        throw new Error('el prompt no reconoció todas las misiones entrantes');
+      }
       global.SGN_MORNING_CONTEXT = payload.snapshot;
+      global.SGN_MORNING_PROMPT = morningPrompt;
       const temporaryFile = `${MORNING_CONTEXT_FILE}.tmp`;
       fs.writeFileSync(temporaryFile, JSON.stringify(payload.snapshot, null, 2), 'utf8');
       fs.renameSync(temporaryFile, MORNING_CONTEXT_FILE);
@@ -87,7 +254,7 @@ async function sincronizarVitaminasMatutinas() {
       return;
     }
 
-    console.log('[MORNING-SYNC] Contexto persistido en memoria y disco.');
+    console.log(`[MORNING-SYNC] Contexto incorporado al prompt; ${verification.pendingCount} misiones entrantes verificadas.`);
     const ack = await fetch(`${MORNING_SYNC_HOST}/api/ops/morning-injection/ack`, {
       method: 'POST',
       headers: {
@@ -96,7 +263,10 @@ async function sincronizarVitaminasMatutinas() {
       },
       body: JSON.stringify({
         recipient: MORNING_RECIPIENT,
-        status: 'INJECTED_OK'
+        status: MORNING_ACK_STATUS,
+        context_read: true,
+        pending_count: verification.pendingCount,
+        mission_ids: verification.missionIds
       }),
       signal: AbortSignal.timeout(30000)
     });
@@ -105,7 +275,18 @@ async function sincronizarVitaminasMatutinas() {
       console.warn(`[MORNING-SYNC] ACK falló con HTTP ${ack.status}`);
       return;
     }
-    console.log('[MORNING-SYNC] ACK registrado con éxito en Railway.');
+    const ackPayload = await ack.json().catch(() => ({}));
+    if (ackPayload.status !== MORNING_ACK_STATUS) {
+      console.warn(`[MORNING-SYNC] ACK inválido: ${String(ackPayload.status || 'sin status')}`);
+      return;
+    }
+    global.SGN_MORNING_LAST_ACK = {
+      status: MORNING_ACK_STATUS,
+      pending_count: verification.pendingCount,
+      mission_ids: verification.missionIds,
+      acknowledged_at: new Date().toISOString()
+    };
+    console.log(`[MORNING-SYNC] ACK ${MORNING_ACK_STATUS} registrado con éxito.`);
   } catch (error) {
     console.error('[MORNING-SYNC] Error de sincronización:', error);
   }
@@ -422,6 +603,8 @@ console.log(`[alma] soul.md ${SOUL ? 'cargada (' + SOUL.length + ' chars)' : 'NO
    kind: 'chat' (incluye formato de archivos del IDE) | 'goal' (sesiones autónomas) */
 function buildSystemPrompt(kind) {
   const parts = [];
+  const morningPrompt = _activeMorningPrompt();
+  if (morningPrompt) parts.push(morningPrompt);
   if (CFG.herramientas.alma_en_prompt && SOUL) parts.push(SOUL);
   parts.push(CRITICAL_RULES.trim());
   if (kind === 'chat') parts.push(IDE_SYSTEM);
@@ -772,6 +955,24 @@ app.get('/api/alma', requirePwd, (_req, res) => {
     manual_cargado: !!MANUAL, manual_chars: MANUAL.length,
     config: CFG
   });
+});
+
+app.get('/api/morning/pending-missions', requirePwd, async (_req, res) => {
+  try {
+    res.json(await _queryPendingIncomingMissions());
+  } catch (error) {
+    console.error('[/api/morning/pending-missions]', error.message);
+    res.status(503).json({ error: error.message });
+  }
+});
+
+app.post('/api/morning/sync', requirePwd, async (_req, res) => {
+  await sincronizarVitaminasMatutinas();
+  const ack = global.SGN_MORNING_LAST_ACK;
+  if (!ack || ack.status !== MORNING_ACK_STATUS) {
+    return res.status(503).json({ ok: false, error: 'El despertar activo no obtuvo un ACK operativo' });
+  }
+  res.json({ ok: true, ...ack });
 });
 /* El manual maestro como texto plano — PC1/PC2 lo descargan con la llave de equipos:
    PC1: Invoke-RestMethod -Uri <IDE>/api/manual -Headers @{'x-equipos-key'=<KEY>} | Out-File ...
@@ -2354,7 +2555,124 @@ function _mailboxForcedMission(instruction) {
   return _mailboxNormalizeVoiceMission(raw);
 }
 
+// MAILBOX_SEMANTIC_CLASSIFIER_V1
+// Embeddings locales y deterministas: cada frase se proyecta a conceptos
+// semánticos y se compara por coseno con ejemplos canónicos.
+function _mailboxSemanticIntent(text) {
+  var raw = String(text || '').trim();
+  var normalized = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  normalized = normalized.replace(/\b(?:buson|buzom)\b/g, 'buzon').replace(/\b(?:micion|misio)\b/g, 'mision').replace(/\b(?:pe ce|pese)\s*uno\b/g, 'pc 1');
+  if (!normalized) return null;
+  var utterance = raw;
+
+  if (/^(?:confirmo|confirmar|confirmado|si confirma|si adelante|adelante|procede)$/i.test(normalized)) {
+    return { type: 'confirm-only', utterance: utterance };
+  }
+  if (/^(?:cancelar|cancela|cancelado|anula|anular|descarta|descartar|olvidalo|no lo hagas)$/i.test(normalized)
+      || /\bno\s+(?:crees?|crear|dejes?|enviar|mandes?)\b/.test(normalized)) {
+    return { type: 'cancel-only', utterance: utterance };
+  }
+
+  var pc1Target = '(?:p\\s*[cs]\\s*(?:1|uno)|pe\\s+(?:ce|ese)\\s+uno)';
+  var directedMissionPatterns = [
+    new RegExp('^(?:(?:agy|agi)[\\s,]+)?' + pc1Target + '[\\s,:-]+(.+)$', 'i'),
+    new RegExp('^(?:agy|agi)[\\s,]+dile\\s+a\\s+' + pc1Target + '\\s+que\\s+(.+)$', 'i'),
+    new RegExp('^misi[oó]n\\s+para\\s+' + pc1Target + '\\s*[:,-]?\\s*(.+)$', 'i'),
+    new RegExp('^(?:(?:agy|agi)[\\s,]+)?manda\\s+a\\s+' + pc1Target + '\\s+a\\s+(.+)$', 'i')
+  ];
+  for (var directedIndex = 0; directedIndex < directedMissionPatterns.length; directedIndex++) {
+    var directedMission = raw.match(directedMissionPatterns[directedIndex]);
+    if (!directedMission || !directedMission[1]) continue;
+    var directedObjective = directedMission[1].trim().replace(/[.?!¡,;:]+$/, '').trim();
+    var directedConfirmInline = /(?:^|\s)(?:confirmo|confirmar)\s*$/i.test(directedObjective);
+    if (directedConfirmInline) directedObjective = directedObjective.replace(/(?:^|\s)(?:confirmo|confirmar)\s*$/i, '').trim();
+    return directedObjective.length >= 4
+      ? { type: 'draft', mission: directedObjective, confirmInline: directedConfirmInline, utterance: utterance }
+      : { type: 'draft-help', utterance: utterance };
+  }
+
+  var groups = {
+    read: ['consulta','consultar','revisa','revisar','mira','mirar','lista','listar','muestra','mostrar','dime','dame','ver','saber','comprobar','chequear'],
+    create: ['crea','crear','prepara','preparar','deja','dejar','manda','mandar','envia','enviar','encarga','encargar','apunta','apuntar','anota','anotar','nueva'],
+    mission: ['mision','misiones','tarea','tareas','encargo','encargos','trabajo','trabajos','objetivo','objetivos'],
+    input: ['entrada','entrante','recibido','recibidos','buzon1','buzonuno','paraagy','para agy','pc1pendiente','pc uno pendiente'],
+    output: ['salida','saliente','enviado','enviados','deagy','de agy','parareplit','para replit','agy pendiente'],
+    pending: ['pendiente','pendientes','espera','esperando','cola']
+  };
+  var examples = {
+    input: ['consulta la entrada de pc1','que tareas tiene pc1 pendientes','mira el buzon uno','misiones para agy'],
+    output: ['consulta la salida de pc1','que ha enviado agy a replit','mira el buzon de agy','misiones pendientes de agy'],
+    create: ['deja una mision para agy','prepara un encargo nuevo','manda una tarea al buzon uno','anota un objetivo para pc1']
+  };
+  function embedding(value) {
+    var clean = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    var compact = clean.replace(/\s+/g, '');
+    var words = clean ? clean.split(/\s+/) : [];
+    var vector = {};
+    words.forEach(function(word) { vector['w:' + word] = (vector['w:' + word] || 0) + 0.35; });
+    Object.keys(groups).forEach(function(concept) {
+      var hit = groups[concept].some(function(alias) {
+        return alias.indexOf(' ') >= 0 ? clean.indexOf(alias) >= 0 : (words.indexOf(alias) >= 0 || compact.indexOf(alias) >= 0);
+      });
+      if (hit) vector['c:' + concept] = 1;
+    });
+    if (/\bpc\s*(?:1|uno)\b/.test(clean)) vector['c:pc1'] = 1;
+    if (/\bbuzon\b/.test(clean)) vector['c:mailbox'] = 1;
+    return vector;
+  }
+  function cosine(a, b) {
+    var dot = 0, aa = 0, bb = 0;
+    Object.keys(a).forEach(function(key) { aa += a[key] * a[key]; if (b[key]) dot += a[key] * b[key]; });
+    Object.keys(b).forEach(function(key) { bb += b[key] * b[key]; });
+    return aa && bb ? dot / Math.sqrt(aa * bb) : 0;
+  }
+  var vector = embedding(normalized);
+  function best(intent) {
+    return Math.max.apply(Math, examples[intent].map(function(example) { return cosine(vector, embedding(example)); }));
+  }
+  var scores = { input: best('input'), output: best('output'), create: best('create') };
+  var createWords = /\b(?:crea|crear|prepara|preparar|deja|dejar|manda|mandar|envia|enviar|encarga|encargar|apunta|apuntar|anota|anotar|nueva)\b/.test(normalized);
+  var missionWords = /\b(?:mision(?:es)?|tarea(?:s)?|encargo(?:s)?|objetivo(?:s)?)\b/.test(normalized);
+  if (createWords && missionWords) {
+    var objective = raw.match(/(?:con\s+(?:el\s+)?objetivo|objetivo)\s*[:\-]?\s*(.+)$/i)
+      || raw.match(/(?:misi[oó]n|tarea|encargo)\s*(?:es|que|para|de)?\s*[:\-]?\s*(.+)$/i);
+    var mission = objective && objective[1] ? objective[1].trim() : '';
+    var confirmInline = /(?:^|\s)(?:confirmo|confirmar)\s*$/i.test(mission);
+    if (confirmInline) mission = mission.replace(/(?:^|\s)(?:confirmo|confirmar)\s*$/i, '').trim();
+    return mission.length >= 4
+      ? { type: 'draft', mission: mission, confirmInline: confirmInline, utterance: utterance }
+      : { type: 'draft-help', utterance: utterance };
+  }
+
+  var explicitInput = /\bentrada(?:\s+de)?\s+pc\s*(?:1|uno)\b|\bbuzon\s*(?:1|uno)\b|\b(?:tareas?|misiones?)\s+(?:pendientes?\s+de|para)\s+pc\s*(?:1|uno)\b/.test(normalized);
+  var explicitOutput = /\bsalida(?:\s+de)?\s+pc\s*(?:1|uno)\b|\bbuzon\s+(?:de\s+)?agy\b|\b(?:tareas?|misiones?)\s+pendientes?\s+(?:de|en)\s+agy\b|\b(?:que\s+ha\s+)?(?:enviado|dejado|mandado)(?:\s+por)?\s+agy\b|\bagy\s+(?:ha\s+)?(?:enviado|dejado|mandado)\b/.test(normalized);
+  if (explicitInput && explicitOutput) return { type: 'clarify', utterance: utterance };
+  if (explicitInput) return { type: 'list', utterance: utterance };
+  if (explicitOutput) return { type: 'list-agy-to-replit', utterance: utterance };
+
+  var mailboxTopic = /\b(?:buzon|mision(?:es)?|tarea(?:s)?|encargo(?:s)?|trabajo(?:s)?|entrada|salida)\b/.test(normalized);
+  var readWords = /\b(?:consulta|consultar|revisa|revisar|mira|mirar|lista|listar|muestra|mostrar|dime|dame|ver|saber|hay|existen|pendiente|pendientes)\b/.test(normalized);
+  var ellipticalRead = /^(?:(?:las?|mis)\s+)?(?:misiones?|tareas?|encargos?|trabajos?)\b/.test(normalized);
+  if (mailboxTopic && (readWords || ellipticalRead)) {
+    var embeddedInput = vector['c:input'] === 1;
+    var embeddedOutput = vector['c:output'] === 1;
+    if (embeddedInput !== embeddedOutput && Math.max(scores.input, scores.output) >= 0.55) {
+      return { type: scores.input > scores.output ? 'list' : 'list-agy-to-replit', utterance: utterance };
+    }
+    return { type: 'clarify', utterance: utterance };
+  }
+  if (/\bbuzon\b/.test(normalized)) return { type: 'clarify', utterance: utterance };
+  return null;
+}
+
 function _mailboxLegacyChatIntent(instruction) {
+  const semanticIntent = _mailboxSemanticIntent(instruction);
+  if (semanticIntent) {
+    if (semanticIntent.type === 'list') return { kind: 'read', direction: 'replit-to-agy' };
+    if (semanticIntent.type === 'list-agy-to-replit') return { kind: 'read', direction: 'agy-to-replit' };
+    if (semanticIntent.type === 'clarify') return { kind: 'clarify' };
+    return { kind: 'creation' };
+  }
   const normalized = _mailboxNormalizeInstruction(instruction);
   const mentionsMailbox = /\bbuzon\b/.test(normalized);
   const asksToCreate = /\b(?:dejar|deja|dejando|enviar|envia|enviando|manda|mandar|mandando|crea|crear|creando|prepara|preparar|preparando|nueva)\b/.test(normalized)
@@ -2371,7 +2689,7 @@ function _mailboxLegacyChatIntent(instruction) {
     const match = pattern.exec(normalized);
     if (match && match[1] && match[1].trim().length >= 4) {
       const mission = match[1].replace(/(?:^|\s)(?:confirmo|confirmar)\s*$/, '').trim();
-      if (mission.length >= 4) return { kind: 'immediate-creation', mission };
+      if (mission.length >= 4) return { kind: 'creation' };
     }
   }
   if (asksToCreate) return { kind: 'creation' };
@@ -2386,13 +2704,19 @@ function _mailboxLegacyChatIntent(instruction) {
 }
 
 async function _mailboxLegacyChatFallback(instruction) {
-  const forcedMission = _mailboxForcedMission(instruction);
-  const intent = forcedMission
-    ? { kind: 'immediate-creation', mission: forcedMission }
-    : _mailboxLegacyChatIntent(instruction);
+  const intent = _mailboxLegacyChatIntent(instruction);
   if (!intent) return null;
 
   const id = `mailbox_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  if (intent.kind === 'clarify') {
+    return {
+      ok: true,
+      id,
+      source: 'mailbox',
+      riskLevel: 0,
+      result: '¿Quieres consultar la Entrada de PC1 (misiones para AGY) o la Salida de PC1 (encargos que AGY dejó para Replit)?'
+    };
+  }
   if (intent.kind === 'immediate-creation') {
     if (!AGY_KEY) {
       return {
@@ -2773,11 +3097,36 @@ app.post('/api/ops/mailbox/voice/command', async (req, res) => {
     return res.status(503).json({ error: 'Conexion con PC1 no configurada' });
   }
 
-  const requestedAction = req.body && req.body.action;
-  const inputText = req.body && (req.body.instruction || req.body.text || req.body.mission);
-  const readDirection = requestedAction ? null : _mailboxReadDirection(inputText);
-  const forcedMission = requestedAction ? null : (readDirection ? null : _mailboxForcedMission(inputText));
-  const action = requestedAction || (forcedMission ? 'create' : (readDirection ? 'list' : null));
+  const action = req.body && req.body.action;
+  if (req.body && typeof req.body.utterance === 'string' && req.body.utterance.trim()) {
+    const serverIntent = _mailboxSemanticIntent(req.body.utterance);
+    const expectedAction = serverIntent && (
+      serverIntent.type === 'list'
+        ? 'list'
+        : serverIntent.type === 'list-agy-to-replit'
+          ? 'list-agy-to-replit'
+          : serverIntent.type === 'draft'
+            ? 'draft'
+            : null
+    );
+    if (!expectedAction || expectedAction !== action) {
+      return res.status(409).json({
+        error: serverIntent && serverIntent.type === 'clarify'
+          ? 'Aclara si quieres consultar la Entrada de PC1 o la Salida de PC1'
+          : 'La decisión semántica del cliente no coincide con la del servidor',
+        code: 'MAILBOX_INTENT_MISMATCH'
+      });
+    }
+    if (
+      serverIntent.type === 'draft' &&
+      _mailboxNormalizeVoiceMission(req.body.mission) !== serverIntent.mission
+    ) {
+      return res.status(409).json({
+        error: 'El objetivo enviado no coincide con el dictado clasificado',
+        code: 'MAILBOX_MISSION_MISMATCH'
+      });
+    }
+  }
   if (action === 'list' || action === 'list-agy-to-replit') {
     try {
       const direction = action === 'list-agy-to-replit' ? 'agy-to-replit' : 'replit-to-agy';
@@ -2843,45 +3192,6 @@ app.post('/api/ops/mailbox/voice/command', async (req, res) => {
       mission,
       message: `Voy a crear una mision nueva en el Buzon 1 con este objetivo: ${mission}. Di confirmo para crearla o cancelar para no hacer nada.`
     });
-  }
-
-  if (action === 'create') {
-    const mission = forcedMission || _mailboxNormalizeVoiceMission(req.body && req.body.mission);
-    if (!mission) {
-      return res.status(400).json({ error: 'La orden para PC1 no es valida' });
-    }
-    try {
-      const markdown = _mailboxCreateMissionMarkdown(mission);
-      const instruction = _mailboxBuildEncodedCreateCommand(markdown);
-      const outcome = await _mailboxDispatch(instruction);
-      if (outcome.status === 'timeout') {
-        return res.status(504).json({ error: 'PC1 no respondio a tiempo' });
-      }
-      if (outcome.status !== 'done' || !outcome.result) {
-        return res.status(502).json({ error: 'PC1 no pudo crear la mision' });
-      }
-      const created = JSON.parse(outcome.result);
-      if (
-        !created ||
-        typeof created !== 'object' ||
-        typeof created.name !== 'string' ||
-        !/^MISION_\d{8}_\d{3}\.md$/.test(created.name) ||
-        created.status !== 'PENDIENTE'
-      ) {
-        return res.status(502).json({ error: 'PC1 devolvio una respuesta no valida' });
-      }
-      _mailboxRecentReads.delete('replit-to-agy');
-      return res.json({
-        kind: 'created',
-        source: 'mailbox',
-        name: created.name,
-        status: 'PENDIENTE',
-        message: 'Entendido, orden enviada a PC1.'
-      });
-    } catch (error) {
-      console.error('[mailbox-voice] error de creacion inmediata', error instanceof Error ? error.message : 'UNKNOWN');
-      return res.status(502).json({ error: 'No pude crear la mision en PC1' });
-    }
   }
 
   return res.status(400).json({ error: 'Comando de voz de Buzon 1 no valido' });
