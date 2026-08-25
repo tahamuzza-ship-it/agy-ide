@@ -1186,23 +1186,33 @@
       const sent = await sendToAGY(msg + fileCtx);
       if (!sent.id) throw new Error(sent.error || 'Sin ID');
 
-      // Resultado directo (IA) o error — nunca ir a pollStatus si ya hay resultado
+      // Resultado directo (IA) o polling a PC1/PC2
+      let resText = '';
+      let isErr = false;
       if (sent.result) {
-        finalizeThinking(wrap, bubble, sent.result);
+        resText = sent.result;
+        finalizeThinking(wrap, bubble, resText);
         void autoSaveChat();
       } else {
         const result = await pollStatus(sent.id);
-        finalizeThinking(wrap, bubble, result.result || '(respuesta vacía)');
+        resText = result.result || '(respuesta vacía)';
+        isErr = (result.status === 'error');
+        finalizeThinking(wrap, bubble, resText);
         void autoSaveChat();
       }
+
+      // Espejo automático: también escribir en el panel de OUTPUT para vista móvil/escritorio
+      appendOutput('🤖 ' + ts() + ' — ' + getPcTarget() + ' (' + sent.id.slice(0,8) + '…)', resText, isErr);
+      setOutStatus(isErr ? '❌ error' : '✅ listo', isErr ? '#ff5555' : '#00ff88');
     } catch (e) {
       finalizeThinking(wrap, bubble, '⚠ Error: ' + e.message);
+      appendOutput('❌ ' + ts() + ' — fallo', e.message, true);
+      setOutStatus('❌ error', '#ff5555');
     } finally {
       send.disabled = false;
       inp.focus();
     }
-        window._agySpeakNext = true; // dictado por voz → AGY responderá con voz
-    }
+  }
 
     /* ══════════════════════════════════════════
      /goal PANEL — Modo Agente Autónomo
