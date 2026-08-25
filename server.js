@@ -490,6 +490,23 @@ async function pollAGY(id, maxMs = 120000, sessionId = null) {
 }
 
 const recentCommandTargets = new Map();
+const recentBridgeResults = new Map();
+
+function rememberBridgeResult(id, target, instruction, done) {
+  const now = new Date().toISOString();
+  recentBridgeResults.set(id, {
+    id,
+    target,
+    instruction,
+    status: done.status === 'done' ? 'done' : 'error',
+    result: String(done.result || ''),
+    created_at: now,
+    updated_at: now
+  });
+  while (recentBridgeResults.size > 100) {
+    recentBridgeResults.delete(recentBridgeResults.keys().next().value);
+  }
+}
 
 /* ══════════════════════════════════════════════════════════════
    GOAL LOOP — auto-healer + Supabase logging + Telegram report
@@ -823,6 +840,8 @@ app.post('/api/send', requirePwd, async (req, res) => {
 app.get('/api/status/:id', requirePwd, async (req, res) => {
   try {
     const { id } = req.params;
+    const requestedTarget = String(req.query.target || '').toUpperCase();
+    const safeTarget = requestedTarget === 'PC1' || requestedTarget === 'PC2' ? requestedTarget : null;
     if (id.startsWith('groq_') && SUPABASE_URL && SUPABASE_KEY) {
       const r = await fetch(
         `${SUPABASE_URL}/rest/v1/antigravity_commands?id=eq.${encodeURIComponent(id)}&select=id,status,result`,
@@ -833,7 +852,7 @@ app.get('/api/status/:id', requirePwd, async (req, res) => {
       if (row) return res.json({ id: row.id, status: row.status, result: row.result });
     }
     const data = await replitGet(`/api/antigravity/status/${id}`);
-    res.json({ ...data, target: data.target || recentCommandTargets.get(id) || null });
+    res.json({ ...data, target: data.target || recentCommandTargets.get(id) || safeTarget });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -842,28 +861,13 @@ app.get('/api/status/:id', requirePwd, async (req, res) => {
 app.get('/api/recent', requirePwd, async (req, res) => {
   try {
     const requestedSince = typeof req.query.since === 'string' ? req.query.since : '';
-    const parsedSince = requestedSince && !Number.isNaN(Date.parse(requestedSince))
-      ? new Date(requestedSince)
-      : new Date(Date.now() - 24 * 60 * 60 * 1000);
-    if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error('Supabase no configurado');
-    const query =
-      'select=id,instruction,result,status,created_at,updated_at' +
-      '&status=in.(done,error)' +
-      `&created_at=gt.${encodeURIComponent(parsedSince.toISOString())}` +
-      '&order=updated_at.desc&limit=50';
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/antigravity_commands?${query}`, {
-      headers: sbHeaders()
-    });
-    if (!r.ok) throw new Error(`Supabase recent HTTP ${r.status}`);
-    const rows = await r.json();
-    res.json((Array.isArray(rows) ? rows : []).map((row) => {
-      const match = String(row.instruction || '').match(/^\[(PC1|PC2)\]\s*/i);
-      return {
-        ...row,
-        target: match ? match[1].toUpperCase() : recentCommandTargets.get(row.id) || null,
-        instruction: String(row.instruction || '').replace(/^\[(PC1|PC2)\]\s*/i, '')
-      };
-    }));
+    const sinceMs = requestedSince && !Number.isNaN(Date.parse(requestedSince))
+      ? Date.parse(requestedSince)
+      : Date.now() - 24 * 60 * 60 * 1000;
+    const rows = Array.from(recentBridgeResults.values())
+      .filter((row) => Date.parse(row.updated_at) > sinceMs)
+      .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
+    res.json(rows);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1039,6 +1043,7 @@ app.post('/api/telegram-webhook', async (req, res) => {
           const done = await pollAGY(sent.id, 15 * 60 * 1000);
           const out = String(done.result || '(sin salida)');
           const isError = done.status !== 'done';
+          rememberBridgeResult(sent.id, pcTarget, pcCmd, done);
           await tgReply(`📬 <b>[RESULTADO ${pcTarget}] ${isError ? '🔴' : '🟢'}</b>\n\n<pre>${esc(out.slice(0, 3500))}</pre>`);
         })().catch((err) => console.error('[telegram] retorno PC asíncrono:', err.message));
       } catch (e) {
