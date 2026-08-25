@@ -489,6 +489,8 @@ async function pollAGY(id, maxMs = 120000, sessionId = null) {
   return { status: 'error', result: 'Tiempo de espera agotado (120s)' };
 }
 
+const recentCommandTargets = new Map();
+
 /* ══════════════════════════════════════════════════════════════
    GOAL LOOP — auto-healer + Supabase logging + Telegram report
 ══════════════════════════════════════════════════════════════ */
@@ -810,6 +812,7 @@ app.post('/api/send', requirePwd, async (req, res) => {
     if (data.requiresConfirmation) {
       data = await replitPost('/api/antigravity/send', { instruction: prefixed, target, confirmed: true });
     }
+    if (data && data.id) recentCommandTargets.set(data.id, target);
     res.json(data);
   } catch (e) {
     console.error('[/api/send] ERROR:', e.message);
@@ -830,7 +833,7 @@ app.get('/api/status/:id', requirePwd, async (req, res) => {
       if (row) return res.json({ id: row.id, status: row.status, result: row.result });
     }
     const data = await replitGet(`/api/antigravity/status/${id}`);
-    res.json(data);
+    res.json({ ...data, target: data.target || recentCommandTargets.get(id) || null });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -838,10 +841,29 @@ app.get('/api/status/:id', requirePwd, async (req, res) => {
 
 app.get('/api/recent', requirePwd, async (req, res) => {
   try {
-    const since = typeof req.query.since === 'string' ? req.query.since : '';
-    const suffix = since ? `?since=${encodeURIComponent(since)}` : '';
-    const data = await replitGet(`/api/antigravity/recent${suffix}`);
-    res.json(Array.isArray(data) ? data : []);
+    const requestedSince = typeof req.query.since === 'string' ? req.query.since : '';
+    const parsedSince = requestedSince && !Number.isNaN(Date.parse(requestedSince))
+      ? new Date(requestedSince)
+      : new Date(Date.now() - 24 * 60 * 60 * 1000);
+    if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error('Supabase no configurado');
+    const query =
+      'select=id,instruction,result,status,created_at,updated_at' +
+      '&status=in.(done,error)' +
+      `&created_at=gt.${encodeURIComponent(parsedSince.toISOString())}` +
+      '&order=updated_at.desc&limit=50';
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/antigravity_commands?${query}`, {
+      headers: sbHeaders()
+    });
+    if (!r.ok) throw new Error(`Supabase recent HTTP ${r.status}`);
+    const rows = await r.json();
+    res.json((Array.isArray(rows) ? rows : []).map((row) => {
+      const match = String(row.instruction || '').match(/^\[(PC1|PC2)\]\s*/i);
+      return {
+        ...row,
+        target: match ? match[1].toUpperCase() : recentCommandTargets.get(row.id) || null,
+        instruction: String(row.instruction || '').replace(/^\[(PC1|PC2)\]\s*/i, '')
+      };
+    }));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -998,14 +1020,12 @@ app.post('/api/telegram-webhook', async (req, res) => {
         const prefixed = `[${pcTarget}] ${isMission ? 'AGY' : 'EJECUTAR'} ${pcCmd}`;
         let sent = await replitPost('/api/antigravity/send', {
           instruction: prefixed,
-          target: pcTarget,
-          chat_id: chatId
+          target: pcTarget
         });
         if (sent && sent.requiresConfirmation) {
           sent = await replitPost('/api/antigravity/send', {
             instruction: prefixed,
             target: pcTarget,
-            chat_id: chatId,
             confirmed: true
           });
         }
@@ -1013,7 +1033,14 @@ app.post('/api/telegram-webhook', async (req, res) => {
           await tgReply(`❌ ${pcTarget} no aceptó el comando: ${esc(JSON.stringify(sent || {}).slice(0, 300))}`);
           return;
         }
+        recentCommandTargets.set(sent.id, pcTarget);
         await tgReply(`📨 Orden <code>${esc(String(sent.id).slice(0, 12))}</code> en cola. El puente enviará el resultado al terminar.`);
+        void (async () => {
+          const done = await pollAGY(sent.id, 15 * 60 * 1000);
+          const out = String(done.result || '(sin salida)');
+          const isError = done.status !== 'done';
+          await tgReply(`📬 <b>[RESULTADO ${pcTarget}] ${isError ? '🔴' : '🟢'}</b>\n\n<pre>${esc(out.slice(0, 3500))}</pre>`);
+        })().catch((err) => console.error('[telegram] retorno PC asíncrono:', err.message));
       } catch (e) {
         await tgReply(`❌ Error con ${pcTarget}: ${esc(e.message.slice(0, 200))}`);
       }
