@@ -1172,14 +1172,39 @@
       } catch (e) { return ''; }
     }
 
+    function _parseUniversalPcInput(value) {
+    const text = String(value || '').trim();
+    const direct = text.match(/^\/(pc1|pc2)\b(?:\s+([\s\S]+))?$/i);
+    const mission = text.match(/^misiones\s+(pc1|pc2)\b(?:\s+([\s\S]+))?$/i);
+    const match = direct || mission;
+    if (!match) return null;
+    return {
+      target: match[1].toUpperCase(),
+      command: String(match[2] || '').trim(),
+      mission: !!mission
+    };
+    }
+
+    async function _sendUniversalPcCommand(text) {
+    const r = await fetch('/api/pc-command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': _getPwd() },
+      body: JSON.stringify({ text: text })
+    });
+    const data = await r.json().catch(function() { return {}; });
+    if (!r.ok) throw new Error(data.error || 'No fue posible enviar la orden al PC.');
+    return data;
+    }
+
     async function sendChat(raw, opts) {
     opts = opts || {};
     const msg = raw.trim();
     if (!msg) return;
+    const universalPc = _parseUniversalPcInput(msg);
     // Si el navegador dejó una orden de consulta en la caja (en vez de
     // entregarla al cierre del micrófono), no permitir que caiga al chat IA.
     // Las órdenes naturales para PC1 crean una misión y nunca llegan al chat IA.
-    if (!opts.mailboxVoiceIntent) {
+    if (!universalPc && !opts.mailboxVoiceIntent) {
       var pendingMailboxIntent = window._mailboxVoiceIntent(msg);
       if (pendingMailboxIntent) {
         opts.mailboxVoiceIntent = pendingMailboxIntent;
@@ -1196,6 +1221,24 @@
     const { wrap, bubble } = appendThinking();
 
     try {
+      if (universalPc) {
+        if (!universalPc.command) {
+          throw new Error('Uso: /' + universalPc.target.toLowerCase() + ' <comando> o MISIONES ' + universalPc.target + ' <objetivo>');
+        }
+        const sent = await _sendUniversalPcCommand(msg);
+        if (!sent.id) throw new Error(sent.error || 'El puente no devolvió un ID de tarea.');
+        appendOutput('📤 ' + ts() + ' — enviado a ' + universalPc.target + ' (' + sent.id.slice(0,8) + '…)', msg, false);
+        setOutStatus('⏳ ejecutando en ' + universalPc.target + '…', '#ffcc00');
+        if (window.innerWidth <= 768) switchPanel('output');
+        const result = await pollStatus(sent.id, universalPc.target, 15 * 60 * 1000);
+        const isErr = result.status === 'error';
+        const output = result.result || '(sin output)';
+        appendOutput((isErr ? '❌' : '✅') + ' ' + ts() + ' — resultado ' + universalPc.target, output, isErr);
+        finalizeThinking(wrap, bubble, '[' + universalPc.target + '] ' + output);
+        setOutStatus(isErr ? '❌ error' : '✅ listo', isErr ? '#ff5555' : '#00ff88');
+        void autoSaveChat();
+        return;
+      }
       if (opts.mailboxVoiceIntent) {
         const voiceResult = await _runMailboxVoiceIntent(opts.mailboxVoiceIntent);
         const armConfirmation = voiceResult.kind === 'proposal'
@@ -1219,33 +1262,23 @@
       const sent = await sendToAGY(msg + fileCtx);
       if (!sent.id) throw new Error(sent.error || 'Sin ID');
 
-      // Resultado directo (IA) o polling a PC1/PC2
-      let resText = '';
-      let isErr = false;
+      // Resultado directo (IA) o error — nunca ir a pollStatus si ya hay resultado
       if (sent.result) {
-        resText = sent.result;
-        finalizeThinking(wrap, bubble, resText);
+        finalizeThinking(wrap, bubble, sent.result);
         void autoSaveChat();
       } else {
         const result = await pollStatus(sent.id, getPcTarget());
-        resText = result.result || '(respuesta vacía)';
-        isErr = (result.status === 'error');
-        finalizeThinking(wrap, bubble, resText);
+        finalizeThinking(wrap, bubble, result.result || '(respuesta vacía)');
         void autoSaveChat();
       }
-
-      // Espejo automático: también escribir en el panel de OUTPUT para vista móvil/escritorio
-      appendOutput('🤖 ' + ts() + ' — ' + getPcTarget() + ' (' + sent.id.slice(0,8) + '…)', resText, isErr);
-      setOutStatus(isErr ? '❌ error' : '✅ listo', isErr ? '#ff5555' : '#00ff88');
     } catch (e) {
       finalizeThinking(wrap, bubble, '⚠ Error: ' + e.message);
-      appendOutput('❌ ' + ts() + ' — fallo', e.message, true);
-      setOutStatus('❌ error', '#ff5555');
     } finally {
       send.disabled = false;
       inp.focus();
     }
-  }
+        window._agySpeakNext = true; // dictado por voz → AGY responderá con voz
+    }
 
     /* ══════════════════════════════════════════
      /goal PANEL — Modo Agente Autónomo
