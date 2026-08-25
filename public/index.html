@@ -1074,12 +1074,13 @@
     }
     window._runMailboxVoiceIntent = _runMailboxVoiceIntent;
 
-    async function pollStatus(id, maxMs) {
+    async function pollStatus(id, target, maxMs) {
     maxMs = maxMs || 180000;
     const start = Date.now();
     while (Date.now() - start < maxMs) {
       await new Promise(res => setTimeout(res, 5000));
-      const r = await fetch('/api/status/' + id, { headers: { 'x-agyide-pwd': _getPwd() } });
+      const suffix = target ? '?target=' + encodeURIComponent(target) : '';
+      const r = await fetch('/api/status/' + id + suffix, { headers: { 'x-agyide-pwd': _getPwd() } });
       if (!r.ok) continue;
       const d = await r.json();
       if (d.status === 'done' || d.status === 'error') return d;
@@ -1101,18 +1102,19 @@
 
     const lang = document.getElementById('editor-lang').textContent;
     const instruction = 'EJECUTAR el siguiente código ' + lang + ':\n```' + lang + '\n' + code + '\n```\nMuéstrame el output completo.';
+    const target = getPcTarget();
 
     try {
-      const sent = await sendToAGY(instruction);
+      const sent = await sendToAGY(instruction, target);
       if (!sent.id) throw new Error(sent.error || 'Sin ID de tarea');
 
-      appendOutput('📤 ' + ts() + ' — enviado a ' + getPcTarget() + ' (' + sent.id.slice(0,8) + '…)', instruction, false);
+      appendOutput('📤 ' + ts() + ' — enviado a ' + target + ' (' + sent.id.slice(0,8) + '…)', instruction, false);
       setOutStatus('⏳ ejecutando…', '#ffcc00');
 
       // Cambiar a output en móvil para ver resultados
       if (window.innerWidth <= 768) switchPanel('output');
 
-      const result = await pollStatus(sent.id);
+      const result = await pollStatus(sent.id, target);
       const isErr  = result.status === 'error';
       appendOutput((isErr ? '❌' : '✅') + ' ' + ts() + ' — resultado', result.result || '(sin output)', isErr);
       setOutStatus(isErr ? '❌ error' : '✅ listo', isErr ? '#ff5555' : '#00ff88');
@@ -1225,7 +1227,7 @@
         finalizeThinking(wrap, bubble, resText);
         void autoSaveChat();
       } else {
-        const result = await pollStatus(sent.id);
+        const result = await pollStatus(sent.id, getPcTarget());
         resText = result.result || '(respuesta vacía)';
         isErr = (result.status === 'error');
         finalizeThinking(wrap, bubble, resText);
