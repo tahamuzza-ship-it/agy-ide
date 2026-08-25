@@ -794,6 +794,42 @@ app.get('/api/heartbeat', async (_req, res) => {
   }
 });
 
+app.post('/api/pc-command', requirePwd, async (req, res) => {
+  try {
+    const text = String(req.body && req.body.text || '').trim();
+    const directMatch = text.match(/^\/(pc1|pc2)\b(?:\s+([\s\S]+))?$/i);
+    const missionMatch = text.match(/^misiones\s+(pc1|pc2)\b(?:\s+([\s\S]+))?$/i);
+    const match = directMatch || missionMatch;
+    if (!match) return res.status(400).json({ error: 'Comando universal no reconocido' });
+
+    const target = match[1].toUpperCase();
+    const command = String(match[2] || '').trim();
+    if (!command) {
+      return res.status(400).json({
+        error: `Uso: /${target.toLowerCase()} <comando> o MISIONES ${target} <objetivo>`
+      });
+    }
+
+    const instruction = `${missionMatch ? 'AGY' : 'EJECUTAR'} ${command}`;
+    let data = await replitPost('/api/antigravity/send', {
+      instruction: `[${target}] ${instruction}`,
+      target
+    });
+    if (data.requiresConfirmation) {
+      data = await replitPost('/api/antigravity/send', {
+        instruction: `[${target}] ${instruction}`,
+        target,
+        confirmed: true
+      });
+    }
+    if (data && data.id) recentCommandTargets.set(data.id, target);
+    res.json({ ...data, target, command, mode: missionMatch ? 'mission' : 'direct' });
+  } catch (e) {
+    console.error('[/api/pc-command] ERROR:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/send', requirePwd, async (req, res) => {
   try {
     const { instruction, target = 'PC1' } = req.body;
