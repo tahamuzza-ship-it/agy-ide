@@ -747,6 +747,35 @@
     out.scrollTop = out.scrollHeight;
     }
 
+    const _agyRecentSeen = new Set();
+    const _agyRecentSince = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+    async function refreshBridgeResults() {
+    try {
+      const r = await fetch('/api/recent?since=' + encodeURIComponent(_agyRecentSince), {
+        headers: { 'x-agyide-pwd': _getPwd() }
+      });
+      if (!r.ok) return;
+      const rows = await r.json();
+      if (!Array.isArray(rows)) return;
+      rows.slice().reverse().forEach(function(item) {
+        if (!item || !item.id || _agyRecentSeen.has(item.id)) return;
+        if (item.status !== 'done' && item.status !== 'error') return;
+        _agyRecentSeen.add(item.id);
+        const target = item.target || 'PC';
+        const when = item.updated_at ? new Date(item.updated_at).toLocaleTimeString() : ts();
+        appendOutput(
+          '📬 ' + when + ' — resultado ' + target + ' (' + String(item.id).slice(0, 8) + '…)',
+          item.result || '(sin output)',
+          item.status === 'error'
+        );
+      });
+    } catch (_) {}
+    }
+
+    setTimeout(refreshBridgeResults, 1500);
+    setInterval(refreshBridgeResults, 5000);
+
     function escHtml(s) {
     return String(s)
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -762,7 +791,9 @@
       body: JSON.stringify({ instruction, target: target || getPcTarget() })
     });
     if (!r.ok) throw new Error('HTTP ' + r.status);
-    return r.json();
+    const data = await r.json();
+    if (data && data.id) _agyRecentSeen.add(data.id);
+    return data;
     }
 
     function _voiceSessionId() {
