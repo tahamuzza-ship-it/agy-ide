@@ -390,6 +390,7 @@
       height: 100%;
       overflow: hidden;
     }
+    }
 
 /* ── MODO YARBIS: módulo opt-in aislado ── */
 .hbtn-yarbis{background:linear-gradient(135deg,#092b34,#007f8f);color:#bffcff;border:1px solid rgba(0,243,255,.55);font-weight:800;box-shadow:0 0 15px rgba(0,243,255,.12)}
@@ -413,6 +414,7 @@
 .yarbis-proposal{margin-top:10px;padding:12px;border:1px solid rgba(255,196,74,.4);border-radius:9px;background:rgba(90,55,0,.18)}.yarbis-proposal p{margin:0 0 9px;color:#ffe9ad;font-size:.78rem}.yarbis-note{margin:13px 0 0;color:#617184;font-size:.65rem;line-height:1.45;text-align:center}
 @media(max-width:600px){#yarbis-overlay{padding:0;place-items:stretch}#yarbis-panel{width:100%;max-height:100vh;border-radius:0}.yarbis-body{max-height:calc(100vh - 76px);padding:14px}.yarbis-reactor{width:104px;height:104px}.yarbis-controls{flex-wrap:wrap}.yarbis-history{height:30vh}}
 
+    @media (max-width: 768px) {
     /* Ocultar TODO por defecto */
     #panel-editor,
     #panel-right,
