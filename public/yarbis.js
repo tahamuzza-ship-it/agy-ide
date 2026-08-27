@@ -53,6 +53,7 @@
   var ws = null, stream = null, audioCtx = null, source = null, processor = null;
   var playbackCtx = null, playbackAt = 0, proposalId = '', closing = false, panelOpen = false;
   var micGeneration = 0, connectionGeneration = 0;
+  var activeConnection = null;
 
   function pwd() { try { return localStorage.getItem('agyide_auth_v1') || ''; } catch (_) { return ''; } }
   function voiceSession() {
@@ -138,8 +139,14 @@
       add('system', 'No se pudo abrir el micrófono. El Plan B de texto sigue disponible.');
     }
   }
-  function playPcm(data, mime, generation) {
-    if (closing || !panelOpen || generation !== connectionGeneration || !ws) return;
+  function playPcm(data, mime, generation, session) {
+    if (
+      closing || !panelOpen || generation !== connectionGeneration || !ws ||
+      !session || session.closed || activeConnection !== session || session.socket !== ws
+    ) {
+      overlay.dataset.lastDiscard = 'audio';
+      return;
+    }
     var match = /rate=(\d+)/.exec(mime || ''), rate = match ? Number(match[1]) : 24000;
     var raw = atob(data), bytes = new Uint8Array(raw.length);
     for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
@@ -153,6 +160,8 @@
   }
   function disconnect(message) {
     closing = true;
+    if (activeConnection) activeConnection.closed = true;
+    activeConnection = null;
     connectionGeneration++;
     stopMic();
     var closingSocket = ws;
@@ -171,6 +180,8 @@
     var scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
     var generation = ++connectionGeneration;
     var socket = new WebSocket(scheme + '//' + location.host + '/api/yarbis/live');
+    var session = { socket: socket, closed: false };
+    activeConnection = session;
     ws = socket;
     connectBtn.disabled = true; disconnectBtn.disabled = false;
     setState('THINKING', 'Conectando con Gemini Live…');
@@ -179,7 +190,13 @@
       socket.send(JSON.stringify({ type: 'auth', password: pwd() }));
     };
     socket.onmessage = function (event) {
-      if (closing || !panelOpen || ws !== socket || generation !== connectionGeneration) return;
+      if (
+        closing || !panelOpen || ws !== socket || generation !== connectionGeneration ||
+        session.closed || activeConnection !== session
+      ) {
+        overlay.dataset.lastDiscard = 'message';
+        return;
+      }
       var m; try { m = JSON.parse(event.data); } catch (_) { return; }
       if (m.type === 'connecting') {
         setState('THINKING', 'Autenticado. Esperando a Gemini Live…');
@@ -188,18 +205,23 @@
       } else if (m.type === 'unavailable') {
         textSend.disabled = false; setState('IDLE', m.message); add('system', m.message);
       } else if (m.type === 'transcript') add(m.role === 'user' ? 'user' : 'yarbis', m.text);
-      else if (m.type === 'audio') playPcm(m.data, m.mimeType, generation);
+      else if (m.type === 'audio') playPcm(m.data, m.mimeType, generation, session);
       else if (m.type === 'turn_complete') setState(stream ? 'LISTENING' : 'IDLE', stream ? 'Escuchando.' : 'Live listo.');
       else if (m.type === 'interrupted') { playbackAt = 0; setState('LISTENING', 'Respuesta interrumpida; escuchando.'); }
       else if (m.type === 'error' || m.type === 'disconnected') { add('system', m.message); setState('IDLE', m.message); }
     };
     socket.onclose = function (event) {
-      if (ws !== socket || generation !== connectionGeneration) return;
+      if (ws !== socket || generation !== connectionGeneration || activeConnection !== session) return;
+      session.closed = true;
+      activeConnection = null;
       ws = null; stopMic(); connectBtn.disabled = false; micBtn.disabled = true; disconnectBtn.disabled = true; textSend.disabled = true;
       if (!closing) { setState('IDLE', 'Live desconectado. Puedes volver a conectar.'); add('system', event.reason || 'La conexión terminó.'); }
     };
     socket.onerror = function () {
-      if (ws === socket && generation === connectionGeneration && panelOpen) setState('IDLE', 'No se pudo conectar con Live.');
+      if (
+        ws === socket && generation === connectionGeneration && panelOpen &&
+        !session.closed && activeConnection === session
+      ) setState('IDLE', 'No se pudo conectar con Live.');
     };
   }
   async function mailboxCommand(text) {
