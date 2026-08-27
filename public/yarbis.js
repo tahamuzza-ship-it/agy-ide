@@ -52,7 +52,7 @@
       !proposalText || !document.getElementById('btn-yarbis')) return;
   var ws = null, stream = null, audioCtx = null, source = null, processor = null;
   var playbackCtx = null, playbackAt = 0, proposalId = '', closing = false, panelOpen = false;
-  var micGeneration = 0;
+  var micGeneration = 0, connectionGeneration = 0;
 
   function pwd() { try { return localStorage.getItem('agyide_auth_v1') || ''; } catch (_) { return ''; } }
   function voiceSession() {
@@ -138,7 +138,8 @@
       add('system', 'No se pudo abrir el micrófono. El Plan B de texto sigue disponible.');
     }
   }
-  function playPcm(data, mime) {
+  function playPcm(data, mime, generation) {
+    if (closing || !panelOpen || generation !== connectionGeneration || !ws) return;
     var match = /rate=(\d+)/.exec(mime || ''), rate = match ? Number(match[1]) : 24000;
     var raw = atob(data), bytes = new Uint8Array(raw.length);
     for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
@@ -151,8 +152,15 @@
     setState('SPEAKING', 'Yarbis está respondiendo.');
   }
   function disconnect(message) {
-    closing = true; stopMic();
-    if (ws) { try { ws.close(1000); } catch (_) {} ws = null; }
+    closing = true;
+    connectionGeneration++;
+    stopMic();
+    var closingSocket = ws;
+    ws = null;
+    if (closingSocket) {
+      closingSocket.onopen = closingSocket.onmessage = closingSocket.onclose = closingSocket.onerror = null;
+      try { closingSocket.close(1000); } catch (_) {}
+    }
     if (playbackCtx) { playbackCtx.close().catch(function(){}); playbackCtx = null; playbackAt = 0; }
     connectBtn.disabled = false; micBtn.disabled = true; disconnectBtn.disabled = true; textSend.disabled = true;
     setState('IDLE', message || 'Apagado. Nada escucha ni está conectado.');
@@ -161,11 +169,17 @@
   function connect() {
     if (ws) return;
     var scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(scheme + '//' + location.host + '/api/yarbis/live');
+    var generation = ++connectionGeneration;
+    var socket = new WebSocket(scheme + '//' + location.host + '/api/yarbis/live');
+    ws = socket;
     connectBtn.disabled = true; disconnectBtn.disabled = false;
     setState('THINKING', 'Conectando con Gemini Live…');
-    ws.onopen = function () { ws.send(JSON.stringify({ type: 'auth', password: pwd() })); };
-    ws.onmessage = function (event) {
+    socket.onopen = function () {
+      if (ws !== socket || generation !== connectionGeneration || !panelOpen) return;
+      socket.send(JSON.stringify({ type: 'auth', password: pwd() }));
+    };
+    socket.onmessage = function (event) {
+      if (closing || !panelOpen || ws !== socket || generation !== connectionGeneration) return;
       var m; try { m = JSON.parse(event.data); } catch (_) { return; }
       if (m.type === 'connecting') {
         setState('THINKING', 'Autenticado. Esperando a Gemini Live…');
@@ -174,16 +188,19 @@
       } else if (m.type === 'unavailable') {
         textSend.disabled = false; setState('IDLE', m.message); add('system', m.message);
       } else if (m.type === 'transcript') add(m.role === 'user' ? 'user' : 'yarbis', m.text);
-      else if (m.type === 'audio') playPcm(m.data, m.mimeType);
+      else if (m.type === 'audio') playPcm(m.data, m.mimeType, generation);
       else if (m.type === 'turn_complete') setState(stream ? 'LISTENING' : 'IDLE', stream ? 'Escuchando.' : 'Live listo.');
       else if (m.type === 'interrupted') { playbackAt = 0; setState('LISTENING', 'Respuesta interrumpida; escuchando.'); }
       else if (m.type === 'error' || m.type === 'disconnected') { add('system', m.message); setState('IDLE', m.message); }
     };
-    ws.onclose = function (event) {
+    socket.onclose = function (event) {
+      if (ws !== socket || generation !== connectionGeneration) return;
       ws = null; stopMic(); connectBtn.disabled = false; micBtn.disabled = true; disconnectBtn.disabled = true; textSend.disabled = true;
       if (!closing) { setState('IDLE', 'Live desconectado. Puedes volver a conectar.'); add('system', event.reason || 'La conexión terminó.'); }
     };
-    ws.onerror = function () { setState('IDLE', 'No se pudo conectar con Live.'); };
+    socket.onerror = function () {
+      if (ws === socket && generation === connectionGeneration && panelOpen) setState('IDLE', 'No se pudo conectar con Live.');
+    };
   }
   async function mailboxCommand(text) {
     var intent = typeof window._mailboxVoiceIntent === 'function' ? window._mailboxVoiceIntent(text) : null;
