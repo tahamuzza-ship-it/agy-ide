@@ -52,6 +52,7 @@
       !proposalText || !document.getElementById('btn-yarbis')) return;
   var ws = null, stream = null, audioCtx = null, source = null, processor = null;
   var playbackCtx = null, playbackAt = 0, proposalId = '', closing = false;
+  var micGeneration = 0;
 
   function pwd() { try { return localStorage.getItem('agyide_auth_v1') || ''; } catch (_) { return ''; } }
   function voiceSession() {
@@ -101,6 +102,7 @@
     return out;
   }
   function stopMic() {
+    micGeneration++;
     if (processor) { processor.disconnect(); processor.onaudioprocess = null; }
     if (source) source.disconnect();
     if (stream) stream.getTracks().forEach(function (track) { track.stop(); });
@@ -110,8 +112,15 @@
   }
   async function startMic() {
     if (stream) { stopMic(); setState('IDLE', 'Micrófono detenido; Live sigue conectado.'); return; }
+    var generation = ++micGeneration;
+    var pendingStream = null;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }, video: false });
+      pendingStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }, video: false });
+      if (generation !== micGeneration || closing || overlay.getAttribute('aria-hidden') === 'true') {
+        pendingStream.getTracks().forEach(function (track) { track.stop(); });
+        return;
+      }
+      stream = pendingStream;
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       source = audioCtx.createMediaStreamSource(stream);
       processor = audioCtx.createScriptProcessor(4096, 1, 1);
@@ -124,6 +133,7 @@
       micBtn.textContent = 'DETENER MICRÓFONO';
       setState('LISTENING', 'Escuchando solo dentro de Modo Yarbis.');
     } catch (_) {
+      if (generation !== micGeneration) return;
       stopMic(); setState('IDLE', 'Permiso de micrófono denegado. Usa el modo texto.');
       add('system', 'No se pudo abrir el micrófono. El Plan B de texto sigue disponible.');
     }
