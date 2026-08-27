@@ -51,7 +51,7 @@
       !micBtn || !disconnectBtn || !textForm || !textInput || !proposalBox ||
       !proposalText || !document.getElementById('btn-yarbis')) return;
   var ws = null, stream = null, audioCtx = null, source = null, processor = null;
-  var playbackCtx = null, playbackAt = 0, proposalId = '', closing = false;
+  var playbackCtx = null, playbackAt = 0, proposalId = '', closing = false, panelOpen = false;
   var micGeneration = 0;
 
   function pwd() { try { return localStorage.getItem('agyide_auth_v1') || ''; } catch (_) { return ''; } }
@@ -116,7 +116,7 @@
     var pendingStream = null;
     try {
       pendingStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }, video: false });
-      if (generation !== micGeneration || closing || overlay.getAttribute('aria-hidden') === 'true') {
+      if (generation !== micGeneration || closing || !panelOpen || overlay.getAttribute('aria-hidden') === 'true') {
         pendingStream.getTracks().forEach(function (track) { track.stop(); });
         return;
       }
@@ -214,12 +214,15 @@
     add('system', body.message || body.error || 'Buzón actualizado.');
   }
   document.getElementById('btn-yarbis').addEventListener('click', function () {
+    panelOpen = true;
     overlay.setAttribute('aria-hidden', 'false');
     overlay.classList.add('open');
     overlay.style.setProperty('display', 'grid', 'important');
     textInput.focus();
   });
   document.getElementById('yarbis-close').addEventListener('click', function () {
+    panelOpen = false;
+    micGeneration++;
     overlay.style.setProperty('display', 'none', 'important');
     overlay.classList.remove('open');
     overlay.setAttribute('aria-hidden', 'true');
