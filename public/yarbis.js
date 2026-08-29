@@ -657,6 +657,21 @@
       message: body.error || 'Railway no confirmó la operación.'
     };
   }
+  function missionTransportFailureResult(decision, error) {
+    var message = error && error.message ? error.message : 'Se perdió la conexión antes de recibir la confirmación.';
+    if (decision === 'confirm') {
+      return {
+        kind: 'uncertain',
+        title: 'RESULTADO INCIERTO — REVISAR BUZÓN',
+        message: message + ' No repitas el envío hasta comprobar el Buzón.'
+      };
+    }
+    return {
+      kind: 'error',
+      title: 'NO SE PUDO CONFIRMAR LA CANCELACIÓN',
+      message: message + ' Abre de nuevo la bandeja para comprobar si el borrador sigue disponible.'
+    };
+  }
   async function confirmMailbox(decision, proposalId, card) {
     if (!proposalId || (decision !== 'confirm' && decision !== 'cancel')) return;
     if (missionDecisionInFlight) return;
@@ -686,10 +701,13 @@
         setState(stream ? 'LISTENING' : 'IDLE', 'No se pudo completar la decisión.');
       }
     } catch (error) {
-      var errorMessage = error.message || 'No se pudo completar la decisión.';
-      showMissionNotice('error', decision === 'confirm' ? 'NO SE PUDO ENVIAR' : 'NO SE PUDO CANCELAR', errorMessage);
-      add('system', (decision === 'confirm' ? 'NO SE PUDO ENVIAR. ' : 'NO SE PUDO CANCELAR. ') + errorMessage);
-      setState(stream ? 'LISTENING' : 'IDLE', 'No se pudo completar la decisión.');
+      var transportResult = missionTransportFailureResult(decision, error);
+      showMissionNotice(transportResult.kind, transportResult.title, transportResult.message);
+      add('system', transportResult.title + '. ' + transportResult.message);
+      setState(
+        stream ? 'LISTENING' : 'IDLE',
+        transportResult.kind === 'uncertain' ? 'Resultado incierto. No repitas el envío.' : 'No se pudo confirmar la cancelación.'
+      );
     } finally {
       missionDecisionInFlight = null;
       await refreshDrafts(true);
