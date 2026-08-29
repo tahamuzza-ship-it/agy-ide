@@ -34,6 +34,8 @@ const MORNING_RECIPIENT = 'agy-ide';
 const MORNING_TARGET_HOUR_UTC = 13; // 08:00 America/Bogota (UTC-5, sin DST)
 const MORNING_CONTEXT_FILE = path.join(__dirname, 'morning_context_current.json');
 const MORNING_ACK_STATUS = 'INJECTED_AND_MISSIONS_VERIFIED';
+const MORNING_PC1_EVIDENCE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const MORNING_SNAPSHOT_MAX_AGE_MS = 36 * 60 * 60 * 1000;
 const BRIDGE_SUPABASE_URL = (process.env.SUPABASE_GOAL_URL || 'https://crpsnlonpmgwatjpyzkm.supabase.co')
   .replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '');
 const BRIDGE_SUPABASE_KEYS = [
@@ -75,6 +77,138 @@ function _morningMissionVerification(snapshot) {
   return { pendingCount, missionIds: normalized.map((mission) => mission.id), missions: normalized };
 }
 
+function _morningSha256(content) {
+  return crypto.createHash('sha256').update(content, 'utf8').digest('hex');
+}
+
+function _morningNormalizedHash(value) {
+  const hash = String(value || '').trim().toLowerCase().replace(/^sha256:/, '');
+  return /^[a-f0-9]{64}$/.test(hash) ? hash : null;
+}
+
+function _morningAssertNoSensitiveMaterial(value) {
+  const serialized = JSON.stringify(value);
+  const sensitiveText = [
+    /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i,
+    /\b(?:github_pat_|glpat-|sk-(?:proj-)?)[A-Za-z0-9_-]{16,}/,
+    /\b(?:AKIA[0-9A-Z]{16}|ya29\.[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b/,
+    /\bBearer\s+[A-Za-z0-9._~+/-]{16,}/i,
+    /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/,
+    /\b\d{6,12}:[A-Za-z0-9_-]{24,}\b/,
+    /["']?(?:password|passwd|api[_-]?key|secret|service[_-]?role[_-]?key|token|access[_-]?token|refresh[_-]?token|id[_-]?token|authorization|private[_-]?key)["']?\s*[:=]\s*["']?[^\s"',;]{8,}/i,
+    /(?:postgres(?:ql)?|https?):\/\/[^/\s:@]+:[^/\s@]+@/i
+  ].some((pattern) => pattern.test(serialized));
+  const sensitiveKey = (input) => {
+    if (Array.isArray(input)) return input.some(sensitiveKey);
+    if (!input || typeof input !== 'object') return false;
+    return Object.entries(input).some(([key, child]) => (
+      /^(?:password|passwd|api[_-]?key|secret|service[_-]?role(?:[_-]?key)?|token|access[_-]?token|refresh[_-]?token|id[_-]?token|authorization|private[_-]?key)$/i.test(key) &&
+      typeof child === 'string' && child.trim().length >= 8
+    ) || sensitiveKey(child));
+  };
+  if (sensitiveText || sensitiveKey(value)) {
+    throw new Error('el snapshot contiene material sensible y fue rechazado');
+  }
+}
+
+function _morningAssertSnapshotCurrent(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') throw new Error('snapshot matutino inválido');
+  const date = typeof snapshot.__railway_created_at === 'string'
+    ? snapshot.__railway_created_at
+    : typeof snapshot.generated_at === 'string' ? snapshot.generated_at : null;
+  const timestamp = date ? Date.parse(date) : NaN;
+  if (!Number.isFinite(timestamp) || Date.now() - timestamp < 0 ||
+      Date.now() - timestamp > MORNING_SNAPSHOT_MAX_AGE_MS) {
+    throw new Error('el paquete de Railway no tiene una fecha vigente verificable');
+  }
+}
+
+function _morningValidatedDocument(snapshot, key) {
+  const document = snapshot && typeof snapshot === 'object' ? snapshot[key] : null;
+  if (!document || typeof document !== 'object') throw new Error(`${key} ausente`);
+  const content = typeof document.content === 'string' ? document.content : '';
+  const declared = _morningNormalizedHash(document.sha256);
+  if (!content) throw new Error(`${key} no contiene contenido completo`);
+  if (!declared) throw new Error(`${key} no contiene sha256 válido`);
+  if (_morningSha256(content) !== declared) throw new Error(`${key} no coincide con su sha256`);
+  return { content, sha256: declared, version: typeof document.version === 'string' ? document.version : null };
+}
+
+function _morningExplicitPc1Evidence(snapshot) {
+  const continuity = snapshot && snapshot.continuity_state;
+  const report = snapshot && (snapshot.pc1_continuity || (continuity && continuity.pc1_report));
+  if (!report || typeof report !== 'object') return null;
+  const hash = _morningNormalizedHash(report.sha256 || report.continuity_sha256);
+  const reportedAt = typeof report.reported_at === 'string' ? report.reported_at : null;
+  const reportedMs = reportedAt ? Date.parse(reportedAt) : NaN;
+  const expiresMs = typeof report.expires_at === 'string' ? Date.parse(report.expires_at) : NaN;
+  const current = Boolean(
+    hash && Number.isFinite(reportedMs) && Date.now() - reportedMs >= 0 &&
+    Date.now() - reportedMs <= MORNING_PC1_EVIDENCE_MAX_AGE_MS &&
+    (!Number.isFinite(expiresMs) || expiresMs >= Date.now())
+  );
+  return { sha256: hash, reported_at: reportedAt, current };
+}
+
+function _morningSafeStatus(snapshot, synchronizedAt) {
+  const master = _morningValidatedDocument(snapshot, 'master_prompt');
+  const continuity = _morningValidatedDocument(snapshot, 'continuity_state');
+  const prompt = _buildMorningContextPrompt(snapshot);
+  const evidence = _morningExplicitPc1Evidence(snapshot);
+  const missing = [];
+  const snapshotDate = typeof snapshot.__railway_created_at === 'string'
+    ? snapshot.__railway_created_at
+    : typeof snapshot.generated_at === 'string' ? snapshot.generated_at : null;
+  const snapshotMs = snapshotDate ? Date.parse(snapshotDate) : NaN;
+  const snapshotCurrent = Number.isFinite(snapshotMs) && Date.now() - snapshotMs >= 0 &&
+    Date.now() - snapshotMs <= MORNING_SNAPSHOT_MAX_AGE_MS;
+  if (!snapshotCurrent) missing.push('el paquete de Railway no tiene una fecha vigente verificable');
+  if (!evidence || !evidence.sha256) missing.push('PC1 no reportó un hash de continuidad explícito');
+  else if (!evidence.current) missing.push('el hash de continuidad reportado por PC1 no está vigente');
+  const matches = evidence && evidence.sha256 && evidence.current ? evidence.sha256 === continuity.sha256 : null;
+  const state = !snapshotCurrent || matches === false || Boolean(evidence && evidence.sha256 && !evidence.current)
+    ? 'stale'
+    : matches === true ? 'synchronized' : 'unverifiable';
+  return {
+    ok: true,
+    state,
+    synchronized_at: synchronizedAt || null,
+    snapshot_date: snapshotDate,
+    master_prompt: { version: master.version, sha256: master.sha256, validated: true },
+    continuity_state: { version: continuity.version, sha256: continuity.sha256, validated: true },
+    injected_context_sha256: _morningSha256(prompt),
+    pc1: {
+      sha256: evidence ? evidence.sha256 : null,
+      reported_at: evidence ? evidence.reported_at : null,
+      current: evidence ? evidence.current : false,
+      matches
+    },
+    missing_evidence: missing,
+    message: state === 'synchronized'
+      ? 'SINCRONIZADOS — MISMO HASH DE CONTINUIDAD'
+      : state === 'stale'
+        ? 'DESACTUALIZADO — EL CONTEXTO O LA EVIDENCIA DE PC1 NO ESTÁN VIGENTES'
+        : `NO VERIFICADO — ${missing.join('; ')}`
+  };
+}
+
+function _morningCurrentStatus() {
+  const active = global.SGN_MORNING_SYNC_STATUS;
+  try {
+    const snapshot = global.SGN_MORNING_CONTEXT || _loadMorningContextSnapshot();
+    if (!snapshot) throw new Error('no hay contexto matutino cargado');
+    return _morningSafeStatus(snapshot, active ? active.synchronized_at : null);
+  } catch (error) {
+    return {
+      ok: false, state: 'error', synchronized_at: null, snapshot_date: null,
+      master_prompt: null, continuity_state: null, injected_context_sha256: null,
+      pc1: { sha256: null, reported_at: null, current: false, matches: null },
+      missing_evidence: ['contexto validado no disponible'],
+      message: error.message || 'estado de sincronización no disponible'
+    };
+  }
+}
+
 function _buildMorningContextPrompt(snapshot) {
   const verification = _morningMissionVerification(snapshot);
   const missionLines = verification.missions.length
@@ -87,19 +221,8 @@ function _buildMorningContextPrompt(snapshot) {
     node_health: Array.isArray(snapshot.node_health) ? snapshot.node_health : [],
     agent_roles: Array.isArray(snapshot.agent_roles) ? snapshot.agent_roles : [],
     mailbox_pending: Array.isArray(snapshot.mailbox_pending) ? snapshot.mailbox_pending : [],
-    continuity_state: snapshot.continuity_state && typeof snapshot.continuity_state === 'object'
-      ? {
-          version: snapshot.continuity_state.version || null,
-          content: String(snapshot.continuity_state.content || '').slice(0, 6000)
-        }
-      : null,
-    master_prompt: snapshot.master_prompt && typeof snapshot.master_prompt === 'object'
-      ? {
-          version: snapshot.master_prompt.version || null,
-          sha256: snapshot.master_prompt.sha256 || null,
-          sections: snapshot.master_prompt.sections || []
-        }
-      : null
+    continuity_state: snapshot.continuity_state,
+    master_prompt: snapshot.master_prompt
   };
   return `════════ PROTOCOLO_DESPERTAR_ACTIVO — CONTEXTO MATUTINO VERIFICADO ════════
 Este bloque es contexto operativo obligatorio del system prompt.
@@ -254,17 +377,29 @@ async function sincronizarVitaminasMatutinas() {
     let verification;
     let morningPrompt;
     try {
-      verification = _morningMissionVerification(payload.snapshot);
-      morningPrompt = _buildMorningContextPrompt(payload.snapshot);
+      const snapshot = payload.snapshot && typeof payload.snapshot === 'object'
+        ? { ...payload.snapshot, __railway_created_at: typeof payload.createdAt === 'string' ? payload.createdAt : null }
+        : payload.snapshot;
+      _morningAssertNoSensitiveMaterial(snapshot);
+      _morningAssertSnapshotCurrent(snapshot);
+      verification = _morningMissionVerification(snapshot);
+      _morningValidatedDocument(snapshot, 'master_prompt');
+      _morningValidatedDocument(snapshot, 'continuity_state');
+      morningPrompt = _buildMorningContextPrompt(snapshot);
       if (!morningPrompt.includes('PROTOCOLO_DESPERTAR_ACTIVO') ||
           verification.missionIds.some((id) => !morningPrompt.includes(id))) {
         throw new Error('el prompt no reconoció todas las misiones entrantes');
       }
-      global.SGN_MORNING_CONTEXT = payload.snapshot;
+      global.SGN_MORNING_CONTEXT = snapshot;
       global.SGN_MORNING_PROMPT = morningPrompt;
       const temporaryFile = `${MORNING_CONTEXT_FILE}.tmp`;
-      fs.writeFileSync(temporaryFile, JSON.stringify(payload.snapshot, null, 2), 'utf8');
+      fs.writeFileSync(temporaryFile, JSON.stringify(snapshot, null, 2), 'utf8');
       fs.renameSync(temporaryFile, MORNING_CONTEXT_FILE);
+      global.SGN_MORNING_SYNC_STATUS = _morningSafeStatus(snapshot, new Date().toISOString());
+      const invalidatedSessions = typeof global.SGN_INVALIDATE_YARBIS_LIVE_CONTEXT === 'function'
+        ? global.SGN_INVALIDATE_YARBIS_LIVE_CONTEXT()
+        : 0;
+      console.log(`[MORNING-SYNC] ${invalidatedSessions} sesiones Live invalidadas para cargar el nuevo contexto.`);
     } catch (error) {
       console.error('[MORNING-SYNC] No se pudo persistir; ACK cancelado:', error);
       return;
@@ -989,13 +1124,19 @@ app.get('/api/morning/pending-missions', requireMorningPeer, async (_req, res) =
   }
 });
 
+app.get('/api/morning/status', requirePwd, (_req, res) => {
+  const status = _morningCurrentStatus();
+  res.status(status.ok ? 200 : 503).json(status);
+});
+
 app.post('/api/morning/sync', requirePwd, async (_req, res) => {
   await sincronizarVitaminasMatutinas();
   const ack = global.SGN_MORNING_LAST_ACK;
   if (!ack || ack.status !== MORNING_ACK_STATUS) {
     return res.status(503).json({ ok: false, error: 'El despertar activo no obtuvo un ACK operativo' });
   }
-  res.json({ ok: true, ...ack });
+  const status = _morningCurrentStatus();
+  res.status(status.ok ? 200 : 503).json(status);
 });
 /* El manual maestro como texto plano — PC1/PC2 lo descargan con la llave de equipos:
    PC1: Invoke-RestMethod -Uri <IDE>/api/manual -Headers @{'x-equipos-key'=<KEY>} | Out-File ...

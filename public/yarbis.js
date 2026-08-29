@@ -25,6 +25,8 @@
               '<div class="yarbis-controls"><button id="yarbis-connect" type="button">CONECTAR LIVE</button>' +
               '<button id="yarbis-mic" type="button" disabled>ACTIVAR MICRÓFONO</button>' +
               '<button id="yarbis-disconnect" type="button" disabled>DESCONECTAR</button></div>' +
+              '<div class="yarbis-sync"><button id="yarbis-sync" type="button">🔄 SINCRONIZAR CONTEXTO PC1</button>' +
+              '<div id="yarbis-sync-status" role="status" aria-live="polite">Estado de contexto aún no consultado.</div></div>' +
               '<div class="yarbis-missions-bar"><button id="yarbis-missions-open" type="button" aria-haspopup="dialog">MISIONES CREADAS <span id="yarbis-missions-count">0</span></button></div>' +
               '<div id="yarbis-history" class="yarbis-history" aria-live="polite"></div>' +
               '<form id="yarbis-text-form" class="yarbis-text"><input id="yarbis-text-input" maxlength="4000" placeholder="Ejemplo seguro: PC1 abre el bloc de notas" autocomplete="off">' +
@@ -44,6 +46,8 @@
   var connectBtn = document.getElementById('yarbis-connect');
   var micBtn = document.getElementById('yarbis-mic');
   var disconnectBtn = document.getElementById('yarbis-disconnect');
+  var syncBtn = document.getElementById('yarbis-sync');
+  var syncStatus = document.getElementById('yarbis-sync-status');
   var textForm = document.getElementById('yarbis-text-form');
   var textInput = document.getElementById('yarbis-text-input');
   var textSend = textForm.querySelector('button');
@@ -53,7 +57,7 @@
   var missionsList = document.getElementById('yarbis-missions-list');
   var missionsCloseBtn = document.getElementById('yarbis-missions-close');
   if (!overlay || !reactor || !stateEl || !statusEl || !history || !connectBtn ||
-      !micBtn || !disconnectBtn || !textForm || !textInput || !missionsOpenBtn ||
+      !micBtn || !disconnectBtn || !syncBtn || !syncStatus || !textForm || !textInput || !missionsOpenBtn ||
       !missionsCount || !missionsLayer || !missionsList || !missionsCloseBtn ||
       !document.getElementById('btn-yarbis')) return;
   var ws = null, stream = null, audioCtx = null, source = null, processor = null;
@@ -107,6 +111,64 @@
       }
     }
     return (left + ' ' + right).replace(/\s+/g, ' ').trim();
+  }
+  function synchronizationIntent(text) {
+    var normalized = String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    return /\bestado\s+(?:de\s+)?sincronizacion\b/.test(normalized);
+  }
+  function renderSyncStatus(body) {
+    var state = body && body.state ? body.state : 'error';
+    syncStatus.dataset.state = state;
+    var detail = body && body.message ? body.message : 'ERROR — no se pudo verificar el contexto.';
+    var version = body && body.continuity_state && body.continuity_state.version
+      ? ' · versión ' + body.continuity_state.version : '';
+    var date = body && body.synchronized_at
+      ? ' · ' + new Date(body.synchronized_at).toLocaleString() : '';
+    syncStatus.textContent = detail + version + date;
+    return syncStatus.textContent;
+  }
+  async function fetchSyncStatus(force) {
+    syncBtn.disabled = true;
+    delete syncBtn.dataset.result;
+    syncBtn.textContent = force ? 'SINCRONIZANDO…' : 'CONSULTANDO…';
+    syncStatus.dataset.state = 'working';
+    syncStatus.textContent = force ? 'Descargando y validando el contexto completo…' : 'Consultando evidencia verificable…';
+    try {
+      var response = await fetchWithTimeout(force ? '/api/morning/sync' : '/api/morning/status', {
+        method: force ? 'POST' : 'GET',
+        headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': encodeURIComponent(pwd()) }
+      }, force ? 45000 : 15000);
+      var body = await response.json().catch(function () { return {}; });
+      if (!response.ok) throw new Error(body.message || body.error || 'Railway no pudo verificar la sincronización.');
+      var message = renderSyncStatus(body);
+      if (force) {
+        syncBtn.dataset.result = 'success';
+        syncBtn.textContent = 'SINCRONIZADO';
+        syncStatus.textContent = 'SINCRONIZADO — contexto descargado, validado e inyectado. PC1: ' + message;
+        message = syncStatus.textContent;
+      }
+      add('system', message);
+      if (force && (body.state === 'synchronized' || body.state === 'stale' || body.state === 'unverifiable') && ws) {
+        var restoreMic = !!stream;
+        resumeMicAfterReconnect = restoreMic;
+        reconnectAttempts = 0;
+        disconnect('Contexto validado. Renovando la sesión Live…');
+        setTimeout(function () { if (panelOpen && !ws) connect(); }, 250);
+      }
+      return body;
+    } catch (error) {
+      syncStatus.dataset.state = 'error';
+      if (force) {
+        syncBtn.dataset.result = 'failed';
+        syncBtn.textContent = 'FAILED';
+      }
+      syncStatus.textContent = (force ? 'FAILED — ' : 'ERROR — ') + (error.message || 'no se pudo sincronizar.');
+      add('system', syncStatus.textContent);
+      return null;
+    } finally {
+      syncBtn.disabled = false;
+      if (!force) syncBtn.textContent = '🔄 SINCRONIZAR CONTEXTO PC1';
+    }
   }
   function finishYarbisMessage() { activeYarbisBody = null; }
   function add(role, text) {
@@ -346,6 +408,10 @@
     if (!text || processedInputTurns.has(key)) return;
     processedInputTurns.add(key);
     add('user', text);
+    if (synchronizationIntent(text)) {
+      await fetchSyncStatus(false);
+      return;
+    }
     var intent = mailboxIntentForUtterance(text);
     try {
       if (intent) await handleMailboxIntent(text, intent);
@@ -749,6 +815,7 @@
     disconnect('Desconectado manualmente.');
   });
   micBtn.addEventListener('click', startMic);
+  syncBtn.addEventListener('click', function () { fetchSyncStatus(true); });
   missionsOpenBtn.addEventListener('click', openMissions);
   missionsCloseBtn.addEventListener('click', closeMissions);
   missionsLayer.addEventListener('click', function (event) { if (event.target === missionsLayer) closeMissions(); });
@@ -756,6 +823,7 @@
     event.preventDefault(); var text = textInput.value.trim(); if (!text) return;
     textInput.value = ''; add('user', text); setState('THINKING', 'Procesando…');
     try {
+      if (synchronizationIntent(text)) { await fetchSyncStatus(false); return; }
       var intent = mailboxIntentForUtterance(text);
       if (intent) await handleMailboxIntent(text, intent);
       else if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'text', text: text }));
