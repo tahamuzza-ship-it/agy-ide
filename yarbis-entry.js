@@ -21,7 +21,11 @@ html = html.replace(
 if (!html.includes('id="yarbis-bootstrap"')) {
   const marker =
     '<' + 'script id="yarbis-bootstrap" src="/yarbis.js?v=11"></' + 'script>';
-  html = html.replace('</body>', marker + '</body>');
+  const closingBody = html.toLowerCase().lastIndexOf('</body>');
+  if (closingBody < 0) {
+    throw new Error('No se encontro el cierre real de body para Yarbis');
+  }
+  html = html.slice(0, closingBody) + marker + html.slice(closingBody);
 }
 fs.writeFileSync(indexPath, html, 'utf8');
 
