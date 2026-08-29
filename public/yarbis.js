@@ -131,8 +131,12 @@
       detail = 'SINCRONIZADO — contexto descargado, validado e inyectado. PC1: NO VERIFICADO — ' +
         missing + '. Esto no significa que la sincronización haya fallado.';
     }
-    var version = body && body.continuity_state && body.continuity_state.version
-      ? ' · versión ' + body.continuity_state.version : '';
+    var continuity = body && body.continuity_state ? body.continuity_state : null;
+    var hash = continuity && typeof continuity.sha256 === 'string' ? continuity.sha256.replace(/^sha256:/, '') : '';
+    var displayCode = continuity && continuity.display_code
+      ? continuity.display_code
+      : /^[a-f0-9]{64}$/i.test(hash) ? hash.slice(0, 4) + '…' + hash.slice(-4) : '';
+    var version = displayCode ? ' · sello ' + displayCode : '';
     var date = body && body.synchronized_at
       ? ' · ' + new Date(body.synchronized_at).toLocaleString() : '';
     syncStatus.textContent = detail + version + date;

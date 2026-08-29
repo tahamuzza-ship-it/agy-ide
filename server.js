@@ -86,6 +86,13 @@ function _morningNormalizedHash(value) {
   return /^[a-f0-9]{64}$/.test(hash) ? hash : null;
 }
 
+function _morningShortHash(hash) {
+  return {
+    short_code: hash.slice(-4),
+    display_code: `${hash.slice(0, 4)}…${hash.slice(-4)}`
+  };
+}
+
 function _morningAssertNoSensitiveMaterial(value) {
   const serialized = JSON.stringify(value);
   const sensitiveText = [
@@ -169,13 +176,20 @@ function _morningSafeStatus(snapshot, synchronizedAt) {
   const state = !snapshotCurrent || matches === false || Boolean(evidence && evidence.sha256 && !evidence.current)
     ? 'stale'
     : matches === true ? 'synchronized' : 'unverifiable';
+  const continuityCode = _morningShortHash(continuity.sha256);
   return {
     ok: true,
     state,
     synchronized_at: synchronizedAt || null,
     snapshot_date: snapshotDate,
     master_prompt: { version: master.version, sha256: master.sha256, validated: true },
-    continuity_state: { version: continuity.version, sha256: continuity.sha256, validated: true },
+    continuity_state: {
+      version: continuity.version,
+      sha256: continuity.sha256,
+      short_code: continuityCode.short_code,
+      display_code: continuityCode.display_code,
+      validated: true
+    },
     injected_context_sha256: _morningSha256(prompt),
     pc1: {
       sha256: evidence ? evidence.sha256 : null,
@@ -185,10 +199,10 @@ function _morningSafeStatus(snapshot, synchronizedAt) {
     },
     missing_evidence: missing,
     message: state === 'synchronized'
-      ? 'SINCRONIZADOS — MISMO HASH DE CONTINUIDAD'
+      ? `SINCRONIZADOS — SELLO ${continuityCode.display_code} — PC1 CONFIRMÓ ${continuityCode.short_code}`
       : state === 'stale'
-        ? 'DESACTUALIZADO — EL CONTEXTO O LA EVIDENCIA DE PC1 NO ESTÁN VIGENTES'
-        : `CONTEXTO SINCRONIZADO EN RAILWAY — PC1 NO VERIFICADO: ${missing.join('; ')}`
+        ? `DESACTUALIZADO — SELLO ${continuityCode.display_code} — EL CONTEXTO O LA EVIDENCIA DE PC1 NO ESTÁN VIGENTES`
+        : `CONTEXTO SINCRONIZADO EN RAILWAY — SELLO ${continuityCode.display_code} — PC1 NO VERIFICADO: ${missing.join('; ')}`
   };
 }
 
