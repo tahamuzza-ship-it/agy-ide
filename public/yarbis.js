@@ -59,6 +59,7 @@
   var ws = null, stream = null, audioCtx = null, source = null, processor = null;
   var playbackCtx = null, playbackAt = 0, closing = false, panelOpen = false;
   var drafts = [], activeYarbisBody = null;
+  var missionNotice = null, missionDecisionInFlight = null;
   var micGeneration = 0, connectionGeneration = 0;
   var activeConnection = null;
   var activePlaybackNodes = new Set(), speechActive = false, audioTurnOpen = false, lastSpeechAt = 0;
@@ -137,6 +138,18 @@
     missionsOpenBtn.classList.toggle('has-items', drafts.length > 0);
     missionsOpenBtn.setAttribute('aria-label', 'Misiones creadas: ' + actionableCount);
     missionsList.replaceChildren();
+    if (missionNotice) {
+      var notice = document.createElement('div');
+      notice.className = 'yarbis-mission-notice is-' + missionNotice.kind;
+      notice.setAttribute('role', missionNotice.kind === 'error' || missionNotice.kind === 'uncertain' ? 'alert' : 'status');
+      notice.setAttribute('aria-live', 'assertive');
+      var noticeTitle = document.createElement('strong');
+      noticeTitle.textContent = missionNotice.title;
+      var noticeDetail = document.createElement('p');
+      noticeDetail.textContent = missionNotice.detail;
+      notice.append(noticeTitle, noticeDetail);
+      missionsList.appendChild(notice);
+    }
     if (!drafts.length) {
       var empty = document.createElement('div');
       empty.className = 'yarbis-missions-empty';
@@ -177,6 +190,10 @@
         cancel.type = 'button';
         cancel.className = 'yarbis-mission-cancel';
         cancel.textContent = 'CANCELAR';
+        if (missionDecisionInFlight === draft.proposalId) {
+          send.disabled = true;
+          cancel.disabled = true;
+        }
         send.addEventListener('click', function () { confirmMailbox('confirm', draft.proposalId, card); });
         cancel.addEventListener('click', function () { confirmMailbox('cancel', draft.proposalId, card); });
         actions.append(send, cancel);
@@ -191,6 +208,11 @@
       }
       missionsList.appendChild(card);
     });
+  }
+  function showMissionNotice(kind, title, detail) {
+    missionNotice = { kind: kind, title: title, detail: detail || '' };
+    missionsLayer.hidden = false;
+    renderDrafts();
   }
   async function refreshDrafts(silent) {
     try {
@@ -563,7 +585,10 @@
     }, 15000);
     var body = await response.json().catch(function(){ return {}; });
     if (!response.ok) throw new Error(body.error || 'No se pudo consultar el Buzón.');
-    if (body.kind === 'proposal') await refreshDrafts(true);
+    if (body.kind === 'proposal') {
+      missionNotice = null;
+      await refreshDrafts(true);
+    }
     return body;
   }
   async function handleMailboxIntent(text, intent) {
@@ -608,8 +633,15 @@
   }
   async function confirmMailbox(decision, proposalId, card) {
     if (!proposalId || (decision !== 'confirm' && decision !== 'cancel')) return;
+    if (missionDecisionInFlight) return;
+    missionDecisionInFlight = proposalId;
     var buttons = card ? card.querySelectorAll('button') : [];
     Array.prototype.forEach.call(buttons, function (button) { button.disabled = true; });
+    showMissionNotice(
+      'working',
+      decision === 'confirm' ? 'ENVIANDO MISIÓN A PC1…' : 'CANCELANDO MISIÓN…',
+      'Espera el resultado antes de realizar otra acción.'
+    );
     try {
       var response = await fetchWithTimeout('/api/ops/mailbox/voice/confirm', {
         method: 'POST',
@@ -617,13 +649,33 @@
         body: JSON.stringify({ proposalId: proposalId, decision: decision })
       }, 40000);
       var body = await response.json().catch(function(){ return {}; });
-      add('system', body.message || body.error || 'Buzón actualizado.');
-      if (response.ok && decision === 'confirm') setState(stream ? 'LISTENING' : 'IDLE', 'Misión enviada a PC1.');
-      if (!response.ok) setState(stream ? 'LISTENING' : 'IDLE', 'No se pudo completar la decisión.');
+      var expectedKind = decision === 'confirm' ? 'created' : 'cancelled';
+      if (response.ok && body.kind === expectedKind) {
+        var successTitle = decision === 'confirm' ? 'MISIÓN ENVIADA A PC1' : 'MISIÓN CANCELADA';
+        var successMessage = body.message || (decision === 'confirm'
+          ? 'Railway confirmó que PC1 creó la misión.'
+          : 'El borrador fue cancelado y no se envió a PC1.');
+        showMissionNotice('success', successTitle, successMessage);
+        add('system', successTitle + '. ' + successMessage);
+        setState(stream ? 'LISTENING' : 'IDLE', successTitle + '.');
+      } else if (body.code === 'PC1_RESULT_UNCERTAIN') {
+        var uncertainMessage = body.error || 'No se pudo confirmar el resultado. Consulta el Buzón antes de repetir.';
+        showMissionNotice('uncertain', 'RESULTADO INCIERTO — REVISAR BUZÓN', uncertainMessage);
+        add('system', 'RESULTADO INCIERTO — REVISAR BUZÓN. ' + uncertainMessage);
+        setState(stream ? 'LISTENING' : 'IDLE', 'Resultado incierto. No repitas el envío.');
+      } else {
+        var failureMessage = body.error || 'Railway no confirmó la operación.';
+        showMissionNotice('error', decision === 'confirm' ? 'NO SE PUDO ENVIAR' : 'NO SE PUDO CANCELAR', failureMessage);
+        add('system', (decision === 'confirm' ? 'NO SE PUDO ENVIAR. ' : 'NO SE PUDO CANCELAR. ') + failureMessage);
+        setState(stream ? 'LISTENING' : 'IDLE', 'No se pudo completar la decisión.');
+      }
     } catch (error) {
-      add('system', error.message || 'No se pudo completar la decisión.');
+      var errorMessage = error.message || 'No se pudo completar la decisión.';
+      showMissionNotice('error', decision === 'confirm' ? 'NO SE PUDO ENVIAR' : 'NO SE PUDO CANCELAR', errorMessage);
+      add('system', (decision === 'confirm' ? 'NO SE PUDO ENVIAR. ' : 'NO SE PUDO CANCELAR. ') + errorMessage);
       setState(stream ? 'LISTENING' : 'IDLE', 'No se pudo completar la decisión.');
     } finally {
+      missionDecisionInFlight = null;
       await refreshDrafts(true);
     }
   }
