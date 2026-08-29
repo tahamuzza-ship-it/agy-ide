@@ -2258,6 +2258,7 @@ const _mailboxLoginAttempts = new Map();
 const _mailboxInFlightReads = new Map();
 const _mailboxRecentReads = new Map();
 const _mailboxVoiceProposals = new Map();
+let _mailboxVoiceMissionStatusQueue = Promise.resolve();
 
 function _mailboxPruneSessions(now = Date.now()) {
   for (const [token, expiresAt] of _mailboxSessions) {
@@ -2420,6 +2421,62 @@ function _mailboxBuildEncodedCommand(direction) {
   const instruction = `[PC1] EJECUTAR powershell -NoProfile -EncodedCommand ${encoded}`;
   if (instruction.length > 7500) throw new Error('MAILBOX_COMMAND_TOO_LONG');
   return instruction;
+}
+
+function _mailboxBuildEncodedMissionStatusCommand(names) {
+  const config = MAILBOX_DIRECTIONS['replit-to-agy'];
+  const namesBase64 = Buffer.from(JSON.stringify(names), 'utf8').toString('base64');
+  const script = [
+    "$ErrorActionPreference='Stop'",
+    `$f=Join-Path '${MAILBOX_ROOT}' '${config.folder}'`,
+    "if(!(Test-Path -LiteralPath $f -PathType Container)){throw 'MAILBOX_UNAVAILABLE'}",
+    `$b='${namesBase64}'`,
+    "$ns=@([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($b))|ConvertFrom-Json)",
+    "function readPrefix($p,$n){$x=[IO.File]::OpenRead($p);try{$l=[Math]::Min([int64]$n,$x.Length);$d=[byte[]]::new([int]$l);[void]$x.Read($d,0,[int]$l);return [Text.Encoding]::UTF8.GetString($d)}finally{$x.Dispose()}}",
+    "function readStatus($t){$z=[regex]::Match($t,'(?mi)^-\\s*\\*\\*Estado:\\*\\*\\s*(PENDIENTE|EN_PROCESO|COMPLETADA|ERROR)\\s*$');if($z.Success){return $z.Groups[1].Value.ToUpperInvariant()};return $null}",
+    "function readSection($t,$p,$n){$m=[regex]::Match($t,\"(?ims)^##\\s+(?:$p)\\s*\\r?\\n+(.*?)(?=^##\\s+|\\z)\");if(!$m.Success){return $null};$v=$m.Groups[1].Value.Trim();if($v.Length -gt $n){$v=$v.Substring(0,$n)};return $v}",
+    "function readMeta($t,$p,$n){$m=[regex]::Match($t,\"(?mi)^-\\s*\\*\\*(?:$p):\\*\\*\\s*(.+?)\\s*$\");if(!$m.Success){return $null};$v=$m.Groups[1].Value.Trim();if($v.Length -gt $n){$v=$v.Substring(0,$n)};return $v}",
+    "$a=@()",
+    "@($ns)|ForEach-Object{",
+    "$nm=[string]$_",
+    "if($nm -notmatch '^MISION_\\d{8}_\\d{3}\\.md$'){throw 'INVALID_MISSION_NAME'}",
+    "$p=Join-Path $f $nm",
+    "if(Test-Path -LiteralPath $p -PathType Leaf){",
+    "$g=Get-Item -LiteralPath $p",
+    "$c=readPrefix $p 65536",
+    "$st=readStatus $c",
+    "if($st -notin @('PENDIENTE','EN_PROCESO','COMPLETADA','ERROR')){$st='ERROR'}",
+    "$o=readSection $c 'Objetivo|Misi[oó]n|Orden' 2000",
+    "$z=readSection $c 'Resultado(?:\\s+(?:de\\s+)?PC1)?|Respuesta(?:\\s+(?:de\\s+)?PC1)?|Resultado\\s+real|Ejecuci[oó]n' 6000",
+    "if(!$z){$z=readMeta $c 'Resultado(?:\\s+(?:de\\s+)?PC1)?|Respuesta(?:\\s+(?:de\\s+)?PC1)?' 6000}",
+    "$cr=readMeta $c 'Creada|Creado|Fecha\\s+de\\s+creaci[oó]n' 120",
+    "$cl=readMeta $c 'Cerrada|Cierre|Completada|Finalizada' 120",
+    "$ce=$false",
+    "if(!$cl -and $st -eq 'COMPLETADA'){$cl=$g.LastWriteTimeUtc.ToString('o');$ce=$true}",
+    "$a+=([pscustomobject]@{name=$g.Name;status=$st;sizeBytes=[int64]$g.Length;modifiedAt=$g.LastWriteTimeUtc.ToString('o');createdAt=$cr;closedAt=$cl;closedAtEstimated=$ce;objective=$o;pc1Result=$z})",
+    "}}",
+    "[pscustomobject]@{items=@($a);total=@($a).Count;truncated=$false}|ConvertTo-Json -Depth 5 -Compress"
+  ].join(';');
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  const instruction = `[PC1] EJECUTAR powershell -NoProfile -EncodedCommand ${encoded}`;
+  if (instruction.length > 7500) throw new Error('MAILBOX_COMMAND_TOO_LONG');
+  return instruction;
+}
+
+async function _mailboxReadVoiceMissionStatuses(names) {
+  const previous = _mailboxVoiceMissionStatusQueue;
+  let releaseQueue;
+  _mailboxVoiceMissionStatusQueue = new Promise((resolve) => {
+    releaseQueue = resolve;
+  });
+  await previous.catch(() => undefined);
+  try {
+    return await _mailboxDispatch(
+      _mailboxBuildEncodedMissionStatusCommand(names)
+    );
+  } finally {
+    releaseQueue();
+  }
 }
 
 async function _mailboxDispatch(instruction) {
@@ -3399,6 +3456,68 @@ app.post('/api/ops/mailbox/voice/command', async (req, res) => {
   }
 
   return res.status(400).json({ error: 'Comando de voz de Buzon 1 no valido' });
+});
+
+app.post('/api/ops/mailbox/voice/status', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!_mailboxSameOriginAllowed(req)) {
+    return res.status(403).json({ error: 'Origen no autorizado' });
+  }
+  if (!_mailboxHeaderAuthenticated(req)) {
+    return res.status(401).json({ error: 'Acceso no autorizado' });
+  }
+  if (!_mailboxVoiceSession(req)) {
+    return res.status(400).json({ error: 'Sesion de voz no valida' });
+  }
+  const names = Array.isArray(req.body && req.body.names)
+    ? [...new Set(req.body.names.filter((name) =>
+      typeof name === 'string' && /^MISION_\d{8}_\d{3}\.md$/.test(name)
+    ))].slice(0, 10)
+    : [];
+  if (!names.length) {
+    return res.status(400).json({ error: 'Identificadores de mision no validos' });
+  }
+  if (!AGY_KEY) {
+    return res.status(503).json({ error: 'Conexion con PC1 no configurada' });
+  }
+  try {
+    const outcome = await _mailboxReadVoiceMissionStatuses(names);
+    if (outcome.status === 'timeout') {
+      return res.status(504).json({
+        error: 'PC1 no respondio a tiempo',
+        code: 'PC1_TIMEOUT'
+      });
+    }
+    if (outcome.status !== 'done' || !outcome.result) {
+      return res.status(502).json({
+        error: 'PC1 no pudo leer el buzon solicitado',
+        code: 'PC1_READ_ERROR'
+      });
+    }
+    const available = _mailboxParseResult(outcome.result, 'replit-to-agy').items;
+    const wanted = new Set(names);
+    const items = available.filter((item) => wanted.has(item.name));
+    const found = new Set(items.map((item) => item.name));
+    return res.json({
+      kind: 'mission-status',
+      items,
+      missingNames: names.filter((name) => !found.has(name)),
+      fetchedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'UNKNOWN';
+    console.error('[mailbox-voice] error siguiendo misiones', reason);
+    const unavailable =
+      reason.startsWith('BRIDGE_') ||
+      reason === 'TimeoutError' ||
+      reason === 'The operation was aborted due to timeout';
+    return res.status(unavailable ? 502 : 422).json({
+      error: unavailable
+        ? 'El puente no esta disponible en este momento'
+        : 'PC1 devolvio metadatos de mision no validos',
+      code: unavailable ? 'BRIDGE_UNAVAILABLE' : 'INVALID_MAILBOX_RESPONSE'
+    });
+  }
 });
 
 app.post('/api/ops/mailbox/voice/confirm', async (req, res) => {

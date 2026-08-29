@@ -513,3 +513,5 @@
     .msg-bubble { font-size: 0.84rem; }
     .msg-agt .msg-bubble { font-size: 0.78rem; }
     }
+
+.yarbis-mission-card.is-pendiente{border-color:rgba(255,196,74,.55)}.yarbis-mission-card.is-en_proceso{border-color:rgba(44,177,255,.65);background:rgba(20,91,145,.12)}.yarbis-mission-card.is-completada{border-color:rgba(51,209,143,.65);background:rgba(22,163,104,.11)}.yarbis-mission-card.is-error{border-color:rgba(255,92,111,.7);background:rgba(180,24,48,.12)}.yarbis-mission-result{margin-top:12px;padding:11px;border-radius:8px;background:rgba(1,6,14,.48)}.yarbis-mission-result strong{color:#9ff3d1;font-size:.61rem;letter-spacing:.1em}.yarbis-mission-result p{margin-bottom:0}

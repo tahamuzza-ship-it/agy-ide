@@ -62,8 +62,9 @@
       !document.getElementById('btn-yarbis')) return;
   var ws = null, stream = null, audioCtx = null, source = null, processor = null;
   var playbackCtx = null, playbackAt = 0, closing = false, panelOpen = false;
-  var drafts = [], activeYarbisBody = null;
+  var drafts = [], trackedMissions = [], activeYarbisBody = null;
   var missionNotice = null, missionDecisionInFlight = null;
+  var missionPollTimer = null, missionPollInFlight = false;
   var micGeneration = 0, connectionGeneration = 0;
   var activeConnection = null;
   var activePlaybackNodes = new Set(), speechActive = false, audioTurnOpen = false, lastSpeechAt = 0;
@@ -194,11 +195,114 @@
       history.scrollTop = history.scrollHeight;
     }
   }
+  function terminalMissionStatus(status) {
+    return status === 'COMPLETADA' || status === 'ERROR';
+  }
+  function loadTrackedMissions() {
+    try {
+      var stored = JSON.parse(localStorage.getItem('agy_yarbis_tracked_missions_v1') || '[]');
+      trackedMissions = Array.isArray(stored) ? stored.filter(function (item) {
+        return item && /^MISION_\d{8}_\d{3}\.md$/.test(item.name || '') &&
+          ['PENDIENTE', 'EN_PROCESO', 'COMPLETADA', 'ERROR'].indexOf(item.status) >= 0;
+      }) : [];
+      compactTrackedMissions();
+    } catch (_) { trackedMissions = []; }
+  }
+  function compactTrackedMissions() {
+    var active = trackedMissions.filter(function (item) { return !terminalMissionStatus(item.status); });
+    var finished = trackedMissions.filter(function (item) { return terminalMissionStatus(item.status); }).slice(0, 10);
+    trackedMissions = active.concat(finished);
+  }
+  function saveTrackedMissions() {
+    compactTrackedMissions();
+    try {
+      localStorage.setItem('agy_yarbis_tracked_missions_v1', JSON.stringify(trackedMissions));
+    } catch (_) {}
+  }
+  function trackCreatedMission(body, mission) {
+    if (!body || !/^MISION_\d{8}_\d{3}\.md$/.test(body.name || '')) return;
+    var existing = trackedMissions.find(function (item) { return item.name === body.name; });
+    var tracked = existing || {
+      name: body.name,
+      mission: mission || body.name,
+      createdAt: new Date().toISOString()
+    };
+    tracked.status = body.status === 'EN_PROCESO' ? 'EN_PROCESO' : 'PENDIENTE';
+    tracked.updatedAt = new Date().toISOString();
+    if (!existing) trackedMissions.unshift(tracked);
+    saveTrackedMissions();
+    renderDrafts();
+    scheduleMissionPoll(1000);
+  }
+  function scheduleMissionPoll(delay) {
+    if (missionPollTimer) clearTimeout(missionPollTimer);
+    missionPollTimer = null;
+    if (!trackedMissions.some(function (item) { return !terminalMissionStatus(item.status); })) return;
+    missionPollTimer = setTimeout(function () { refreshTrackedMissions(true); }, delay || 15000);
+  }
+  async function refreshTrackedMissions(silent) {
+    var active = trackedMissions.filter(function (item) { return !terminalMissionStatus(item.status); });
+    if (!active.length || missionPollInFlight) {
+      scheduleMissionPoll(15000);
+      return false;
+    }
+    missionPollInFlight = true;
+    try {
+      for (var offset = 0; offset < active.length; offset += 10) {
+        var batch = active.slice(offset, offset + 10);
+        var response = await fetchWithTimeout('/api/ops/mailbox/voice/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': encodeURIComponent(pwd()), 'x-agy-voice-session': voiceSession() },
+          body: JSON.stringify({ names: batch.map(function (item) { return item.name; }) })
+        }, 65000);
+        var body = await response.json().catch(function () { return {}; });
+        if (!response.ok || !Array.isArray(body.items)) throw new Error(body.error || 'No se pudo consultar el estado de las misiones.');
+        body.items.forEach(function (remote) {
+          var tracked = trackedMissions.find(function (item) { return item.name === remote.name; });
+          if (!tracked || ['PENDIENTE', 'EN_PROCESO', 'COMPLETADA', 'ERROR'].indexOf(remote.status) < 0) return;
+          var previous = tracked.status;
+          tracked.status = remote.status;
+          tracked.mission = remote.objective || tracked.mission;
+          tracked.pc1Result = remote.pc1Result || null;
+          tracked.closedAt = remote.closedAt || null;
+          tracked.modifiedAt = remote.modifiedAt || null;
+          tracked.updatedAt = body.fetchedAt || new Date().toISOString();
+          tracked.trackingIssue = null;
+          tracked.missingChecks = 0;
+          if (!terminalMissionStatus(previous) && terminalMissionStatus(remote.status)) {
+            var finalText = remote.status === 'COMPLETADA'
+              ? 'PC1 completó ' + remote.name + (remote.pc1Result ? ': ' + remote.pc1Result : '.')
+              : 'PC1 reportó ERROR en ' + remote.name + (remote.pc1Result ? ': ' + remote.pc1Result : '.');
+            add('system', finalText);
+          }
+        });
+        if (Array.isArray(body.missingNames)) {
+          body.missingNames.forEach(function (name) {
+            var tracked = trackedMissions.find(function (item) { return item.name === name; });
+            if (!tracked || terminalMissionStatus(tracked.status)) return;
+            tracked.missingChecks = (Number(tracked.missingChecks) || 0) + 1;
+            tracked.trackingIssue = 'Railway aún no encontró este archivo en el Buzón de PC1. El seguimiento continuará automáticamente.';
+            tracked.updatedAt = body.fetchedAt || new Date().toISOString();
+          });
+        }
+      }
+      saveTrackedMissions();
+      renderDrafts();
+      return true;
+    } catch (error) {
+      if (!silent) add('system', error.message || 'No se pudo consultar el estado de las misiones.');
+      return false;
+    } finally {
+      missionPollInFlight = false;
+      scheduleMissionPoll(15000);
+    }
+  }
   function renderDrafts() {
-    var actionableCount = drafts.filter(function (draft) { return draft.status === 'draft'; }).length;
-    missionsCount.textContent = String(actionableCount);
-    missionsOpenBtn.classList.toggle('has-items', drafts.length > 0);
-    missionsOpenBtn.setAttribute('aria-label', 'Misiones creadas: ' + actionableCount);
+    var activeCount = drafts.filter(function (draft) { return draft.status === 'draft'; }).length +
+      trackedMissions.filter(function (item) { return !terminalMissionStatus(item.status); }).length;
+    missionsCount.textContent = String(activeCount);
+    missionsOpenBtn.classList.toggle('has-items', drafts.length > 0 || trackedMissions.length > 0);
+    missionsOpenBtn.setAttribute('aria-label', 'Misiones activas: ' + activeCount);
     missionsList.replaceChildren();
     if (missionNotice) {
       var notice = document.createElement('div');
@@ -212,7 +316,7 @@
       notice.append(noticeTitle, noticeDetail);
       missionsList.appendChild(notice);
     }
-    if (!drafts.length) {
+    if (!drafts.length && !trackedMissions.length) {
       var empty = document.createElement('div');
       empty.className = 'yarbis-missions-empty';
       var emptyTitle = document.createElement('strong');
@@ -270,6 +374,39 @@
       }
       missionsList.appendChild(card);
     });
+    trackedMissions.forEach(function (tracked) {
+      var card = document.createElement('article');
+      card.className = 'yarbis-mission-card is-' + tracked.status.toLowerCase();
+      var label = document.createElement('span');
+      label.className = 'yarbis-mission-label';
+      label.textContent = tracked.status === 'PENDIENTE' ? '🟡 PENDIENTE'
+        : tracked.status === 'EN_PROCESO' ? '🔵 EN_PROCESO'
+          : tracked.status === 'COMPLETADA' ? '🟢 COMPLETADA' : '🔴 ERROR';
+      var mission = document.createElement('p');
+      mission.textContent = tracked.mission || tracked.name;
+      var meta = document.createElement('small');
+      meta.textContent = tracked.name + (tracked.closedAt
+        ? ' · Cerrada ' + new Date(tracked.closedAt).toLocaleString()
+        : tracked.updatedAt ? ' · Actualizada ' + new Date(tracked.updatedAt).toLocaleString() : '');
+      card.append(label, mission, meta);
+      if (tracked.pc1Result) {
+        var result = document.createElement('div');
+        result.className = 'yarbis-mission-result';
+        var resultTitle = document.createElement('strong');
+        resultTitle.textContent = 'RESPUESTA DE PC1';
+        var resultText = document.createElement('p');
+        resultText.textContent = tracked.pc1Result;
+        result.append(resultTitle, resultText);
+        card.appendChild(result);
+      } else if (!terminalMissionStatus(tracked.status)) {
+        var waiting = document.createElement('p');
+        waiting.className = 'yarbis-mission-warning';
+        waiting.textContent = tracked.trackingIssue ||
+          'Seguimiento automático activo. Yarbis consultará Railway hasta recibir COMPLETADA o ERROR.';
+        card.appendChild(waiting);
+      }
+      missionsList.appendChild(card);
+    });
   }
   function showMissionNotice(kind, title, detail) {
     missionNotice = { kind: kind, title: title, detail: detail || '' };
@@ -296,6 +433,7 @@
   function openMissions() {
     missionsLayer.hidden = false;
     refreshDrafts(false);
+    refreshTrackedMissions(true);
     missionsCloseBtn.focus();
   }
   function closeMissions() {
@@ -742,6 +880,7 @@
     if (!proposalId || (decision !== 'confirm' && decision !== 'cancel')) return;
     if (missionDecisionInFlight) return;
     missionDecisionInFlight = proposalId;
+    var proposalMission = drafts.find(function (draft) { return draft.proposalId === proposalId; });
     var buttons = card ? card.querySelectorAll('button') : [];
     Array.prototype.forEach.call(buttons, function (button) { button.disabled = true; });
     showMissionNotice(
@@ -757,6 +896,9 @@
       }, 40000);
       var body = await response.json().catch(function(){ return {}; });
       var result = missionDecisionResult(decision, response.ok, body);
+      if (decision === 'confirm' && result.kind === 'success') {
+        trackCreatedMission(body, proposalMission && proposalMission.mission);
+      }
       showMissionNotice(result.kind, result.title, result.message);
       add('system', result.title + '. ' + result.message);
       if (result.kind === 'success') {
@@ -785,6 +927,7 @@
     overlay.classList.add('open');
     overlay.style.setProperty('display', 'grid', 'important');
     refreshDrafts(true);
+    refreshTrackedMissions(true);
     textInput.focus();
   });
   document.getElementById('yarbis-close').addEventListener('click', function () {
@@ -816,6 +959,9 @@
   });
   micBtn.addEventListener('click', startMic);
   syncBtn.addEventListener('click', function () { fetchSyncStatus(true); });
+  loadTrackedMissions();
+  renderDrafts();
+  scheduleMissionPoll(1000);
   missionsOpenBtn.addEventListener('click', openMissions);
   missionsCloseBtn.addEventListener('click', closeMissions);
   missionsLayer.addEventListener('click', function (event) { if (event.target === missionsLayer) closeMissions(); });
