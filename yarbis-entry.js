@@ -20,7 +20,7 @@ html = html.replace(
 );
 if (!html.includes('id="yarbis-bootstrap"')) {
   const marker =
-    '<' + 'script id="yarbis-bootstrap" src="/yarbis.js?v=11"></' + 'script>';
+    '<' + 'script id="yarbis-bootstrap" src="/yarbis.js?v=12"></' + 'script>';
   const closingBody = html.toLowerCase().lastIndexOf('</body>');
   if (closingBody < 0) {
     throw new Error('No se encontro el cierre real de body para Yarbis');
