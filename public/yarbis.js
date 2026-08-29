@@ -62,12 +62,13 @@
   var micGeneration = 0, connectionGeneration = 0;
   var activeConnection = null;
   var activePlaybackNodes = new Set(), speechActive = false, audioTurnOpen = false, lastSpeechAt = 0;
+  var audioPreRoll = [], reconnectTimer = null, reconnectAttempts = 0, resumeMicAfterReconnect = false;
   var inputTurnSequence = 0, activeInputTurnId = 0, awaitingInputTurnId = 0;
   var blockedSpeechUntilSilence = false;
   var serverTurnInProgress = false, discardInterruptedOutput = false;
   var processedInputTurns = new Set();
   var pendingMissionObjectiveUntil = 0;
-  var SPEECH_RMS_THRESHOLD = 0.018, SPEECH_END_DELAY_MS = 850;
+  var SPEECH_RMS_THRESHOLD = 0.008, SPEECH_END_DELAY_MS = 1200, AUDIO_PRE_ROLL_CHUNKS = 5;
 
   function pwd() { try { return localStorage.getItem('agyide_auth_v1') || ''; } catch (_) { return ''; } }
   function voiceSession() {
@@ -256,6 +257,11 @@
     }
     activeInputTurnId = 0;
   }
+  function sendAudioChunk(turnId, data) {
+    if (ws && ws.readyState === WebSocket.OPEN && turnId) {
+      ws.send(JSON.stringify({ type: 'audio', turnId: turnId, data: data }));
+    }
+  }
   function inputRms(samples) {
     var sum = 0;
     for (var i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
@@ -355,7 +361,14 @@
         var input = event.inputBuffer.getChannelData(0);
         var now = Date.now(), heardSpeech = inputRms(input) >= SPEECH_RMS_THRESHOLD;
         if (blockedSpeechUntilSilence) {
+          audioPreRoll = [];
           if (!heardSpeech) blockedSpeechUntilSilence = false;
+          return;
+        }
+        var encodedAudio = base64(floatTo16(downsample(input, audioCtx.sampleRate)).buffer);
+        if (!audioTurnOpen && !heardSpeech) {
+          audioPreRoll.push(encodedAudio);
+          if (audioPreRoll.length > AUDIO_PRE_ROLL_CHUNKS) audioPreRoll.shift();
           return;
         }
         if (heardSpeech) {
@@ -368,6 +381,8 @@
             if (!audioTurnOpen) {
               audioTurnOpen = true;
               activeInputTurnId = ++inputTurnSequence;
+              audioPreRoll.forEach(function (chunk) { sendAudioChunk(activeInputTurnId, chunk); });
+              audioPreRoll = [];
             }
             var interruptedPlayback = activePlaybackNodes.size > 0 || reactor.dataset.state === 'SPEAKING';
             discardInterruptedOutput = interruptedPlayback && serverTurnInProgress;
@@ -382,8 +397,7 @@
           finishAudioTurn('Pausa detectada. Procesando…');
           return;
         }
-        var pcm = floatTo16(downsample(input, audioCtx.sampleRate));
-        ws.send(JSON.stringify({ type: 'audio', turnId: activeInputTurnId, data: base64(pcm.buffer) }));
+        sendAudioChunk(activeInputTurnId, encodedAudio);
       };
       source.connect(processor); processor.connect(audioCtx.destination);
       micBtn.textContent = 'DETENER MICRÓFONO';
@@ -430,6 +444,8 @@
     audioTurnOpen = false;
     serverTurnInProgress = false;
     discardInterruptedOutput = false;
+    audioPreRoll = [];
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     if (activeConnection) activeConnection.closed = true;
     activeConnection = null;
     connectionGeneration++;
@@ -445,6 +461,22 @@
     connectBtn.disabled = false; micBtn.disabled = true; disconnectBtn.disabled = true; textSend.disabled = true;
     setState('IDLE', message || 'Apagado. Nada escucha ni está conectado.');
     closing = false;
+  }
+  function recoverLive(message) {
+    var hadMic = !!stream;
+    resumeMicAfterReconnect = resumeMicAfterReconnect || hadMic;
+    disconnect(message || 'La sesión Live se interrumpió.');
+    if (!panelOpen || reconnectAttempts >= 2) {
+      add('system', 'Live no pudo recuperarse automáticamente. Pulsa CONECTAR LIVE para reintentarlo.');
+      return;
+    }
+    reconnectAttempts++;
+    var delay = reconnectAttempts * 1200;
+    setState('THINKING', 'Live se interrumpió. Reconectando automáticamente…');
+    reconnectTimer = setTimeout(function () {
+      reconnectTimer = null;
+      if (panelOpen && !ws) connect();
+    }, delay);
   }
   function connect() {
     if (ws) return;
@@ -472,7 +504,14 @@
       if (m.type === 'connecting') {
         setState('THINKING', 'Autenticado. Esperando a Gemini Live…');
       } else if (m.type === 'ready') {
-        micBtn.disabled = false; textSend.disabled = false; setState('IDLE', 'Live listo. Activa el micrófono o usa texto.');
+        var recovered = reconnectAttempts > 0;
+        reconnectAttempts = 0;
+        micBtn.disabled = false; textSend.disabled = false; setState('IDLE', recovered ? 'Live reconectado.' : 'Live listo. Activa el micrófono o usa texto.');
+        if (recovered) add('system', 'Conexión Live recuperada automáticamente.');
+        if (resumeMicAfterReconnect) {
+          resumeMicAfterReconnect = false;
+          startMic();
+        }
       } else if (m.type === 'unavailable') {
         add('system', m.message);
         disconnect(m.message);
@@ -495,7 +534,7 @@
       else if (m.type === 'error' || m.type === 'disconnected') {
         finishYarbisMessage();
         add('system', m.message);
-        disconnect((m.message || 'La sesión Live terminó.') + ' Pulsa CONECTAR LIVE para volver a intentarlo.');
+        recoverLive(m.message || 'La sesión Live terminó.');
       }
     };
     socket.onclose = function (event) {
@@ -503,7 +542,7 @@
       session.closed = true;
       activeConnection = null;
       ws = null; stopMic(false); stopPlayback(); connectBtn.disabled = false; micBtn.disabled = true; disconnectBtn.disabled = true; textSend.disabled = true;
-      if (!closing) { setState('IDLE', 'Live desconectado. Puedes volver a conectar.'); add('system', event.reason || 'La conexión terminó.'); }
+      if (!closing) recoverLive(event.reason || 'La conexión terminó.');
     };
     socket.onerror = function () {
       if (
@@ -598,6 +637,8 @@
   });
   document.getElementById('yarbis-close').addEventListener('click', function () {
     panelOpen = false;
+    reconnectAttempts = 0;
+    resumeMicAfterReconnect = false;
     micGeneration++;
     overlay.style.setProperty('display', 'none', 'important');
     overlay.classList.remove('open');
@@ -616,7 +657,11 @@
     }
   });
   connectBtn.addEventListener('click', connect);
-  disconnectBtn.addEventListener('click', function(){ disconnect('Desconectado manualmente.'); });
+  disconnectBtn.addEventListener('click', function(){
+    reconnectAttempts = 0;
+    resumeMicAfterReconnect = false;
+    disconnect('Desconectado manualmente.');
+  });
   micBtn.addEventListener('click', startMic);
   missionsOpenBtn.addEventListener('click', openMissions);
   missionsCloseBtn.addEventListener('click', closeMissions);
