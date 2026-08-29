@@ -20,10 +20,10 @@ function prepareYarbisHtml(input) {
   const bootstrapPattern = new RegExp(
     '(<' + 'script id="yarbis-bootstrap" src="/yarbis\\.js)(?:\\?v=\\d+)?("><\\/' + 'script>)'
   );
-  prepared = prepared.replace(bootstrapPattern, '$1?v=17$2');
+  prepared = prepared.replace(bootstrapPattern, '$1?v=18$2');
   if (!prepared.includes('id="yarbis-bootstrap"')) {
     const marker =
-      '<' + 'script id="yarbis-bootstrap" src="/yarbis.js?v=17"></' + 'script>';
+      '<' + 'script id="yarbis-bootstrap" src="/yarbis.js?v=18"></' + 'script>';
     const closingBody = prepared.toLowerCase().lastIndexOf('</body>');
     if (closingBody < 0) {
       throw new Error('No se encontro el cierre real de body para Yarbis');

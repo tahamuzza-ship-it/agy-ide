@@ -476,6 +476,16 @@
     if (playbackCtx) playbackAt = playbackCtx.currentTime;
     if (message) setState(stream ? 'LISTENING' : 'IDLE', message);
   }
+  function ensurePlaybackContext(rate) {
+    if (!playbackCtx) {
+      playbackCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: rate || 24000 });
+    }
+    if (playbackCtx.state === 'suspended') playbackCtx.resume().catch(function () {});
+    return playbackCtx;
+  }
+  function assistantPlaybackActive() {
+    return serverTurnInProgress || activePlaybackNodes.size > 0 || reactor.dataset.state === 'SPEAKING';
+  }
   function finishAudioTurn(message) {
     if (!audioTurnOpen) return;
     audioTurnOpen = false;
@@ -581,6 +591,7 @@
     var generation = ++micGeneration;
     var pendingStream = null;
     try {
+      ensurePlaybackContext(24000);
       pendingStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }, video: false });
       if (generation !== micGeneration || closing || !panelOpen || overlay.getAttribute('aria-hidden') === 'true') {
         pendingStream.getTracks().forEach(function (track) { track.stop(); });
@@ -592,6 +603,12 @@
       processor = audioCtx.createScriptProcessor(4096, 1, 1);
       processor.onaudioprocess = function (event) {
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        if (assistantPlaybackActive()) {
+          audioPreRoll = [];
+          speechActive = false;
+          overlay.dataset.lastDiscard = 'speaker-echo';
+          return;
+        }
         var input = event.inputBuffer.getChannelData(0);
         var now = Date.now(), heardSpeech = inputRms(input) >= SPEECH_RMS_THRESHOLD;
         if (blockedSpeechUntilSilence) {
@@ -655,7 +672,7 @@
     for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
     var pcm = new Int16Array(bytes.buffer), floats = new Float32Array(pcm.length);
     for (var j = 0; j < pcm.length; j++) floats[j] = pcm[j] / 32768;
-    playbackCtx = playbackCtx || new (window.AudioContext || window.webkitAudioContext)({ sampleRate: rate });
+    playbackCtx = ensurePlaybackContext(rate);
     var buffer = playbackCtx.createBuffer(1, floats.length, rate); buffer.copyToChannel(floats, 0);
     var node = playbackCtx.createBufferSource(); node.buffer = buffer; node.connect(playbackCtx.destination);
     activePlaybackNodes.add(node);
@@ -714,6 +731,7 @@
   }
   function connect() {
     if (ws) return;
+    ensurePlaybackContext(24000);
     var scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
     var generation = ++connectionGeneration;
     var socket = new WebSocket(scheme + '//' + location.host + '/api/yarbis/live');
