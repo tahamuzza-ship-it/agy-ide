@@ -197,7 +197,24 @@ function _morningCurrentStatus() {
   try {
     const snapshot = global.SGN_MORNING_CONTEXT || _loadMorningContextSnapshot();
     if (!snapshot) throw new Error('no hay contexto matutino cargado');
-    return _morningSafeStatus(snapshot, active ? active.synchronized_at : null);
+    const status = _morningSafeStatus(snapshot, active ? active.synchronized_at : null);
+    const expectedPrompt = _buildMorningContextPrompt(snapshot);
+    if (global.SGN_MORNING_PROMPT !== expectedPrompt) {
+      const missing = [
+        'el contexto validado no está activo en Gemini Live',
+        ...status.missing_evidence
+      ];
+      return {
+        ...status,
+        state: status.state === 'stale' ? 'stale' : 'unverifiable',
+        injected_context_sha256: null,
+        missing_evidence: missing,
+        message: status.state === 'stale'
+          ? status.message
+          : `NO VERIFICADO — ${missing.join('; ')}`
+      };
+    }
+    return status;
   } catch (error) {
     return {
       ok: false, state: 'error', synchronized_at: null, snapshot_date: null,
