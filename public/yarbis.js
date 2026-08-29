@@ -27,12 +27,12 @@
               '<button id="yarbis-disconnect" type="button" disabled>DESCONECTAR</button></div>' +
               '<div class="yarbis-missions-bar"><button id="yarbis-missions-open" type="button" aria-haspopup="dialog">MISIONES CREADAS <span id="yarbis-missions-count">0</span></button></div>' +
               '<div id="yarbis-history" class="yarbis-history" aria-live="polite"></div>' +
-              '<form id="yarbis-text-form" class="yarbis-text"><input id="yarbis-text-input" maxlength="4000" placeholder="Plan B: escribe aquí si no puedes usar el micrófono" autocomplete="off">' +
+              '<form id="yarbis-text-form" class="yarbis-text"><input id="yarbis-text-input" maxlength="4000" placeholder="Ejemplo seguro: PC1 abre el bloc de notas" autocomplete="off">' +
               '<button type="submit" disabled>ENVIAR</button></form>' +
               '<div id="yarbis-missions-layer" class="yarbis-missions-layer" hidden><section class="yarbis-missions-dialog" role="dialog" aria-modal="true" aria-labelledby="yarbis-missions-title">' +
               '<header><div><span>BANDEJA DE BORRADORES</span><h3 id="yarbis-missions-title">MISIONES CREADAS</h3></div><button id="yarbis-missions-close" type="button" aria-label="Cerrar misiones creadas">×</button></header>' +
               '<div id="yarbis-missions-list" class="yarbis-missions-list"></div></section></div>' +
-              '<p class="yarbis-note">Yarbis no reemplaza Chat, OUTPUT ni /goal. Las misiones a PC1 usan exclusivamente el Buzón oficial y requieren confirmación.</p>' +
+              '<p class="yarbis-note">Comando seguro: empieza con PC1 o PS1. Yarbis no reemplaza Chat, OUTPUT ni /goal. Toda misión requiere confirmación.</p>' +
             '</div></section></div>');
     }
   }
@@ -66,6 +66,7 @@
   var blockedSpeechUntilSilence = false;
   var serverTurnInProgress = false, discardInterruptedOutput = false;
   var processedInputTurns = new Set();
+  var pendingMissionObjectiveUntil = 0;
   var SPEECH_RMS_THRESHOLD = 0.018, SPEECH_END_DELAY_MS = 850;
 
   function pwd() { try { return localStorage.getItem('agyide_auth_v1') || ''; } catch (_) { return ''; } }
@@ -268,12 +269,48 @@
     var object = /\b(?:informe|archivo|programa|navegador|camara|bloc|terminal|carpeta|documento|reporte|estado|flota|disco|ram|video|audio|pantalla|url|web|aplicacion|app|foto)\b/.test(normalized);
     return action && object;
   }
+  function explicitYarbisMissionRequest(text) {
+    var raw = String(text || '').trim();
+    var normalized = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    var create = /\b(?:crea(?:me)?|crear|crees?|prepara(?:me)?|preparar|haz|hacer|quiero\s+que\s+crees?|necesito\s+que\s+crees?)\b/.test(normalized);
+    var noun = /\b(?:mision|tarea|encargo|objetivo)\b/.test(normalized);
+    if (!create || !noun) return null;
+    var patterns = [
+      /(?:misi[oó]n|tarea|encargo|objetivo)\s+para\s+pc\s*1\s+(?:que\s+)?(.+)$/i,
+      /(?:misi[oó]n|tarea|encargo|objetivo)\s+con\s+(?:el\s+)?objetivo\s+(?:de\s+)?(.+)$/i,
+      /(?:misi[oó]n|tarea|encargo|objetivo)\s+para\s+que\s+(.+)$/i,
+      /(?:misi[oó]n|tarea|encargo|objetivo)\s+que\s+(.+)$/i,
+      /(?:misi[oó]n|tarea|encargo|objetivo)\s*[:\-]\s*(.+)$/i,
+      /(?:misi[oó]n|tarea|encargo|objetivo)\s+para\s+(.+)$/i
+    ];
+    for (var i = 0; i < patterns.length; i++) {
+      var match = raw.match(patterns[i]);
+      if (match && match[1] && match[1].trim().length >= 4) {
+        var mission = match[1].trim().replace(/^pc\s*1\s+(?:que\s+)?/i, '').replace(/[.?!¡,;:]+$/, '').trim();
+        return { mission: mission };
+      }
+    }
+    return { mission: '' };
+  }
   function mailboxIntentForUtterance(text) {
     if (typeof window._mailboxVoiceIntent !== 'function') return null;
     var intent = window._mailboxVoiceIntent(text);
+    var explicitRequest = explicitYarbisMissionRequest(text);
+    if (!intent && explicitRequest && explicitRequest.mission) {
+      intent = window._mailboxVoiceIntent('PC1: ' + explicitRequest.mission);
+      if (intent) intent.utterance = 'PC1: ' + explicitRequest.mission;
+    } else if (!intent && explicitRequest) {
+      pendingMissionObjectiveUntil = Date.now() + 120000;
+      intent = { type: 'draft-help', utterance: text };
+    } else if (!intent && pendingMissionObjectiveUntil > Date.now() && String(text || '').trim().length >= 4) {
+      intent = window._mailboxVoiceIntent('PC1: ' + String(text || '').trim());
+      if (intent) intent.utterance = 'PC1: ' + String(text || '').trim();
+    }
     if (!intent && isYarbisOperationalUtterance(text)) {
       intent = window._mailboxVoiceIntent('PC1: ' + text);
     }
+    if (intent && intent.type === 'draft-help') pendingMissionObjectiveUntil = Date.now() + 120000;
+    if (intent && (intent.type === 'cancel-only' || intent.type === 'draft')) pendingMissionObjectiveUntil = 0;
     return intent;
   }
   async function processFinalInputTurn(text, turnId) {
@@ -493,6 +530,7 @@
   async function handleMailboxIntent(text, intent) {
     if (intent.type === 'draft' && intent.mission) {
       var proposal = await mailboxCommand(text, intent);
+      pendingMissionObjectiveUntil = 0;
       add('system', proposal.message || 'Borrador preparado. No se ejecutará sin confirmación.');
       setState(stream ? 'LISTENING' : 'IDLE', 'Misión guardada como borrador.');
       openMissions();
