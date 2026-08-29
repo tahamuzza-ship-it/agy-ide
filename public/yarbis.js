@@ -631,6 +631,32 @@
       : 'Aclara si quieres consultar la Entrada de PC1 o la Salida de PC1.');
     setState(stream ? 'LISTENING' : 'IDLE', 'Esperando una instrucción más precisa.');
   }
+  function missionDecisionResult(decision, responseOk, body) {
+    body = body && typeof body === 'object' ? body : {};
+    var expectedKind = decision === 'confirm' ? 'created' : 'cancelled';
+    if (responseOk && body.kind === expectedKind) {
+      return {
+        kind: 'success',
+        title: decision === 'confirm' ? 'MISIÓN ENVIADA A PC1' : 'MISIÓN CANCELADA',
+        message: body.message || (decision === 'confirm'
+          ? 'Railway confirmó que PC1 creó la misión.'
+          : 'El borrador fue cancelado y no se envió a PC1.')
+      };
+    }
+    var uncertainCodes = ['PC1_RESULT_UNCERTAIN', 'PC1_CREATE_ERROR', 'BRIDGE_UNAVAILABLE', 'INVALID_CREATE_RESPONSE'];
+    if (decision === 'confirm' && (uncertainCodes.indexOf(body.code) >= 0 || responseOk)) {
+      return {
+        kind: 'uncertain',
+        title: 'RESULTADO INCIERTO — REVISAR BUZÓN',
+        message: body.error || 'No se pudo confirmar el resultado. Consulta el Buzón antes de repetir.'
+      };
+    }
+    return {
+      kind: 'error',
+      title: decision === 'confirm' ? 'NO SE PUDO ENVIAR' : 'NO SE PUDO CANCELAR',
+      message: body.error || 'Railway no confirmó la operación.'
+    };
+  }
   async function confirmMailbox(decision, proposalId, card) {
     if (!proposalId || (decision !== 'confirm' && decision !== 'cancel')) return;
     if (missionDecisionInFlight) return;
@@ -649,24 +675,14 @@
         body: JSON.stringify({ proposalId: proposalId, decision: decision })
       }, 40000);
       var body = await response.json().catch(function(){ return {}; });
-      var expectedKind = decision === 'confirm' ? 'created' : 'cancelled';
-      if (response.ok && body.kind === expectedKind) {
-        var successTitle = decision === 'confirm' ? 'MISIÓN ENVIADA A PC1' : 'MISIÓN CANCELADA';
-        var successMessage = body.message || (decision === 'confirm'
-          ? 'Railway confirmó que PC1 creó la misión.'
-          : 'El borrador fue cancelado y no se envió a PC1.');
-        showMissionNotice('success', successTitle, successMessage);
-        add('system', successTitle + '. ' + successMessage);
-        setState(stream ? 'LISTENING' : 'IDLE', successTitle + '.');
-      } else if (body.code === 'PC1_RESULT_UNCERTAIN') {
-        var uncertainMessage = body.error || 'No se pudo confirmar el resultado. Consulta el Buzón antes de repetir.';
-        showMissionNotice('uncertain', 'RESULTADO INCIERTO — REVISAR BUZÓN', uncertainMessage);
-        add('system', 'RESULTADO INCIERTO — REVISAR BUZÓN. ' + uncertainMessage);
+      var result = missionDecisionResult(decision, response.ok, body);
+      showMissionNotice(result.kind, result.title, result.message);
+      add('system', result.title + '. ' + result.message);
+      if (result.kind === 'success') {
+        setState(stream ? 'LISTENING' : 'IDLE', result.title + '.');
+      } else if (result.kind === 'uncertain') {
         setState(stream ? 'LISTENING' : 'IDLE', 'Resultado incierto. No repitas el envío.');
       } else {
-        var failureMessage = body.error || 'Railway no confirmó la operación.';
-        showMissionNotice('error', decision === 'confirm' ? 'NO SE PUDO ENVIAR' : 'NO SE PUDO CANCELAR', failureMessage);
-        add('system', (decision === 'confirm' ? 'NO SE PUDO ENVIAR. ' : 'NO SE PUDO CANCELAR. ') + failureMessage);
         setState(stream ? 'LISTENING' : 'IDLE', 'No se pudo completar la decisión.');
       }
     } catch (error) {
