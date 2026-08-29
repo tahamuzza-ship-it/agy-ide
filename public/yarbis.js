@@ -115,12 +115,22 @@
   }
   function synchronizationIntent(text) {
     var normalized = String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-    return /\bestado\s+(?:de\s+)?sincronizacion\b/.test(normalized);
+    return /\b(?:estado|estatus)\s+(?:de\s+)?sincronizacion\b/.test(normalized) ||
+      /\b(?:esta|estas|quedo|sigue)\s+(?:bien\s+)?sincroniz/.test(normalized) ||
+      /\bsincroniz\w*\b.*\b(?:pc1|contexto|yarbis)\b/.test(normalized) ||
+      /\b(?:pc1|contexto|yarbis)\b.*\bsincroniz\w*\b/.test(normalized);
   }
   function renderSyncStatus(body) {
     var state = body && body.state ? body.state : 'error';
     syncStatus.dataset.state = state;
     var detail = body && body.message ? body.message : 'ERROR — no se pudo verificar el contexto.';
+    if (state === 'unverifiable' && body && body.injected_context_sha256) {
+      var missing = Array.isArray(body.missing_evidence) && body.missing_evidence.length
+        ? body.missing_evidence.join('; ')
+        : 'PC1 todavía no aportó evidencia explícita vigente';
+      detail = 'SINCRONIZADO — contexto descargado, validado e inyectado. PC1: NO VERIFICADO — ' +
+        missing + '. Esto no significa que la sincronización haya fallado.';
+    }
     var version = body && body.continuity_state && body.continuity_state.version
       ? ' · versión ' + body.continuity_state.version : '';
     var date = body && body.synchronized_at
@@ -145,8 +155,6 @@
       if (force) {
         syncBtn.dataset.result = 'success';
         syncBtn.textContent = 'SINCRONIZADO';
-        syncStatus.textContent = 'SINCRONIZADO — contexto descargado, validado e inyectado. PC1: ' + message;
-        message = syncStatus.textContent;
       }
       add('system', message);
       if (force && (body.state === 'synchronized' || body.state === 'stale' || body.state === 'unverifiable') && ws) {

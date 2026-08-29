@@ -188,7 +188,7 @@ function _morningSafeStatus(snapshot, synchronizedAt) {
       ? 'SINCRONIZADOS — MISMO HASH DE CONTINUIDAD'
       : state === 'stale'
         ? 'DESACTUALIZADO — EL CONTEXTO O LA EVIDENCIA DE PC1 NO ESTÁN VIGENTES'
-        : `NO VERIFICADO — ${missing.join('; ')}`
+        : `CONTEXTO SINCRONIZADO EN RAILWAY — PC1 NO VERIFICADO: ${missing.join('; ')}`
   };
 }
 
@@ -243,6 +243,7 @@ function _buildMorningContextPrompt(snapshot) {
   };
   return `════════ PROTOCOLO_DESPERTAR_ACTIVO — CONTEXTO MATUTINO VERIFICADO ════════
 Este bloque es contexto operativo obligatorio del system prompt.
+REGLA DE DIAGNÓSTICO: este contexto ya fue descargado, validado e inyectado en Railway. Que PC1 no haya reportado un hash explícito significa únicamente "PC1 NO VERIFICADO"; no significa que la sincronización de Railway falló. No infieras fallos de sincronización ni problemas de credenciales desde node_health u otros campos del paquete.
 ANTES de planificar o responder, reconoce y reporta las misiones entrantes pendientes dirigidas a AGY, PC1 o PC2.
 No ejecutes operaciones físicas automáticamente. Procesa una misión a la vez y respeta las autorizaciones.
 Conteo exacto de misiones entrantes pendientes: ${verification.pendingCount}
