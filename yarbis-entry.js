@@ -12,6 +12,19 @@ fs.writeFileSync(generatedPath, Buffer.from(hex, 'hex'));
 
 const { attachYarbisLive } = require(generatedPath);
 
+const indexPath = path.join(__dirname, 'public', 'index.html');
+let html = fs.readFileSync(indexPath, 'utf8');
+html = html.replace(
+  /href="style\.css(?:\?v=\d+)?"/,
+  'href="style.css?v=3"'
+);
+if (!html.includes('id="yarbis-bootstrap"')) {
+  const marker =
+    '<' + 'script id="yarbis-bootstrap" src="/yarbis.js?v=11"></' + 'script>';
+  html = html.replace('</body>', marker + '</body>');
+}
+fs.writeFileSync(indexPath, html, 'utf8');
+
 const originalListen = http.Server.prototype.listen;
 let attached = false;
 http.Server.prototype.listen = function yarbisListen(...args) {
