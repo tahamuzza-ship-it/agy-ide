@@ -10,8 +10,7 @@ const hex = [1, 2, 3]
   .join('');
 fs.writeFileSync(generatedPath, Buffer.from(hex, 'hex'));
 
-const { attachYarbisLive, prepareYarbisIndex } = require(generatedPath);
-prepareYarbisIndex();
+const { attachYarbisLive } = require(generatedPath);
 
 const originalListen = http.Server.prototype.listen;
 let attached = false;
