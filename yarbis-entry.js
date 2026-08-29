@@ -16,11 +16,11 @@ const indexPath = path.join(__dirname, 'public', 'index.html');
 let html = fs.readFileSync(indexPath, 'utf8');
 html = html.replace(
   /href="style\.css(?:\?v=\d+)?"/,
-  'href="style.css?v=3"'
+  'href="style.css?v=4"'
 );
 if (!html.includes('id="yarbis-bootstrap"')) {
   const marker =
-    '<' + 'script id="yarbis-bootstrap" src="/yarbis.js?v=13"></' + 'script>';
+    '<' + 'script id="yarbis-bootstrap" src="/yarbis.js?v=14"></' + 'script>';
   const closingBody = html.toLowerCase().lastIndexOf('</body>');
   if (closingBody < 0) {
     throw new Error('No se encontro el cierre real de body para Yarbis');
