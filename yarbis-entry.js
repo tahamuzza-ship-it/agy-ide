@@ -12,21 +12,29 @@ fs.writeFileSync(generatedPath, Buffer.from(hex, 'hex'));
 
 const { attachYarbisLive } = require(generatedPath);
 
-const indexPath = path.join(__dirname, 'public', 'index.html');
-let html = fs.readFileSync(indexPath, 'utf8');
-html = html.replace(
-  /href="style\.css(?:\?v=\d+)?"/,
-  'href="style.css?v=4"'
-);
-if (!html.includes('id="yarbis-bootstrap"')) {
-  const marker =
-    '<' + 'script id="yarbis-bootstrap" src="/yarbis.js?v=14"></' + 'script>';
-  const closingBody = html.toLowerCase().lastIndexOf('</body>');
-  if (closingBody < 0) {
-    throw new Error('No se encontro el cierre real de body para Yarbis');
+function prepareYarbisHtml(input) {
+  let prepared = input.replace(
+    /href="style\.css(?:\?v=\d+)?"/,
+    'href="style.css?v=4"'
+  );
+  const bootstrapPattern = new RegExp(
+    '(<' + 'script id="yarbis-bootstrap" src="/yarbis\\.js)(?:\\?v=\\d+)?("><\\/' + 'script>)'
+  );
+  prepared = prepared.replace(bootstrapPattern, '$1?v=14$2');
+  if (!prepared.includes('id="yarbis-bootstrap"')) {
+    const marker =
+      '<' + 'script id="yarbis-bootstrap" src="/yarbis.js?v=14"></' + 'script>';
+    const closingBody = prepared.toLowerCase().lastIndexOf('</body>');
+    if (closingBody < 0) {
+      throw new Error('No se encontro el cierre real de body para Yarbis');
+    }
+    prepared = prepared.slice(0, closingBody) + marker + prepared.slice(closingBody);
   }
-  html = html.slice(0, closingBody) + marker + html.slice(closingBody);
+  return prepared;
 }
+
+const indexPath = path.join(__dirname, 'public', 'index.html');
+const html = prepareYarbisHtml(fs.readFileSync(indexPath, 'utf8'));
 fs.writeFileSync(indexPath, html, 'utf8');
 
 const originalListen = http.Server.prototype.listen;
