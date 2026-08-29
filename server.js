@@ -2078,7 +2078,7 @@ const MAILBOX_LOGIN_WINDOW_MS = 10 * 60 * 1000;
 const MAILBOX_LOGIN_BLOCK_MS = 15 * 60 * 1000;
 const MAILBOX_LOGIN_MAX_FAILURES = 5;
 const MAILBOX_READ_CACHE_MS = 5000;
-const MAILBOX_VOICE_PROPOSAL_TTL_MS = 60 * 1000;
+const MAILBOX_VOICE_PROPOSAL_TTL_MS = 15 * 60 * 1000;
 const MAILBOX_VOICE_MAX_PROPOSALS = 256;
 const MAILBOX_VOICE_MAX_MISSION_BYTES = 4000;
 const MAILBOX_ROOT = 'C:\\Users\\Roberto1\\OneDrive\\Desktop\\comunicacion entre apps en nube y en local';
@@ -2894,6 +2894,20 @@ function _mailboxPruneVoiceProposals(now = Date.now()) {
   }
 }
 
+function _mailboxVoiceDrafts(voiceSession) {
+  _mailboxPruneVoiceProposals();
+  return Array.from(_mailboxVoiceProposals.entries())
+    .filter((entry) => entry[1].voiceSession === voiceSession)
+    .map((entry) => ({
+      proposalId: entry[0],
+      mission: entry[1].mission,
+      status: entry[1].status,
+      createdAt: new Date(entry[1].createdAt).toISOString(),
+      expiresAt: new Date(entry[1].expiresAt).toISOString()
+    }))
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+}
+
 function _mailboxCreateMissionMarkdown(mission) {
   const now = new Date().toISOString();
   return [
@@ -3116,11 +3130,14 @@ app.post('/api/ops/mailbox/voice/command', async (req, res) => {
   if (!voiceSession) {
     return res.status(400).json({ error: 'Sesion de voz no valida' });
   }
+  const action = req.body && req.body.action;
+  if (action === 'drafts') {
+    const items = _mailboxVoiceDrafts(voiceSession);
+    return res.json({ kind: 'drafts', count: items.length, items });
+  }
   if (!AGY_KEY) {
     return res.status(503).json({ error: 'Conexion con PC1 no configurada' });
   }
-
-  const action = req.body && req.body.action;
   if (req.body && typeof req.body.utterance === 'string' && req.body.utterance.trim()) {
     const serverIntent = _mailboxSemanticIntent(req.body.utterance);
     const expectedAction = serverIntent && (
@@ -3202,18 +3219,24 @@ app.post('/api/ops/mailbox/voice/command', async (req, res) => {
     }
     _mailboxPruneVoiceProposals();
     const proposalId = crypto.randomBytes(24).toString('base64url');
-    const expiresAt = Date.now() + MAILBOX_VOICE_PROPOSAL_TTL_MS;
+    const createdAt = Date.now();
+    const expiresAt = createdAt + MAILBOX_VOICE_PROPOSAL_TTL_MS;
     _mailboxVoiceProposals.set(proposalId, {
       voiceSession,
       mission,
+      createdAt,
+      status: 'draft',
       expiresAt
     });
+    const draftCount = _mailboxVoiceDrafts(voiceSession).length;
     return res.json({
       kind: 'proposal',
       proposalId,
+      createdAt: new Date(createdAt).toISOString(),
       expiresAt: new Date(expiresAt).toISOString(),
       mission,
-      message: `Voy a crear una mision nueva en el Buzon 1 con este objetivo: ${mission}. Di confirmo para crearla o cancelar para no hacer nada.`
+      draftCount,
+      message: `Mision guardada como borrador: ${mission}. Abre MISIONES CREADAS para enviarla a PC1 o cancelarla.`
     });
   }
 
@@ -3250,34 +3273,66 @@ app.post('/api/ops/mailbox/voice/confirm', async (req, res) => {
       error: 'La propuesta ya no esta disponible. Vuelve a dictar la mision.'
     });
   }
-  _mailboxVoiceProposals.delete(proposalId);
-
   if (decision === 'cancel') {
+    if (proposal.status !== 'draft') {
+      return res.status(409).json({
+        error: proposal.status === 'sending'
+          ? 'La mision ya se esta enviando. Espera el resultado.'
+          : 'El resultado del envio es incierto. Consulta el Buzon antes de crear otra mision.',
+        code: 'MISSION_NOT_ACTIONABLE'
+      });
+    }
+    _mailboxVoiceProposals.delete(proposalId);
     return res.json({
       kind: 'cancelled',
-      message: 'Propuesta cancelada. No se creo ningun archivo.'
+      draftCount: _mailboxVoiceDrafts(voiceSession).length,
+      message: 'Borrador cancelado. No se creo ningun archivo.'
     });
   }
   if (!AGY_KEY) {
     return res.status(503).json({ error: 'Conexion con PC1 no configurada' });
   }
+  if (proposal.status !== 'draft') {
+    return res.status(409).json({
+      error: proposal.status === 'sending'
+        ? 'La mision ya se esta enviando. Espera el resultado.'
+        : 'El resultado del envio es incierto. Consulta el Buzon antes de crear otra mision.',
+      code: 'MISSION_NOT_ACTIONABLE'
+    });
+  }
+  proposal.status = 'sending';
 
   try {
     const markdown = _mailboxCreateMissionMarkdown(proposal.mission);
     const instruction = _mailboxBuildEncodedCreateCommand(markdown);
     const outcome = await _mailboxDispatch(instruction);
     if (outcome.status === 'timeout') {
-      return res.status(504).json({ error: 'PC1 no respondio a tiempo' });
+      proposal.status = 'uncertain';
+      proposal.expiresAt = Date.now() + MAILBOX_VOICE_PROPOSAL_TTL_MS;
+      return res.status(504).json({
+        error: 'PC1 no respondio a tiempo. El resultado es incierto: consulta el Buzon antes de crear otra mision.',
+        code: 'PC1_RESULT_UNCERTAIN'
+      });
     }
     if (outcome.status !== 'done' || !outcome.result) {
-      return res.status(502).json({ error: 'PC1 no pudo crear la mision' });
+      proposal.status = 'uncertain';
+      proposal.expiresAt = Date.now() + MAILBOX_VOICE_PROPOSAL_TTL_MS;
+      return res.status(502).json({
+        error: 'El resultado es incierto. Consulta el Buzon antes de crear otra mision.',
+        code: 'PC1_RESULT_UNCERTAIN'
+      });
     }
 
     let created;
     try {
       created = JSON.parse(outcome.result);
     } catch {
-      return res.status(502).json({ error: 'PC1 devolvio una respuesta no valida' });
+      proposal.status = 'uncertain';
+      proposal.expiresAt = Date.now() + MAILBOX_VOICE_PROPOSAL_TTL_MS;
+      return res.status(502).json({
+        error: 'PC1 devolvio una respuesta no valida. Consulta el Buzon antes de crear otra mision.',
+        code: 'PC1_RESULT_UNCERTAIN'
+      });
     }
     if (
       !created ||
@@ -3286,18 +3341,30 @@ app.post('/api/ops/mailbox/voice/confirm', async (req, res) => {
       !/^MISION_\d{8}_\d{3}\.md$/.test(created.name) ||
       created.status !== 'PENDIENTE'
     ) {
-      return res.status(502).json({ error: 'PC1 devolvio una respuesta no valida' });
+      proposal.status = 'uncertain';
+      proposal.expiresAt = Date.now() + MAILBOX_VOICE_PROPOSAL_TTL_MS;
+      return res.status(502).json({
+        error: 'PC1 devolvio una respuesta no valida. Consulta el Buzon antes de crear otra mision.',
+        code: 'PC1_RESULT_UNCERTAIN'
+      });
     }
     _mailboxRecentReads.delete('replit-to-agy');
+    _mailboxVoiceProposals.delete(proposalId);
     return res.json({
       kind: 'created',
       name: created.name,
       status: 'PENDIENTE',
+      draftCount: _mailboxVoiceDrafts(voiceSession).length,
       message: `Mision creada en el Buzon 1: ${created.name}. Quedo en estado pendiente.`
     });
   } catch (error) {
+    proposal.status = 'uncertain';
+    proposal.expiresAt = Date.now() + MAILBOX_VOICE_PROPOSAL_TTL_MS;
     console.error('[mailbox-voice] error de creacion', error instanceof Error ? error.message : 'UNKNOWN');
-    return res.status(502).json({ error: 'No pude crear la mision en PC1' });
+    return res.status(502).json({
+      error: 'El resultado es incierto. Consulta el Buzon antes de crear otra mision.',
+      code: 'PC1_RESULT_UNCERTAIN'
+    });
   }
 });
 /* /BUZÓN AGY */
