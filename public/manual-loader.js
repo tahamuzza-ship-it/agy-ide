@@ -1,4 +1,12 @@
 (function () {
+  if (!document.getElementById('manual-content')) {
+    document.body.innerHTML =
+      '<main><button id="manual-close" type="button">← Volver a AGY IDE</button>' +
+      '<header><h1>📖 Manual Maestro del Ecosistema SGN</h1>' +
+      '<p id="manual-status">Cargando la fuente vigente…</p></header>' +
+      '<span class="tag">FUENTE ÚNICA · /api/manual</span>' +
+      '<section><pre id="manual-content" style="white-space:pre-wrap;overflow-wrap:anywhere">Cargando…</pre></section></main>';
+  }
   var closeButton = document.getElementById('manual-close');
   var status = document.getElementById('manual-status');
   var content = document.getElementById('manual-content');
