@@ -4,8 +4,8 @@
   "description": "IDE conectado a Antigravity — ejecuta código real en PC1/PC2",
   "main": "server.js",
   "scripts": {
-    "start": "node yarbis-entry.js",
-    "dev": "node yarbis-entry.js"
+    "start": "node bridge-config.cjs && node yarbis-entry.js",
+    "dev": "node bridge-config.cjs && node yarbis-entry.js"
   },
   "dependencies": {
     "express": "^4.18.2",
