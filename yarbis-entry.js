@@ -37,6 +37,21 @@ const indexPath = path.join(__dirname, 'public', 'index.html');
 const html = prepareYarbisHtml(fs.readFileSync(indexPath, 'utf8'));
 fs.writeFileSync(indexPath, html, 'utf8');
 
+function prepareManualHtml(input) {
+  if (input.includes('manual-loader.js')) return input;
+  const marker =
+    '<' + 'script src="./manual-loader.js?v=1" defer></' + 'script>';
+  const closingHead = input.toLowerCase().lastIndexOf('</head>');
+  if (closingHead < 0) {
+    throw new Error('No se encontro el cierre de head en manual.html');
+  }
+  return input.slice(0, closingHead) + marker + input.slice(closingHead);
+}
+
+const manualPath = path.join(__dirname, 'public', 'manual.html');
+const manualHtml = prepareManualHtml(fs.readFileSync(manualPath, 'utf8'));
+fs.writeFileSync(manualPath, manualHtml, 'utf8');
+
 const originalListen = http.Server.prototype.listen;
 let attached = false;
 http.Server.prototype.listen = function yarbisListen(...args) {
