@@ -93,7 +93,7 @@
       <div class="header-btns">
         <button class="hbtn hbtn-run"  id="btn-run">▶ EJECUTAR</button>
         <button class="hbtn hbtn-goal" id="btn-goal">/goal</button>
-        <button class="hbtn hbtn-clr"  id="btn-clear-out">🗑 Output</button>
+        <button class="hbtn hbtn-clr" id="btn-clear-out" type="button" title="Vaciar completamente el panel de salida" onclick="document.getElementById('output').replaceChildren();document.getElementById('out-status').textContent='listo';document.getElementById('out-status').style.color='';">🗑 LIMPIAR OUTPUT</button>
         <button class="hbtn hbtn-clr"  id="btn-clear-chat">🗑 Chat</button>
         <button class="hbtn" id="btn-puente-pc2" title="PUENTE PC2 — tmux en PC2. Termius: ssh roberto@192.168.1.14" style="background:linear-gradient(135deg,#5a0010,#cc0020);color:#fff;border:none;font-weight:700;">🔴 PUENTE PC2</button>
         <button class="hbtn" id="btn-puente-pc1" title="PUENTE PC1 — SSH Windows. Termius: ssh Roberto1@192.168.1.2" style="background:linear-gradient(135deg,#003a7f,#0055cc);color:#fff;border:none;font-weight:700;">🔵 PUENTE PC1</button>
