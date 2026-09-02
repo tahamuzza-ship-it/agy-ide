@@ -6,7 +6,13 @@ const crypto  = require('crypto');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-const REPLIT_API  = 'https://automate-make.replit.app';
+// Nombre histórico conservado para evitar una migración mecánica masiva.
+// El destino real es configurable y Railway es el puente productivo.
+const REPLIT_API  = (
+  process.env.BRIDGE_URL ||
+  process.env.MAILBOX_BRIDGE_URL ||
+  'https://workspaceapi-server-production-0f24.up.railway.app'
+).replace(/\/+$/, '');
 const MEMORY_API  = 'https://workspaceapi-server-production-905a.up.railway.app';
 
 /* ── Fire-and-forget al agente de memoria ── */
@@ -1795,6 +1801,26 @@ app.get('/api/equipos', requirePwd, (_req, res) => {
   });
 });
 
+/* PC3 vive en Yarbis Control. AGY actúa como proxy autenticado para evitar
+   CORS y no exponer credenciales entre servicios en el navegador. */
+const YARBIS_CONTROL_URL = process.env.YARBIS_CONTROL_URL || 'https://yarbis-autonomous-control-production.up.railway.app';
+app.get('/api/equipos/pc3-status', requirePwd, async (_req, res) => {
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const r = await fetch(`${YARBIS_CONTROL_URL}/api/equipos/status`, {
+      headers: { 'x-agyide-pwd': AGY_IDE_PWD },
+      signal: ctrl.signal
+    });
+    clearTimeout(timer);
+    if (!r.ok) return res.status(r.status).json({ error: 'Yarbis no autorizó la consulta de PC3' });
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(await r.json());
+  } catch (e) {
+    res.status(502).json({ error: 'No se pudo consultar PC3 en Yarbis', detail: e.message });
+  }
+});
+
 
 /* ══════════════════════════════════════════
    OJO REMOTO — capturas de pantalla y terminal de PC1/PC2
@@ -2239,7 +2265,8 @@ app.get('/api/equipos/screens/:pc/shot', requirePwd, (req, res) => {
 /* ══════════════════════════════════════════
    BUZÓN AGY — metadatos seguros desde PC1
 ══════════════════════════════════════════ */
-const MAILBOX_BRIDGE_URL = process.env.MAILBOX_BRIDGE_URL ||
+const MAILBOX_BRIDGE_URL = process.env.BRIDGE_URL ||
+  process.env.MAILBOX_BRIDGE_URL ||
   'https://workspaceapi-server-production-0f24.up.railway.app';
 const MAILBOX_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const MAILBOX_MAX_SESSIONS = 256;

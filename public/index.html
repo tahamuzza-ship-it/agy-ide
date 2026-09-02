@@ -6,7 +6,7 @@
     <title>AGY-IDE — Powered by Antigravity</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;600;700&family=Orbitron:wght@600;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=6">
     <style>
       /* Fondo personalizado de Roberto — imagen con velo suave para que el texto siga legible */
       html { background: #04080e !important; }
@@ -38,7 +38,7 @@
     window._PC2_IP = '100.121.53.89'; // fallback hardcoded
     window._PC1_IP = '100.113.7.92';
     (function fetchPCRegistry() {
-      fetch('https://automate-make.replit.app/api/pc-registry')
+      fetch('https://workspaceapi-server-production-0f24.up.railway.app/api/pc-registry')
         .then(function(r){ return r.json(); })
         .then(function(d){
           if (d.PC2 && d.PC2.ip) { window._PC2_IP = d.PC2.ip; console.log('[PC-REG] PC2 IP:', window._PC2_IP); }
@@ -2887,6 +2887,23 @@
     <pre id="equipo-term-pc2" style="display:none;max-height:110px;overflow:auto;background:#060a16;border:1px solid rgba(0,243,255,0.15);border-radius:8px;padding:6px 8px;font-size:0.58rem;line-height:1.35;color:#9fe8c0;white-space:pre-wrap;word-break:break-all;margin:6px 0 0;"></pre>
     <div id="equipo-eyeinfo-pc2" style="font-size:0.55rem;color:#5a6a80;margin-top:3px;"></div>
   </div>
+  <div class="equipo-card" id="equipo-card-pc3" style="display:flex;align-items:center;gap:10px;background:rgba(0,210,190,0.10);border:1px solid rgba(0,243,220,0.35);border-radius:10px;padding:10px;margin-top:8px;">
+    <span id="equipo-dot-pc3" style="width:12px;height:12px;border-radius:50%;background:#555;flex-shrink:0;"></span>
+    <div style="min-width:0;">
+      <div style="font-size:0.78rem;font-weight:700;color:#e8f0ff;">🟢 PC3 · Miami / Lucrecia</div>
+      <div id="equipo-info-pc3" style="font-size:0.65rem;color:#8c9cb2;">consultando Yarbis…</div>
+    </div>
+  </div>
+  <div id="equipo-eye-pc3" style="display:block;margin:8px 0 0;padding:8px;background:rgba(0,243,220,0.04);border:1px solid rgba(0,243,220,0.16);border-radius:10px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
+      <div style="font-family:'Orbitron',monospace;font-size:0.57rem;letter-spacing:0.07em;color:#65fff0;">👁 OJO MÁGICO — PC3 MIAMI</div>
+      <span id="equipo-live-pc3" style="display:none;font-size:0.52rem;font-weight:800;color:#22e6ba;">● MIAMI EN VIVO</span>
+    </div>
+    <div id="equipo-placeholder-pc3" style="min-height:92px;display:flex;align-items:center;justify-content:center;text-align:center;background:#060a16;border-radius:8px;color:#5f7388;font-size:0.62rem;padding:12px;">Esperando señal de video de Miami…</div>
+    <img id="equipo-shot-pc3" alt="Pantalla PC3 Miami" style="display:none;width:100%;border-radius:8px;border:1px solid rgba(0,243,220,0.3);cursor:zoom-in;"/>
+    <pre id="equipo-term-pc3" style="display:none;max-height:90px;overflow:auto;background:#060a16;border:1px solid rgba(0,243,220,0.14);border-radius:8px;padding:6px 8px;font-size:0.56rem;line-height:1.35;color:#9fe8c0;white-space:pre-wrap;word-break:break-word;margin:6px 0 0;"></pre>
+    <div id="equipo-eyeinfo-pc3" style="font-size:0.55rem;color:#6f8498;margin-top:5px;">sin señal reciente</div>
+  </div>
   <!-- 🎬 RODAJE / PELÍCULA -->
   <div style="margin-top:12px;border-top:1px solid rgba(0,243,255,0.18);padding-top:10px;">
     <div style="font-family:'Orbitron',monospace;font-size:0.66rem;letter-spacing:0.1em;color:#ffc64d;margin-bottom:6px;">🎬 RODAJE (guarda las fotos)</div>
@@ -3063,6 +3080,46 @@
       .catch(function () { setEye('PC1', null); setEye('PC2', null); });
   }
 
+  var pc3Timer = null;
+  function setPc3(data) {
+    var state = data && data.PC3;
+    var dot = document.getElementById('equipo-dot-pc3');
+    var info = document.getElementById('equipo-info-pc3');
+    var live = document.getElementById('equipo-live-pc3');
+    var img = document.getElementById('equipo-shot-pc3');
+    var placeholder = document.getElementById('equipo-placeholder-pc3');
+    var term = document.getElementById('equipo-term-pc3');
+    var meta = document.getElementById('equipo-eyeinfo-pc3');
+    var fresh = !!(state && state.connected && state.fresh && state.shot);
+    dot.style.background = fresh ? '#22e6ba' : '#ff3355';
+    dot.style.boxShadow = fresh ? '0 0 9px #22e6ba' : '0 0 7px rgba(255,51,85,.7)';
+    live.style.display = fresh ? 'inline' : 'none';
+    info.textContent = fresh ? 'Conectado ✅ · señal ' + fmtAgo(state.secondsAgo) : 'Sin señal reciente ⚠️';
+    if (!fresh) {
+      img.style.display = 'none'; img.removeAttribute('src');
+      placeholder.style.display = 'flex';
+      term.style.display = 'none';
+      meta.textContent = 'Esperando señal de video de Miami…';
+      return;
+    }
+    placeholder.style.display = 'none';
+    img.onload = function () {
+      var received = state.receivedAt ? new Date(state.receivedAt).toLocaleTimeString() : 'sin hora';
+      meta.textContent = img.naturalWidth + '×' + img.naturalHeight + ' · latencia ' + Math.round(state.secondsAgo || 0) + ' s · recibido ' + received;
+    };
+    if (img.src !== state.shot) img.src = state.shot;
+    img.style.display = 'block';
+    if (state.terminal) { term.textContent = state.terminal; term.style.display = 'block'; }
+    else term.style.display = 'none';
+  }
+
+  function refreshPc3() {
+    fetch('/api/equipos/pc3-status?t=' + Date.now(), { headers: _pwdHeaders() })
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(setPc3)
+      .catch(function () { setPc3(null); });
+  }
+
   ['PC1', 'PC2'].forEach(function (pc) {
     var btn = document.getElementById('equipo-pause-' + pc.toLowerCase());
     if (!btn) return;
@@ -3083,7 +3140,7 @@
 
   var full = document.getElementById('equipo-shot-full');
   var fullImg = document.getElementById('equipo-shot-full-img');
-  ['pc1', 'pc2'].forEach(function (lc) {
+  ['pc1', 'pc2', 'pc3'].forEach(function (lc) {
     var img = document.getElementById('equipo-shot-' + lc);
     if (img) img.addEventListener('click', function () {
       fullImg.src = img.src;
@@ -3148,14 +3205,17 @@
     if (!open) {
       refreshEquipos();
       refreshScreens();
+      refreshPc3();
       refreshRodaje();
       timer = setInterval(refreshEquipos, 30000);
       eyeTimer = setInterval(refreshScreens, 10000);
+      pc3Timer = setInterval(refreshPc3, 5000);
       rodajeTimer = setInterval(refreshRodaje, 15000);
     } else {
       if (rodajeTimer) { clearInterval(rodajeTimer); rodajeTimer = null; }
       if (timer) { clearInterval(timer); timer = null; }
       if (eyeTimer) { clearInterval(eyeTimer); eyeTimer = null; }
+      if (pc3Timer) { clearInterval(pc3Timer); pc3Timer = null; }
       ['PC1', 'PC2'].forEach(function (pc) {
         var im = document.getElementById('equipo-shot-' + pc.toLowerCase());
         if (im) { im.style.display = 'none'; im.removeAttribute('src'); }
@@ -3622,5 +3682,6 @@
   });
 })();
 </script>
+    <script id="yarbis-bootstrap" src="/yarbis.js?v=19"></script>
 </body>
     </html>
