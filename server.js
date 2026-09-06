@@ -1804,21 +1804,21 @@ app.get('/api/equipos', requirePwd, (_req, res) => {
 /* PC3 vive en Yarbis Control. AGY actúa como proxy autenticado para evitar
    CORS y no exponer credenciales entre servicios en el navegador. */
 const YARBIS_CONTROL_URL = process.env.YARBIS_CONTROL_URL || 'https://yarbis-autonomous-control-production.up.railway.app';
-app.get('/api/equipos/pc3-status', requirePwd, async (_req, res) => {
-  try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
-    const r = await fetch(`${YARBIS_CONTROL_URL}/api/equipos/status`, {
-      headers: { 'x-agyide-pwd': AGY_IDE_PWD },
-      signal: ctrl.signal
-    });
-    clearTimeout(timer);
-    if (!r.ok) return res.status(r.status).json({ error: 'Yarbis no autorizó la consulta de PC3' });
-    res.setHeader('Cache-Control', 'no-store');
-    res.json(await r.json());
-  } catch (e) {
-    res.status(502).json({ error: 'No se pudo consultar PC3 en Yarbis', detail: e.message });
-  }
+app.get('/api/equipos/pc3-status', requirePwd, (_req, res) => {
+  const e = _eyeFresh('PC3');
+  if (!e) return res.json({ PC3: null });
+  const secondsAgo = Math.round((Date.now() - e.ts) / 1000);
+  res.setHeader('Cache-Control', 'no-store');
+  res.json({
+    PC3: {
+      connected: true,
+      fresh: secondsAgo <= 60,
+      shot: e.shot ? `data:${e.mime || 'image/jpeg'};base64,${e.shot.toString('base64')}` : null,
+      terminal: e.terminal || '',
+      secondsAgo,
+      receivedAt: new Date(e.ts).toISOString()
+    }
+  });
 });
 
 
@@ -1930,7 +1930,7 @@ app.post('/api/equipos/report', (req, res) => {
   }
   const { pc, shot, terminal } = req.body || {};
   const id = String(pc || '').toUpperCase();
-  if (id !== 'PC1' && id !== 'PC2') return res.status(400).json({ error: 'pc debe ser PC1 o PC2' });
+  if (!['PC1', 'PC2', 'PC3'].includes(id)) return res.status(400).json({ error: 'pc debe ser PC1, PC2 o PC3' });
   if (_eyePaused[id]) { delete _equiposEye[id]; return res.json({ ok: true, paused: true }); }
   const entry = _equiposEye[id] || {};
   if (typeof shot === 'string' && shot.length) {
