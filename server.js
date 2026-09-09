@@ -1184,6 +1184,112 @@ Responde SOLO con el comando corregido, sin explicaciones.`;
   }
 }
 
+
+/* Exact approved-plan runner: never decomposes or rewrites the signed plan. */
+function stableApprovedPlanJson(value) {
+  if (Array.isArray(value)) return '[' + value.map(stableApprovedPlanJson).join(',') + ']';
+  if (value && typeof value === 'object') {
+    return '{' + Object.entries(value).sort(function (a, b) { return a[0].localeCompare(b[0]); }).map(function (entry) {
+      return JSON.stringify(entry[0]) + ':' + stableApprovedPlanJson(entry[1]);
+    }).join(',') + '}';
+  }
+  return JSON.stringify(value);
+}
+
+function approvedPlanHash(plan) {
+  return crypto.createHash('sha256').update(stableApprovedPlanJson(plan), 'utf8').digest('hex');
+}
+
+function approvedCallbackIsAllowed(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    return parsed.protocol === 'https:' &&
+      parsed.hostname === 'yarbis-autonomous-control-production.up.railway.app' &&
+      parsed.pathname === '/api/goal/execution-result';
+  } catch (_) {
+    return false;
+  }
+}
+
+async function postApprovedGoalCallback(callbackUrl, payload) {
+  if (!approvedCallbackIsAllowed(callbackUrl)) throw new Error('Callback de Yarbis no permitido');
+  const response = await fetch(callbackUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15000)
+  });
+  if (!response.ok) throw new Error('Yarbis rechazó callback HTTP ' + response.status);
+}
+
+async function runApprovedGoalLoop(sessionId, dispatchToken, planHash, plan, steps, callbackUrl) {
+  async function addLog(entry) {
+    try {
+      const session = await sbGet('goal_sessions', sessionId);
+      if (!session) return;
+      const log = Array.isArray(session.log) ? session.log : [];
+      log.push(Object.assign({ ts: new Date().toISOString() }, entry));
+      await sbPatch('goal_sessions', sessionId, { log });
+    } catch (error) {
+      console.error('[approved-goal log]', error.message);
+    }
+  }
+
+  const results = [];
+  try {
+    await addLog({ type: 'approved_plan', msg: 'Plan firmado recibido desde Yarbis', plan_hash: planHash, steps: steps });
+    for (let index = 0; index < steps.length; index++) {
+      const session = await sbGet('goal_sessions', sessionId);
+      if (!session || session.status !== 'running') return;
+      const step = steps[index];
+      await addLog({ type: 'step', step: index + 1, total: steps.length, msg: step.instruction });
+      const prefixed = plan.target === 'ANY' ? step.instruction : '[' + plan.target + '] ' + step.instruction;
+      const sent = await replitPost('/api/antigravity/send', {
+        instruction: prefixed,
+        target: plan.target,
+        confirmed: true,
+        goal_session_id: sessionId,
+        dispatch_token: dispatchToken
+      });
+      if (!sent || !sent.id) throw new Error(sent && sent.error || 'Cartero no devolvió ID para el paso ' + (index + 1));
+      const receipt = await pollAGY(sent.id, 120000, sessionId);
+      if (!receipt || receipt.status === 'error') {
+        throw new Error(receipt && receipt.result || 'El paso ' + (index + 1) + ' falló sin recibo');
+      }
+      const result = {
+        order: index + 1,
+        title: step.title,
+        evidenceExpected: step.evidence,
+        receipt: String(receipt.result || 'OK')
+      };
+      results.push(result);
+      await sbPatch('goal_sessions', sessionId, { steps_done: index + 1 });
+      await addLog({ type: 'step_ok', step: index + 1, msg: result.receipt });
+    }
+    const summary = steps.length + '/' + steps.length + ' pasos físicos aprobados completados';
+    await sbPatch('goal_sessions', sessionId, { status: 'done', result: summary });
+    await addLog({ type: 'done', msg: summary });
+    await postApprovedGoalCallback(callbackUrl, {
+      sessionId: sessionId,
+      planHash: planHash,
+      status: 'done',
+      results: results
+    });
+  } catch (error) {
+    const reason = String(error && error.message || error);
+    await sbPatch('goal_sessions', sessionId, { status: 'blocked', result: reason }).catch(function () {});
+    await addLog({ type: 'blocked', msg: reason });
+    await postApprovedGoalCallback(callbackUrl, {
+      sessionId: sessionId,
+      planHash: planHash,
+      status: 'blocked',
+      results: results.concat([{ error: reason }])
+    }).catch(function (callbackError) {
+      console.error('[approved-goal callback]', callbackError.message);
+    });
+  }
+}
+
 /* ══════════════════════════════════════════
    AUTH MIDDLEWARE
 ══════════════════════════════════════════ */
@@ -1315,6 +1421,75 @@ app.post('/api/goal/plan-shadow', requireMorningPeer, async (req, res) => {
     return res.status(502).json({ error: error.message, shadowMode: true, dispatched: false, persisted: false });
   }
 });
+
+/* Receives one exact PLAN_HASH approved in Yarbis. It does not call any planner. */
+app.post('/api/goal/execute-approved', requireMorningPeer, async (req, res) => {
+  const body = req.body || {};
+  const planHash = String(body.planHash || '').trim().toLowerCase();
+  const plan = body.plan;
+  const callbackUrl = String(body.callbackUrl || '').trim();
+  if (!/^[a-f0-9]{64}$/.test(planHash) || !plan || typeof plan !== 'object') {
+    return res.status(400).json({ error: 'PLAN_HASH o plan inválido', accepted: false });
+  }
+  if (approvedPlanHash(plan) !== planHash) {
+    return res.status(409).json({ error: 'El plan no coincide con PLAN_HASH', accepted: false });
+  }
+  if (!approvedCallbackIsAllowed(callbackUrl)) {
+    return res.status(400).json({ error: 'Callback de Yarbis no permitido', accepted: false });
+  }
+  const target = String(plan.target || '').toUpperCase();
+  if (!['PC1', 'PC2', 'ANY'].includes(target)) {
+    return res.status(400).json({ error: 'Target inválido', accepted: false });
+  }
+  const steps = (Array.isArray(plan.physicalSteps) ? plan.physicalSteps : []).filter(function (step) {
+    const tool = String(step && step.tool || '').toLowerCase();
+    return step && typeof step.instruction === 'string' && step.instruction.trim() &&
+      (tool.includes('antigravity') || tool.includes('cartero'));
+  }).slice(0, 20).map(function (step) {
+    return {
+      title: String(step.title || 'Paso físico').trim(),
+      instruction: String(step.instruction).trim(),
+      evidence: String(step.evidence || 'Recibo estructurado de Cartero').trim()
+    };
+  });
+  if (!steps.length) {
+    return res.status(400).json({ error: 'El plan aprobado no contiene pasos para Cartero', accepted: false });
+  }
+  const sessionId = 'goal_shadow_' + planHash.slice(0, 40);
+  try {
+    const existing = await sbGet('goal_sessions', sessionId);
+    if (existing) {
+      return res.json({ accepted: true, duplicate: true, sessionId: sessionId, planHash: planHash, status: existing.status });
+    }
+    const dispatchToken = crypto.randomBytes(32).toString('hex');
+    await sbInsert('goal_sessions', {
+      id: sessionId,
+      goal_text: String(plan.objective || '').trim(),
+      target: target,
+      status: 'running',
+      steps_done: 0,
+      max_steps: steps.length,
+      retries: 0,
+      log: [{ ts: new Date().toISOString(), type: 'approval', msg: 'Aprobado en Yarbis', plan_hash: planHash }],
+      result: null,
+      dispatch_token: dispatchToken,
+      created_at: new Date().toISOString()
+    });
+    const exactPlan = Object.assign({}, plan, { target: target });
+    runApprovedGoalLoop(sessionId, dispatchToken, planHash, exactPlan, steps, callbackUrl).catch(function (error) {
+      console.error('[approved-goal fatal]', error.message);
+    });
+    return res.status(202).json({ accepted: true, duplicate: false, sessionId: sessionId, planHash: planHash, status: 'running' });
+  } catch (error) {
+    const existing = await sbGet('goal_sessions', sessionId).catch(function () { return null; });
+    if (existing) {
+      return res.json({ accepted: true, duplicate: true, sessionId: sessionId, planHash: planHash, status: existing.status });
+    }
+    console.error('[/api/goal/execute-approved]', error.message);
+    return res.status(502).json({ error: error.message, accepted: false });
+  }
+});
+
 app.get('/api/morning/pending-missions', requireMorningPeer, async (_req, res) => {
   try {
     res.json(await _queryPendingIncomingMissions());
