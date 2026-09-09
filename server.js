@@ -964,9 +964,13 @@ async function planGoalShadow(goalText, target, maxSteps) {
     if (!/Control Plane/i.test(previous.evidence)) previous.evidence += ' Evidencia disponible en el Control Plane para el siguiente paso.';
     const deliveryInstruction = task.instruction
       .replace(/\s*\(o\s+[^)]+\)/gi, '')
-      .replace(/%USERPROFILE%\\Desktop\\[^\s,;.]+/gi, 'la evidencia recibida')
+      .replace(/%USERPROFILE%\\Desktop\\[^\s,;]+/gi, 'la evidencia recibida')
+      .replace(/(?:el archivo\s+)?la evidencia recibida(?:\.[A-Za-z0-9]+)?/gi, 'la evidencia recibida')
       .trim();
     task.instruction = 'Recibir del paso anterior la evidencia verificada y sus referencias mediante el Control Plane. ' + deliveryInstruction;
+    if (/captura|screenshot/i.test(task.evidence)) {
+      task.evidence = 'Confirmación de entrega de Telegram con el message_id devuelto por la API y registrada en el Control Plane.';
+    }
   }
   if (!tasks.length) throw new Error('La IA devolvió un plan vacío.');
   if (exactCount && tasks.length !== exactCount) throw new Error('La IA no respetó la cantidad de tareas solicitada.');
