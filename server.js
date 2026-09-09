@@ -919,11 +919,11 @@ async function planGoalShadow(goalText, target, maxSteps) {
   }
   return [
     {
-      title: 'Ejecutar show teatral homologado en PC1',
+      title: 'Procesar misión aprobada con el ensamblador dinámico en PC1',
       tool: 'ANTIGRAVITY/Cartero',
-      instruction: 'EJECUTAR orden show',
-      announcement: 'Voy a iniciar el show teatral homologado en PC1.',
-      evidence: 'Comprobante del show teatral con pitidos, voz local, video y evidencia devuelta por PC1.'
+      instruction: 'EJECUTAR python "C:\\Users\\Roberto1\\OneDrive\\Desktop\\GUIONES_Y_VIDEOS\\ensamblador_misiones.py"',
+      announcement: 'Voy a entregar la misión aprobada al ensamblador dinámico de PC1.',
+      evidence: 'Comprobante real devuelto por PC1 después de procesar la misión con el ensamblador dinámico.'
     },
     {
       title: 'Entregar evidencia por Telegram',
