@@ -962,14 +962,7 @@ async function planGoalShadow(goalText, target, maxSteps) {
     const handoff = ' Al finalizar, devolver a Yarbis/Railway mediante el Control Plane la evidencia verificada y sus referencias.';
     if (!/devolver a Yarbis|entregar a Yarbis/i.test(previous.instruction)) previous.instruction += handoff;
     if (!/Control Plane/i.test(previous.evidence)) previous.evidence += ' Evidencia disponible en el Control Plane para el siguiente paso.';
-    const deliveryInstruction = task.instruction
-      .replace(/\s*\(o\s+[^)]+\)/gi, '')
-      .replace(/%USERPROFILE%\\Desktop\\[^\s,;]+/gi, 'la evidencia recibida')
-      .replace(/(?:el archivo\s+)?la evidencia recibida(?:\.[A-Za-z0-9]+)?/gi, 'la evidencia recibida')
-      .replace(/la evidencia recibida(?:\s+y\s+la evidencia recibida)+/gi, 'la evidencia recibida')
-      .replace(/(Yarbis\/Railway)(?:\s+(?:en|desde)\s+PC[12])/gi, '$1')
-      .trim();
-    task.instruction = 'Recibir del paso anterior la evidencia verificada y sus referencias mediante el Control Plane. ' + deliveryInstruction;
+    task.instruction = 'Recibir del paso anterior la evidencia verificada y sus referencias mediante el Control Plane. Enviar la evidencia recibida al chat designado mediante la API de Telegram y registrar el message_id devuelto.';
     task.evidence = 'Confirmación de entrega de Telegram con el message_id devuelto por la API y registrada en el Control Plane.';
   }
   if (!tasks.length) throw new Error('La IA devolvió un plan vacío.');
