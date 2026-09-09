@@ -826,6 +826,17 @@ async function gemini(prompt) {
   return d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
 }
 
+function plannerResponseText(message) {
+  if (!message) return '';
+  if (typeof message.content === 'string') return message.content.trim();
+  if (Array.isArray(message.content)) {
+    return message.content.map(function (part) {
+      return typeof part === 'string' ? part : String(part && (part.text || part.content) || '');
+    }).join('').trim();
+  }
+  return '';
+}
+
 async function callPlannerAI(prompt) {
   let lastError = new Error('No hay proveedor de IA configurado para planificación.');
   if (GEMINI_KEY) {
@@ -865,13 +876,17 @@ async function callPlannerAI(prompt) {
               { role: 'user', content: prompt }
             ],
             temperature: 0.1,
-            max_tokens: 1800
+            reasoning_effort: 'low',
+            max_completion_tokens: 2400
           })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error?.message || 'Error Groq ' + response.status);
-        const content = data.choices?.[0]?.message?.content;
-        if (!content || !content.trim()) throw new Error('Groq respondió sin contenido');
+        const choice = data.choices && data.choices[0];
+        const content = plannerResponseText(choice && choice.message);
+        if (!content) {
+          throw new Error('Groq respondió sin contenido (finish_reason=' + String(choice && choice.finish_reason || 'desconocido') + ')');
+        }
         return content;
       } catch (error) {
         lastError = error;
