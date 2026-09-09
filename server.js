@@ -1256,7 +1256,8 @@ async function runApprovedGoalLoop(sessionId, dispatchToken, planHash, plan, ste
         dispatch_token: dispatchToken
       });
       if (!sent || !sent.id) throw new Error(sent && sent.error || 'Cartero no devolvió ID para el paso ' + (index + 1));
-      const receipt = await pollAGY(sent.id, 120000, sessionId);
+      await addLog({ type: 'dispatch', step: index + 1, bridge_id: sent.id, target: plan.target, msg: 'Paso aceptado por el Buzón; esperando recibo de Cartero' });
+      const receipt = await pollAGY(sent.id, 300000, sessionId);
       if (!receipt || receipt.status === 'error') {
         throw new Error(receipt && receipt.result || 'El paso ' + (index + 1) + ' falló sin recibo');
       }
