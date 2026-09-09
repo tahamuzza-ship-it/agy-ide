@@ -1008,7 +1008,7 @@ async function pollAGY(id, maxMs = 120000, sessionId = null) {
       if (d.status === 'done' || d.status === 'error') return d;
     } catch {}
   }
-  return { status: 'error', result: 'Tiempo de espera agotado (120s)' };
+  return { status: 'error', result: 'Tiempo de espera agotado (' + Math.round(maxMs / 1000) + 's)' };
 }
 
 const recentCommandTargets = new Map();
