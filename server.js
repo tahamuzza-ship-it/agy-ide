@@ -920,10 +920,9 @@ function buildDynamicAssemblerCommand(goalText) {
     String(goalText || '').trim(),
   ].join('\n');
   const encodedMission = Buffer.from(missionText, 'utf8').toString('base64');
-  return 'EJECUTAR powershell -NoProfile -Command "' +
-    `$mission=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(' {encodedMission}')); `.replace(' {encodedMission}', encodedMission) +
-    `Set-Content -LiteralPath 'C:\\Users\\Roberto1\\OneDrive\\Desktop\\PENDIENTES\\MISION_01.txt' -Value $mission -Encoding UTF8; ` +
-    `python 'C:\\Users\\Roberto1\\OneDrive\\Desktop\\GUIONES_Y_VIDEOS\\ensamblador_misiones.py'"`;
+  return 'EJECUTAR powershell -NoProfile -Command "$mission=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(\'' +
+    encodedMission +
+    '\')); Set-Content -LiteralPath \'C:\\Users\\Roberto1\\OneDrive\\Desktop\\PENDIENTES\\MISION_01.txt\' -Value $mission -Encoding UTF8; python \'C:\\Users\\Roberto1\\OneDrive\\Desktop\\GUIONES_Y_VIDEOS\\ensamblador_misiones.py\'"';
 }
 
 async function planGoalShadow(goalText, target, maxSteps) {
