@@ -824,6 +824,29 @@ async function gemini(prompt) {
   return d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
 }
 
+async function planGoalShadow(goalText, target, maxSteps) {
+  const prompt = [
+    'Eres el planificador de Modo Sombra de AGY.',
+    'Objetivo: "' + goalText + '"',
+    'Destino: ' + target,
+    'Descompón el objetivo en pasos físicos concretos, ordenados y verificables para Windows.',
+    'No ejecutes nada. No afirmes que una acción ya ocurrió.',
+    'Devuelve SOLO un JSON array de strings con máximo ' + maxSteps + ' elementos.',
+    '["paso 1", "paso 2"]'
+  ].join('\n');
+  const raw = await gemini(prompt);
+  const match = raw.match(/\[[\s\S]*\]/);
+  if (!match) throw new Error('Gemini no devolvió un plan JSON.');
+  let parsed;
+  try { parsed = JSON.parse(match[0]); } catch { throw new Error('Gemini devolvió un plan JSON inválido.'); }
+  if (!Array.isArray(parsed)) throw new Error('Gemini no devolvió una lista de pasos.');
+  const steps = parsed
+    .filter(step => typeof step === 'string' && step.trim())
+    .map(step => step.replace(/\s+/g, ' ').trim())
+    .slice(0, maxSteps);
+  if (!steps.length) throw new Error('Gemini devolvió un plan vacío.');
+  return steps;
+}
 /* ── helpers — Telegram ── */
 async function tgSend(msg) {
   if (!TG_TOKEN || !TG_CHAT_ID) return;
@@ -1153,6 +1176,30 @@ function requireMorningPeer(req, res, next) {
   return res.status(401).json({ error: 'No autorizado' });
 }
 
+app.post('/api/goal/plan-shadow', requireMorningPeer, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const goal = String(body.objetivo || body.goal || body.text || '').replace(/\s+/g, ' ').trim();
+  if (!goal) return res.status(400).json({ error: 'El objetivo es obligatorio.', shadowMode: true, dispatched: false, persisted: false });
+  const requestedTarget = String(body.target || 'PC1').trim().toUpperCase();
+  const target = requestedTarget === 'PC2' ? 'PC2' : 'PC1';
+  const requestedMax = Number(body.max_steps || body.maxSteps || 20);
+  const maxSteps = Number.isFinite(requestedMax) ? Math.min(50, Math.max(1, Math.trunc(requestedMax))) : 20;
+  try {
+    const steps = await planGoalShadow(goal, target, maxSteps);
+    const tasks = steps.map((instruction, index) => ({
+      order: index + 1,
+      title: 'Tarea ' + (index + 1),
+      tool: 'ANTIGRAVITY/Cartero',
+      instruction,
+      announcement: 'Voy a iniciar la tarea ' + (index + 1) + ' de ' + steps.length + '.'
+    }));
+    return res.json({ contractVersion: 'agy-plan-shadow-v1', shadowMode: true, dispatched: false, persisted: false, goal, target, tasks });
+  } catch (error) {
+    console.error('[/api/goal/plan-shadow]', error.message);
+    return res.status(502).json({ error: error.message, shadowMode: true, dispatched: false, persisted: false });
+  }
+});
 app.get('/api/morning/pending-missions', requireMorningPeer, async (_req, res) => {
   try {
     res.json(await _queryPendingIncomingMissions());
