@@ -834,7 +834,7 @@ async function planGoalShadow(goalText, target, maxSteps) {
     'Devuelve SOLO un JSON array de strings con máximo ' + maxSteps + ' elementos.',
     '["paso 1", "paso 2"]'
   ].join('\n');
-  const raw = await gemini(prompt);
+  const raw = await callAI(prompt);
   const match = raw.match(/\[[\s\S]*\]/);
   if (!match) throw new Error('Gemini no devolvió un plan JSON.');
   let parsed;
