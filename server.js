@@ -966,6 +966,7 @@ async function planGoalShadow(goalText, target, maxSteps) {
       .replace(/\s*\(o\s+[^)]+\)/gi, '')
       .replace(/%USERPROFILE%\\Desktop\\[^\s,;]+/gi, 'la evidencia recibida')
       .replace(/(?:el archivo\s+)?la evidencia recibida(?:\.[A-Za-z0-9]+)?/gi, 'la evidencia recibida')
+      .replace(/Yarbis\/Railway\s+en\s+PC[12]/gi, 'Yarbis/Railway')
       .trim();
     task.instruction = 'Recibir del paso anterior la evidencia verificada y sus referencias mediante el Control Plane. ' + deliveryInstruction;
     if (/captura|screenshot/i.test(task.evidence)) {
