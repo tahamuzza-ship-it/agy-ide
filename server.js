@@ -587,7 +587,9 @@ async function callAI(userMsg) {
     const d = await r.json();
     console.log('[callAI] Gemini status:', r.status);
     if (!r.ok) throw new Error((d.error && d.error.message) || 'Gemini error ' + r.status);
-    return (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts && d.candidates[0].content.parts[0] && d.candidates[0].content.parts[0].text) || '(sin respuesta)';
+    const content = d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts && d.candidates[0].content.parts[0] && d.candidates[0].content.parts[0].text;
+    if (!content || !content.trim()) throw new Error('Gemini respondió sin contenido');
+    return content;
     } catch (geminiErr) {
       console.error('[callAI] Gemini falló:', geminiErr.message);
       if (!GROQ_KEY) throw geminiErr;
