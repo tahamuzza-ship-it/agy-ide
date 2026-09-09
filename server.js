@@ -852,12 +852,31 @@ async function planGoalShadow(goalText, target, maxSteps) {
     'Devuelve SOLO un JSON array de objetos con estas claves exactas:',
     '[{"title":"Nombre breve","tool":"ANTIGRAVITY/Cartero","instruction":"Acción exacta","announcement":"Voy a realizar la acción concreta","evidence":"Prueba verificable de éxito"}]'
   ].join('\n');
-  const raw = await callAI(prompt);
-  const match = raw.match(/\[[\s\S]*\]/);
-  if (!match) throw new Error('La IA no devolvió un plan JSON.');
-  let parsed;
-  try { parsed = JSON.parse(match[0]); } catch { throw new Error('La IA devolvió un plan JSON inválido.'); }
-  if (!Array.isArray(parsed)) throw new Error('La IA no devolvió una lista de tareas.');
+  let parsed = null;
+  let lastFormatError = 'La IA no devolvió un plan JSON.';
+  for (let attempt = 0; attempt < 2 && !Array.isArray(parsed); attempt++) {
+    const retryNote = attempt === 0 ? '' : '\nReintento: devuelve JSON estricto y duplica las barras de rutas Windows.';
+    const raw = await callAI(prompt + retryNote);
+    const firstBracket = raw.indexOf('[');
+    const lastBracket = raw.lastIndexOf(']');
+    if (firstBracket < 0 || lastBracket <= firstBracket) continue;
+    const candidate = raw.slice(firstBracket, lastBracket + 1);
+    const repaired = candidate
+      .replace(/\\(?!["\\/bfnrtu])/g, '\\\\')
+      .replace(/,\s*([}\]])/g, '$1');
+    for (const value of [candidate, repaired]) {
+      try {
+        const decoded = JSON.parse(value);
+        if (Array.isArray(decoded)) { parsed = decoded; break; }
+      } catch (error) {
+        lastFormatError = error.message;
+      }
+    }
+  }
+  if (!Array.isArray(parsed)) {
+    console.warn('[planGoalShadow] formato inválido después de reintento:', lastFormatError);
+    throw new Error('La IA devolvió un plan JSON inválido.');
+  }
   const tasks = parsed.slice(0, maxSteps).map((task, index) => {
     if (!task || typeof task !== 'object' || Array.isArray(task)) throw new Error('La tarea ' + (index + 1) + ' no es un objeto válido.');
     const clean = value => typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
