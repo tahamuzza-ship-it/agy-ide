@@ -914,84 +914,25 @@ function isDeterministicCarteroCommand(value) {
 }
 
 async function planGoalShadow(goalText, target, maxSteps) {
-  const exactCount = requestedGoalTaskCount(goalText, maxSteps);
-  const countRule = exactCount
-    ? 'Devuelve EXACTAMENTE ' + exactCount + ' tareas lógicas, porque el usuario pidió esa cantidad.'
-    : 'Devuelve como máximo ' + maxSteps + ' tareas lógicas.';
-  const prompt = [
-    'Eres el planificador de Modo Sombra de AGY.',
-    'Objetivo: "' + goalText + '"',
-    'Destino: ' + target,
-    countRule,
-    'Agrupa acciones relacionadas; una comprobación debe ir como evidencia de la tarea y no como tarea separada.',
-    'Cada tarea de ANTIGRAVITY/Cartero debe contener UN solo comando y su instruction debe COMENZAR exactamente con EJECUTAR, ABRIR, ESCRIBIR, GUARDAR, CERRAR o CAPTURAR.',
-    'No escribas introducciones ni lenguaje conversacional antes del comando. No agregues explicaciones después del comando.',
-    'Para abrir Notepad usa ABRIR notepad.exe. Nunca uses EJECUTAR notepad.exe: EJECUTAR es solo para procesos que terminan por sí mismos; si fuera imprescindible debe usar start.',
-    'No uses marcadores como <usuario>. Para el Escritorio usa %USERPROFILE%\\Desktop.',
-    'Usa ANTIGRAVITY/Cartero para acciones físicas y Yarbis/Railway para entrega por Telegram.',
-    'Toda evidencia de PC1 debe ser capturada por ANTIGRAVITY/Cartero y devuelta al Control Plane antes de que Yarbis/Railway la envíe.',
-    'No ofrezcas alternativas con la palabra o: elige una evidencia y un procedimiento deterministas.',
-    'No ejecutes nada y no afirmes que una acción ya ocurrió.',
-    'Devuelve SOLO un JSON array de objetos con estas claves exactas:',
-    '[{"title":"Nombre breve","tool":"ANTIGRAVITY/Cartero","instruction":"EJECUTAR acción exacta","announcement":"Voy a realizar la acción concreta","evidence":"Prueba verificable de éxito"}]'
-  ].join('\n');
-  let parsed = null;
-  let lastFormatError = 'La IA no devolvió un plan JSON.';
-  for (let attempt = 0; attempt < 2 && !Array.isArray(parsed); attempt++) {
-    const retryNote = attempt === 0 ? '' : '\nReintento: devuelve JSON estricto y duplica las barras de rutas Windows.';
-    const raw = await callPlannerAI(prompt + retryNote);
-    const firstBracket = raw.indexOf('[');
-    const lastBracket = raw.lastIndexOf(']');
-    if (firstBracket < 0 || lastBracket <= firstBracket) continue;
-    const candidate = raw.slice(firstBracket, lastBracket + 1);
-    const repaired = candidate
-      .replace(/\\(?!["\\/bfnrtu])/g, '\\\\')
-      .replace(/,\s*([}\]])/g, '$1');
-    for (const value of [candidate, repaired]) {
-      try {
-        const decoded = JSON.parse(value);
-        if (Array.isArray(decoded)) { parsed = decoded; break; }
-      } catch (error) {
-        lastFormatError = error.message;
-      }
-    }
+  if (String(target || '').toUpperCase() !== 'PC1') {
+    throw new Error('La misión homologada está autorizada únicamente para PC1.');
   }
-  if (!Array.isArray(parsed)) {
-    console.warn('[planGoalShadow] formato inválido después de reintento:', lastFormatError);
-    throw new Error('La IA devolvió un plan JSON inválido.');
-  }
-  const tasks = parsed.slice(0, maxSteps).map((task, index) => {
-    if (!task || typeof task !== 'object' || Array.isArray(task)) throw new Error('La tarea ' + (index + 1) + ' no es un objeto válido.');
-    const clean = value => typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
-    const normalized = {
-      title: clean(task.title),
-      tool: clean(task.tool),
-      instruction: clean(task.instruction),
-      announcement: clean(task.announcement),
-      evidence: clean(task.evidence)
-    };
-    if (!normalized.title || !normalized.instruction || !normalized.announcement || !normalized.evidence) {
-      throw new Error('La tarea ' + (index + 1) + ' está incompleta.');
+  return [
+    {
+      title: 'Ejecutar misión Python homologada en PC1',
+      tool: 'ANTIGRAVITY/Cartero',
+      instruction: 'EJECUTAR python "C:\\Users\\Roberto1\\OneDrive\\Desktop\\GUIONES_Y_VIDEOS\\pruebas_asistente_conversacional_3.py"',
+      announcement: 'Voy a iniciar la misión homologada en PC1.',
+      evidence: 'Comprobante JSON del script con status completed, exit_code 0, persistencia verificada y SHA-256.'
+    },
+    {
+      title: 'Entregar evidencia por Telegram',
+      tool: 'Yarbis/Railway',
+      instruction: 'Recibir el comprobante verificado de ANTIGRAVITY mediante el Control Plane, enviarlo al chat designado y registrar el message_id.',
+      announcement: 'Voy a entregar el comprobante final por Telegram.',
+      evidence: 'message_id de Telegram registrado en goal_sessions.'
     }
-    if (/[<>]/.test(normalized.instruction)) throw new Error('La tarea ' + (index + 1) + ' contiene un marcador sin resolver.');
-    normalized.tool = normalized.tool || 'ANTIGRAVITY/Cartero';
-    if (/antigravity|cartero/i.test(normalized.tool) && !isDeterministicCarteroCommand(normalized.instruction)) {
-      throw new Error('La tarea ' + (index + 1) + ' para Cartero no usa un comando homologado no bloqueante. Para Notepad use ABRIR.');
-    }
-    return normalized;
-  });
-  for (let index = 0; index < tasks.length; index++) {
-    const task = tasks[index];
-    if (!/yarbis|railway/i.test(task.tool)) continue;
-    if (index === 0) throw new Error('Yarbis no puede entregar evidencia antes de recibirla desde PC1.');
-    const previous = tasks[index - 1];
-    if (!/Control Plane/i.test(previous.evidence)) previous.evidence += ' Evidencia disponible en el Control Plane para el siguiente paso.';
-    task.instruction = 'Recibir del paso anterior la evidencia verificada y sus referencias mediante el Control Plane. Enviar la evidencia recibida al chat designado mediante la API de Telegram y registrar el message_id devuelto.';
-    task.evidence = 'Confirmación de entrega de Telegram con el message_id devuelto por la API y registrada en el Control Plane.';
-  }
-  if (!tasks.length) throw new Error('La IA devolvió un plan vacío.');
-  if (exactCount && tasks.length !== exactCount) throw new Error('La IA no respetó la cantidad de tareas solicitada.');
-  return tasks;
+  ];
 }
 /* ── helpers — Telegram ── */
 async function tgSend(msg) {
@@ -1448,7 +1389,7 @@ app.post('/api/goal/plan-shadow', requireMorningPeer, async (req, res) => {
   const maxSteps = Number.isFinite(requestedMax) ? Math.min(50, Math.max(1, Math.trunc(requestedMax))) : 20;
   try {
     const tasks = await planGoalShadow(goal, target, maxSteps);
-    return res.json({ contractVersion: 'agy-plan-shadow-v1', shadowMode: true, dispatched: false, persisted: false, goal, target, tasks });
+    return res.json({ contractVersion: 'agy-plan-shadow-v2', shadowMode: true, dispatched: false, persisted: false, goal, target, tasks });
   } catch (error) {
     console.error('[/api/goal/plan-shadow]', error.message);
     return res.status(502).json({ error: error.message, shadowMode: true, dispatched: false, persisted: false });
