@@ -949,6 +949,9 @@ async function planGoalShadow(goalText, target, maxSteps) {
     }
     if (/[<>]/.test(normalized.instruction)) throw new Error('La tarea ' + (index + 1) + ' contiene un marcador sin resolver.');
     normalized.tool = normalized.tool || 'ANTIGRAVITY/Cartero';
+    if (/antigravity|cartero/i.test(normalized.tool) && /captura|screenshot/i.test(normalized.evidence) && !/captur|screenshot/i.test(normalized.instruction)) {
+      normalized.instruction += ' Tomar la captura indicada en la evidencia y adjuntarla al resultado del paso.';
+    }
     return normalized;
   });
   for (let index = 0; index < tasks.length; index++) {
@@ -959,8 +962,11 @@ async function planGoalShadow(goalText, target, maxSteps) {
     const handoff = ' Al finalizar, devolver a Yarbis/Railway mediante el Control Plane la evidencia verificada y sus referencias.';
     if (!/devolver a Yarbis|entregar a Yarbis/i.test(previous.instruction)) previous.instruction += handoff;
     if (!/Control Plane/i.test(previous.evidence)) previous.evidence += ' Evidencia disponible en el Control Plane para el siguiente paso.';
-    task.instruction = 'Recibir del paso anterior la evidencia verificada y sus referencias mediante el Control Plane. ' +
-      task.instruction.replace(/\s*\(o\s+[^)]+\)/gi, '').trim();
+    const deliveryInstruction = task.instruction
+      .replace(/\s*\(o\s+[^)]+\)/gi, '')
+      .replace(/%USERPROFILE%\\Desktop\\[^\s,;.]+/gi, 'la evidencia recibida')
+      .trim();
+    task.instruction = 'Recibir del paso anterior la evidencia verificada y sus referencias mediante el Control Plane. ' + deliveryInstruction;
   }
   if (!tasks.length) throw new Error('La IA devolvió un plan vacío.');
   if (exactCount && tasks.length !== exactCount) throw new Error('La IA no respetó la cantidad de tareas solicitada.');
