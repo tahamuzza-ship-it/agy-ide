@@ -919,11 +919,11 @@ async function planGoalShadow(goalText, target, maxSteps) {
   }
   return [
     {
-      title: 'Ejecutar misión Python homologada en PC1',
+      title: 'Ejecutar show teatral homologado en PC1',
       tool: 'ANTIGRAVITY/Cartero',
-      instruction: 'EJECUTAR python "C:\\Users\\Roberto1\\OneDrive\\Desktop\\GUIONES_Y_VIDEOS\\pruebas_asistente_conversacional_3.py"',
-      announcement: 'Voy a iniciar la misión homologada en PC1.',
-      evidence: 'Comprobante JSON del script con status completed, exit_code 0, persistencia verificada y SHA-256.'
+      instruction: 'EJECUTAR orden show',
+      announcement: 'Voy a iniciar el show teatral homologado en PC1.',
+      evidence: 'Comprobante del show teatral con pitidos, voz local, video y evidencia devuelta por PC1.'
     },
     {
       title: 'Entregar evidencia por Telegram',
