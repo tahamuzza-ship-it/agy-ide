@@ -966,12 +966,10 @@ async function planGoalShadow(goalText, target, maxSteps) {
       .replace(/\s*\(o\s+[^)]+\)/gi, '')
       .replace(/%USERPROFILE%\\Desktop\\[^\s,;]+/gi, 'la evidencia recibida')
       .replace(/(?:el archivo\s+)?la evidencia recibida(?:\.[A-Za-z0-9]+)?/gi, 'la evidencia recibida')
-      .replace(/Yarbis\/Railway\s+en\s+PC[12]/gi, 'Yarbis/Railway')
+      .replace(/(Yarbis\/Railway)(?:\s+(?:en|desde)\s+PC[12])/gi, '$1')
       .trim();
     task.instruction = 'Recibir del paso anterior la evidencia verificada y sus referencias mediante el Control Plane. ' + deliveryInstruction;
-    if (/captura|screenshot/i.test(task.evidence)) {
-      task.evidence = 'Confirmación de entrega de Telegram con el message_id devuelto por la API y registrada en el Control Plane.';
-    }
+    task.evidence = 'Confirmación de entrega de Telegram con el message_id devuelto por la API y registrada en el Control Plane.';
   }
   if (!tasks.length) throw new Error('La IA devolvió un plan vacío.');
   if (exactCount && tasks.length !== exactCount) throw new Error('La IA no respetó la cantidad de tareas solicitada.');
