@@ -907,7 +907,10 @@ function requestedGoalTaskCount(goalText, maxSteps) {
 const DETERMINISTIC_CARTERO_COMMAND = /^(?:EJECUTAR|ABRIR|ESCRIBIR|GUARDAR|CERRAR|CAPTURAR)\b/;
 
 function isDeterministicCarteroCommand(value) {
-  return DETERMINISTIC_CARTERO_COMMAND.test(String(value || '').trim());
+  const command = String(value || '').trim();
+  if (!DETERMINISTIC_CARTERO_COMMAND.test(command)) return false;
+  if (/^EJECUTAR\b/i.test(command) && /\bnotepad(?:\.exe)?\b/i.test(command) && !/^EJECUTAR\s+(?:cmd\s+\/c\s+)?start\b/i.test(command)) return false;
+  return true;
 }
 
 async function planGoalShadow(goalText, target, maxSteps) {
@@ -923,6 +926,7 @@ async function planGoalShadow(goalText, target, maxSteps) {
     'Agrupa acciones relacionadas; una comprobación debe ir como evidencia de la tarea y no como tarea separada.',
     'Cada tarea de ANTIGRAVITY/Cartero debe contener UN solo comando y su instruction debe COMENZAR exactamente con EJECUTAR, ABRIR, ESCRIBIR, GUARDAR, CERRAR o CAPTURAR.',
     'No escribas introducciones ni lenguaje conversacional antes del comando. No agregues explicaciones después del comando.',
+    'Para abrir Notepad usa ABRIR notepad.exe. Nunca uses EJECUTAR notepad.exe: EJECUTAR es solo para procesos que terminan por sí mismos; si fuera imprescindible debe usar start.',
     'No uses marcadores como <usuario>. Para el Escritorio usa %USERPROFILE%\\Desktop.',
     'Usa ANTIGRAVITY/Cartero para acciones físicas y Yarbis/Railway para entrega por Telegram.',
     'Toda evidencia de PC1 debe ser capturada por ANTIGRAVITY/Cartero y devuelta al Control Plane antes de que Yarbis/Railway la envíe.',
@@ -972,7 +976,7 @@ async function planGoalShadow(goalText, target, maxSteps) {
     if (/[<>]/.test(normalized.instruction)) throw new Error('La tarea ' + (index + 1) + ' contiene un marcador sin resolver.');
     normalized.tool = normalized.tool || 'ANTIGRAVITY/Cartero';
     if (/antigravity|cartero/i.test(normalized.tool) && !isDeterministicCarteroCommand(normalized.instruction)) {
-      throw new Error('La tarea ' + (index + 1) + ' para Cartero no comienza con un comando homologado.');
+      throw new Error('La tarea ' + (index + 1) + ' para Cartero no usa un comando homologado no bloqueante. Para Notepad use ABRIR.');
     }
     return normalized;
   });
@@ -1476,7 +1480,7 @@ app.post('/api/goal/execute-approved', requireMorningPeer, async (req, res) => {
       !isDeterministicCarteroCommand(step.instruction);
   });
   if (rejectedPhysicalStep) {
-    return res.status(400).json({ error: 'El plan aprobado contiene texto libre no homologado para Cartero', accepted: false });
+    return res.status(400).json({ error: 'El plan aprobado contiene un comando no homologado o bloqueante para Cartero', accepted: false });
   }
   const steps = (Array.isArray(plan.physicalSteps) ? plan.physicalSteps : []).filter(function (step) {
     const tool = String(step && step.tool || '').toLowerCase();
