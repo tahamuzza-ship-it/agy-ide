@@ -913,15 +913,28 @@ function isDeterministicCarteroCommand(value) {
   return true;
 }
 
+function buildDynamicAssemblerCommand(goalText) {
+  const missionText = [
+    'DESTINO: AGY_DIRECTO',
+    'TITULO: Informe_Tareas',
+    String(goalText || '').trim(),
+  ].join('\n');
+  const encodedMission = Buffer.from(missionText, 'utf8').toString('base64');
+  return 'EJECUTAR powershell -NoProfile -Command "' +
+    `$mission=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(' {encodedMission}')); `.replace(' {encodedMission}', encodedMission) +
+    `Set-Content -LiteralPath 'C:\\Users\\Roberto1\\OneDrive\\Desktop\\PENDIENTES\\MISION_01.txt' -Value $mission -Encoding UTF8; ` +
+    `python 'C:\\Users\\Roberto1\\OneDrive\\Desktop\\GUIONES_Y_VIDEOS\\ensamblador_misiones.py'"`;
+}
+
 async function planGoalShadow(goalText, target, maxSteps) {
   if (String(target || '').toUpperCase() !== 'PC1') {
     throw new Error('La misión homologada está autorizada únicamente para PC1.');
   }
   return [
     {
-      title: 'Procesar misión aprobada con el ensamblador dinámico en PC1',
+      title: 'Depositar y procesar la misión aprobada con el ensamblador dinámico en PC1',
       tool: 'ANTIGRAVITY/Cartero',
-      instruction: 'EJECUTAR python "C:\\Users\\Roberto1\\OneDrive\\Desktop\\GUIONES_Y_VIDEOS\\ensamblador_misiones.py"',
+      instruction: buildDynamicAssemblerCommand(goalText),
       announcement: 'Voy a entregar la misión aprobada al ensamblador dinámico de PC1.',
       evidence: 'Comprobante real devuelto por PC1 después de procesar la misión con el ensamblador dinámico.'
     },
