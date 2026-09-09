@@ -889,6 +889,12 @@ function requestedGoalTaskCount(goalText, maxSteps) {
   return Number.isInteger(requested) ? Math.min(maxSteps, Math.max(1, requested)) : null;
 }
 
+const DETERMINISTIC_CARTERO_COMMAND = /^(?:EJECUTAR|ABRIR|ESCRIBIR|GUARDAR|CERRAR|CAPTURAR)\b/;
+
+function isDeterministicCarteroCommand(value) {
+  return DETERMINISTIC_CARTERO_COMMAND.test(String(value || '').trim());
+}
+
 async function planGoalShadow(goalText, target, maxSteps) {
   const exactCount = requestedGoalTaskCount(goalText, maxSteps);
   const countRule = exactCount
@@ -900,14 +906,15 @@ async function planGoalShadow(goalText, target, maxSteps) {
     'Destino: ' + target,
     countRule,
     'Agrupa acciones relacionadas; una comprobación debe ir como evidencia de la tarea y no como tarea separada.',
-    'Cada instrucción debe ser física, concreta y ejecutable en Windows.',
+    'Cada tarea de ANTIGRAVITY/Cartero debe contener UN solo comando y su instruction debe COMENZAR exactamente con EJECUTAR, ABRIR, ESCRIBIR, GUARDAR, CERRAR o CAPTURAR.',
+    'No escribas introducciones ni lenguaje conversacional antes del comando. No agregues explicaciones después del comando.',
     'No uses marcadores como <usuario>. Para el Escritorio usa %USERPROFILE%\\Desktop.',
     'Usa ANTIGRAVITY/Cartero para acciones físicas y Yarbis/Railway para entrega por Telegram.',
     'Toda evidencia de PC1 debe ser capturada por ANTIGRAVITY/Cartero y devuelta al Control Plane antes de que Yarbis/Railway la envíe.',
     'No ofrezcas alternativas con la palabra o: elige una evidencia y un procedimiento deterministas.',
     'No ejecutes nada y no afirmes que una acción ya ocurrió.',
     'Devuelve SOLO un JSON array de objetos con estas claves exactas:',
-    '[{"title":"Nombre breve","tool":"ANTIGRAVITY/Cartero","instruction":"Acción exacta","announcement":"Voy a realizar la acción concreta","evidence":"Prueba verificable de éxito"}]'
+    '[{"title":"Nombre breve","tool":"ANTIGRAVITY/Cartero","instruction":"EJECUTAR acción exacta","announcement":"Voy a realizar la acción concreta","evidence":"Prueba verificable de éxito"}]'
   ].join('\n');
   let parsed = null;
   let lastFormatError = 'La IA no devolvió un plan JSON.';
@@ -949,8 +956,8 @@ async function planGoalShadow(goalText, target, maxSteps) {
     }
     if (/[<>]/.test(normalized.instruction)) throw new Error('La tarea ' + (index + 1) + ' contiene un marcador sin resolver.');
     normalized.tool = normalized.tool || 'ANTIGRAVITY/Cartero';
-    if (/antigravity|cartero/i.test(normalized.tool) && /captura|screenshot/i.test(normalized.evidence) && !/captur|screenshot/i.test(normalized.instruction)) {
-      normalized.instruction += ' Tomar la captura indicada en la evidencia y adjuntarla al resultado del paso.';
+    if (/antigravity|cartero/i.test(normalized.tool) && !isDeterministicCarteroCommand(normalized.instruction)) {
+      throw new Error('La tarea ' + (index + 1) + ' para Cartero no comienza con un comando homologado.');
     }
     return normalized;
   });
@@ -959,8 +966,6 @@ async function planGoalShadow(goalText, target, maxSteps) {
     if (!/yarbis|railway/i.test(task.tool)) continue;
     if (index === 0) throw new Error('Yarbis no puede entregar evidencia antes de recibirla desde PC1.');
     const previous = tasks[index - 1];
-    const handoff = ' Al finalizar, devolver a Yarbis/Railway mediante el Control Plane la evidencia verificada y sus referencias.';
-    if (!/devolver a Yarbis|entregar a Yarbis/i.test(previous.instruction)) previous.instruction += handoff;
     if (!/Control Plane/i.test(previous.evidence)) previous.evidence += ' Evidencia disponible en el Control Plane para el siguiente paso.';
     task.instruction = 'Recibir del paso anterior la evidencia verificada y sus referencias mediante el Control Plane. Enviar la evidencia recibida al chat designado mediante la API de Telegram y registrar el message_id devuelto.';
     task.evidence = 'Confirmación de entrega de Telegram con el message_id devuelto por la API y registrada en el Control Plane.';
@@ -1449,6 +1454,14 @@ app.post('/api/goal/execute-approved', requireMorningPeer, async (req, res) => {
   const target = String(plan.target || '').toUpperCase();
   if (!['PC1', 'PC2', 'ANY'].includes(target)) {
     return res.status(400).json({ error: 'Target inválido', accepted: false });
+  }
+  const rejectedPhysicalStep = (Array.isArray(plan.physicalSteps) ? plan.physicalSteps : []).find(function (step) {
+    const tool = String(step && step.tool || '').toLowerCase();
+    return step && (tool.includes('antigravity') || tool.includes('cartero')) &&
+      !isDeterministicCarteroCommand(step.instruction);
+  });
+  if (rejectedPhysicalStep) {
+    return res.status(400).json({ error: 'El plan aprobado contiene texto libre no homologado para Cartero', accepted: false });
   }
   const steps = (Array.isArray(plan.physicalSteps) ? plan.physicalSteps : []).filter(function (step) {
     const tool = String(step && step.tool || '').toLowerCase();
