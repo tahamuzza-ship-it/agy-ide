@@ -826,6 +826,61 @@ async function gemini(prompt) {
   return d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
 }
 
+async function callPlannerAI(prompt) {
+  let lastError = new Error('No hay proveedor de IA configurado para planificación.');
+  if (GEMINI_KEY) {
+    try {
+      const model = CFG.modelos.gemini_chat || 'gemini-2.0-flash';
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(45000),
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: 'Planifica únicamente. No ejecutes, persistas ni despaches acciones.' }] },
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1, maxOutputTokens: 1800, responseMimeType: 'application/json' }
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error?.message || 'Error Gemini ' + response.status);
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!content || !content.trim()) throw new Error('Gemini respondió sin contenido');
+      return content;
+    } catch (error) {
+      lastError = error;
+      console.warn('[planGoalShadow] Gemini:', error.message);
+    }
+  }
+  if (GROQ_KEY) {
+    for (const model of [GROQ_MODEL, GROQ_FALLBACK_MODEL]) {
+      try {
+        const response = await fetch(GROQ_URL, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(45000),
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: 'Planifica únicamente. Devuelve JSON estricto. No ejecutes acciones.' },
+              { role: 'user', content: prompt }
+            ],
+            temperature: 0.1,
+            max_tokens: 1800
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error?.message || 'Error Groq ' + response.status);
+        const content = data.choices?.[0]?.message?.content;
+        if (!content || !content.trim()) throw new Error('Groq respondió sin contenido');
+        return content;
+      } catch (error) {
+        lastError = error;
+        console.warn('[planGoalShadow] Groq ' + model + ':', error.message);
+      }
+    }
+  }
+  throw lastError;
+}
 function requestedGoalTaskCount(goalText, maxSteps) {
   const words = { una: 1, un: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10 };
   const digit = goalText.match(/\b(?:con|en)\s+(\d{1,2})\s+tareas?\b/i);
@@ -856,7 +911,7 @@ async function planGoalShadow(goalText, target, maxSteps) {
   let lastFormatError = 'La IA no devolvió un plan JSON.';
   for (let attempt = 0; attempt < 2 && !Array.isArray(parsed); attempt++) {
     const retryNote = attempt === 0 ? '' : '\nReintento: devuelve JSON estricto y duplica las barras de rutas Windows.';
-    const raw = await callAI(prompt + retryNote);
+    const raw = await callPlannerAI(prompt + retryNote);
     const firstBracket = raw.indexOf('[');
     const lastBracket = raw.lastIndexOf(']');
     if (firstBracket < 0 || lastBracket <= firstBracket) continue;
