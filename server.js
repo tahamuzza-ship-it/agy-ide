@@ -824,28 +824,58 @@ async function gemini(prompt) {
   return d.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
 }
 
+function requestedGoalTaskCount(goalText, maxSteps) {
+  const words = { una: 1, un: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9, diez: 10 };
+  const digit = goalText.match(/\b(?:con|en)\s+(\d{1,2})\s+tareas?\b/i);
+  const word = goalText.match(/\b(?:con|en)\s+(una?|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+tareas?\b/i);
+  const requested = digit ? Number(digit[1]) : word ? words[word[1].toLowerCase()] : null;
+  return Number.isInteger(requested) ? Math.min(maxSteps, Math.max(1, requested)) : null;
+}
+
 async function planGoalShadow(goalText, target, maxSteps) {
+  const exactCount = requestedGoalTaskCount(goalText, maxSteps);
+  const countRule = exactCount
+    ? 'Devuelve EXACTAMENTE ' + exactCount + ' tareas lógicas, porque el usuario pidió esa cantidad.'
+    : 'Devuelve como máximo ' + maxSteps + ' tareas lógicas.';
   const prompt = [
     'Eres el planificador de Modo Sombra de AGY.',
     'Objetivo: "' + goalText + '"',
     'Destino: ' + target,
-    'Descompón el objetivo en pasos físicos concretos, ordenados y verificables para Windows.',
-    'No ejecutes nada. No afirmes que una acción ya ocurrió.',
-    'Devuelve SOLO un JSON array de strings con máximo ' + maxSteps + ' elementos.',
-    '["paso 1", "paso 2"]'
+    countRule,
+    'Agrupa acciones relacionadas; una comprobación debe ir como evidencia de la tarea y no como tarea separada.',
+    'Cada instrucción debe ser física, concreta y ejecutable en Windows.',
+    'No uses marcadores como <usuario>. Para el Escritorio usa %USERPROFILE%\\Desktop.',
+    'Usa ANTIGRAVITY/Cartero para acciones físicas y Yarbis/Railway para entrega por Telegram.',
+    'No ejecutes nada y no afirmes que una acción ya ocurrió.',
+    'Devuelve SOLO un JSON array de objetos con estas claves exactas:',
+    '[{"title":"Nombre breve","tool":"ANTIGRAVITY/Cartero","instruction":"Acción exacta","announcement":"Voy a realizar la acción concreta","evidence":"Prueba verificable de éxito"}]'
   ].join('\n');
   const raw = await callAI(prompt);
   const match = raw.match(/\[[\s\S]*\]/);
-  if (!match) throw new Error('Gemini no devolvió un plan JSON.');
+  if (!match) throw new Error('La IA no devolvió un plan JSON.');
   let parsed;
-  try { parsed = JSON.parse(match[0]); } catch { throw new Error('Gemini devolvió un plan JSON inválido.'); }
-  if (!Array.isArray(parsed)) throw new Error('Gemini no devolvió una lista de pasos.');
-  const steps = parsed
-    .filter(step => typeof step === 'string' && step.trim())
-    .map(step => step.replace(/\s+/g, ' ').trim())
-    .slice(0, maxSteps);
-  if (!steps.length) throw new Error('Gemini devolvió un plan vacío.');
-  return steps;
+  try { parsed = JSON.parse(match[0]); } catch { throw new Error('La IA devolvió un plan JSON inválido.'); }
+  if (!Array.isArray(parsed)) throw new Error('La IA no devolvió una lista de tareas.');
+  const tasks = parsed.slice(0, maxSteps).map((task, index) => {
+    if (!task || typeof task !== 'object' || Array.isArray(task)) throw new Error('La tarea ' + (index + 1) + ' no es un objeto válido.');
+    const clean = value => typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
+    const normalized = {
+      title: clean(task.title),
+      tool: clean(task.tool),
+      instruction: clean(task.instruction),
+      announcement: clean(task.announcement),
+      evidence: clean(task.evidence)
+    };
+    if (!normalized.title || !normalized.instruction || !normalized.announcement || !normalized.evidence) {
+      throw new Error('La tarea ' + (index + 1) + ' está incompleta.');
+    }
+    if (/[<>]/.test(normalized.instruction)) throw new Error('La tarea ' + (index + 1) + ' contiene un marcador sin resolver.');
+    normalized.tool = normalized.tool || 'ANTIGRAVITY/Cartero';
+    return normalized;
+  });
+  if (!tasks.length) throw new Error('La IA devolvió un plan vacío.');
+  if (exactCount && tasks.length !== exactCount) throw new Error('La IA no respetó la cantidad de tareas solicitada.');
+  return tasks;
 }
 /* ── helpers — Telegram ── */
 async function tgSend(msg) {
@@ -1186,14 +1216,7 @@ app.post('/api/goal/plan-shadow', requireMorningPeer, async (req, res) => {
   const requestedMax = Number(body.max_steps || body.maxSteps || 20);
   const maxSteps = Number.isFinite(requestedMax) ? Math.min(50, Math.max(1, Math.trunc(requestedMax))) : 20;
   try {
-    const steps = await planGoalShadow(goal, target, maxSteps);
-    const tasks = steps.map((instruction, index) => ({
-      order: index + 1,
-      title: 'Tarea ' + (index + 1),
-      tool: 'ANTIGRAVITY/Cartero',
-      instruction,
-      announcement: 'Voy a iniciar la tarea ' + (index + 1) + ' de ' + steps.length + '.'
-    }));
+    const tasks = await planGoalShadow(goal, target, maxSteps);
     return res.json({ contractVersion: 'agy-plan-shadow-v1', shadowMode: true, dispatched: false, persisted: false, goal, target, tasks });
   } catch (error) {
     console.error('[/api/goal/plan-shadow]', error.message);
