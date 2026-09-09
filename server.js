@@ -903,6 +903,8 @@ async function planGoalShadow(goalText, target, maxSteps) {
     'Cada instrucción debe ser física, concreta y ejecutable en Windows.',
     'No uses marcadores como <usuario>. Para el Escritorio usa %USERPROFILE%\\Desktop.',
     'Usa ANTIGRAVITY/Cartero para acciones físicas y Yarbis/Railway para entrega por Telegram.',
+    'Toda evidencia de PC1 debe ser capturada por ANTIGRAVITY/Cartero y devuelta al Control Plane antes de que Yarbis/Railway la envíe.',
+    'No ofrezcas alternativas con la palabra o: elige una evidencia y un procedimiento deterministas.',
     'No ejecutes nada y no afirmes que una acción ya ocurrió.',
     'Devuelve SOLO un JSON array de objetos con estas claves exactas:',
     '[{"title":"Nombre breve","tool":"ANTIGRAVITY/Cartero","instruction":"Acción exacta","announcement":"Voy a realizar la acción concreta","evidence":"Prueba verificable de éxito"}]'
@@ -949,6 +951,17 @@ async function planGoalShadow(goalText, target, maxSteps) {
     normalized.tool = normalized.tool || 'ANTIGRAVITY/Cartero';
     return normalized;
   });
+  for (let index = 0; index < tasks.length; index++) {
+    const task = tasks[index];
+    if (!/yarbis|railway/i.test(task.tool)) continue;
+    if (index === 0) throw new Error('Yarbis no puede entregar evidencia antes de recibirla desde PC1.');
+    const previous = tasks[index - 1];
+    const handoff = ' Al finalizar, devolver a Yarbis/Railway mediante el Control Plane la evidencia verificada y sus referencias.';
+    if (!/devolver a Yarbis|entregar a Yarbis/i.test(previous.instruction)) previous.instruction += handoff;
+    if (!/Control Plane/i.test(previous.evidence)) previous.evidence += ' Evidencia disponible en el Control Plane para el siguiente paso.';
+    task.instruction = 'Recibir del paso anterior la evidencia verificada y sus referencias mediante el Control Plane. ' +
+      task.instruction.replace(/\s*\(o\s+[^)]+\)/gi, '').trim();
+  }
   if (!tasks.length) throw new Error('La IA devolvió un plan vacío.');
   if (exactCount && tasks.length !== exactCount) throw new Error('La IA no respetó la cantidad de tareas solicitada.');
   return tasks;
