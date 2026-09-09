@@ -1219,7 +1219,11 @@ async function postApprovedGoalCallback(callbackUrl, payload) {
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(15000)
   });
-  if (!response.ok) throw new Error('Yarbis rechazó callback HTTP ' + response.status);
+  const responseBody = await response.json().catch(function () { return null; });
+  if (!response.ok || !responseBody || responseBody.accepted !== true || !Number.isSafeInteger(responseBody.messageId)) {
+    throw new Error(responseBody && responseBody.error || 'Yarbis rechazó callback HTTP ' + response.status);
+  }
+  return responseBody;
 }
 
 async function runApprovedGoalLoop(sessionId, dispatchToken, planHash, plan, steps, callbackUrl) {
@@ -1269,24 +1273,28 @@ async function runApprovedGoalLoop(sessionId, dispatchToken, planHash, plan, ste
     const summary = steps.length + '/' + steps.length + ' pasos físicos aprobados completados';
     await sbPatch('goal_sessions', sessionId, { status: 'done', result: summary });
     await addLog({ type: 'done', msg: summary });
-    await postApprovedGoalCallback(callbackUrl, {
+    const delivery = await postApprovedGoalCallback(callbackUrl, {
       sessionId: sessionId,
       planHash: planHash,
       status: 'done',
       results: results
     });
+    await addLog({ type: 'telegram_delivery', msg: 'Evidencia entregada por Yarbis', message_id: delivery.messageId });
   } catch (error) {
     const reason = String(error && error.message || error);
     await sbPatch('goal_sessions', sessionId, { status: 'blocked', result: reason }).catch(function () {});
     await addLog({ type: 'blocked', msg: reason });
-    await postApprovedGoalCallback(callbackUrl, {
-      sessionId: sessionId,
-      planHash: planHash,
-      status: 'blocked',
-      results: results.concat([{ error: reason }])
-    }).catch(function (callbackError) {
+    try {
+      const delivery = await postApprovedGoalCallback(callbackUrl, {
+        sessionId: sessionId,
+        planHash: planHash,
+        status: 'blocked',
+        results: results.concat([{ error: reason }])
+      });
+      await addLog({ type: 'telegram_delivery', msg: 'Bloqueo entregado por Yarbis', message_id: delivery.messageId });
+    } catch (callbackError) {
       console.error('[approved-goal callback]', callbackError.message);
-    });
+    }
   }
 }
 
