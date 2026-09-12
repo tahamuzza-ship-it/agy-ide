@@ -2,6 +2,7 @@ const express = require('express');
 const path    = require('path');
 const fs      = require('fs');
 const crypto  = require('crypto');
+const { registerYarbisReadRoutes } = require('./yarbis-read-client.cjs');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -1293,6 +1294,8 @@ function requirePwd(req, res, next) {
   if (_pwdOk(pwd)) return next();
   return res.status(401).json({ error: 'No autorizado' });
 }
+
+registerYarbisReadRoutes(app, requirePwd);
 
 /* ══════════════════════════════════════════
    RUTAS EXISTENTES
