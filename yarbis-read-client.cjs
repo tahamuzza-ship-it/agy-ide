@@ -198,7 +198,7 @@ function statusResult(payload, token) {
   };
   const sources = [payload, object(payload) ? payload.data : null, object(payload) ? payload.status : null]
     .filter(object);
-  const memoryIndexKey = /^(?:memory[\s_-]*index|connected$|database$|databaseName$|database_name$|table$|schema$|source$|backend$)/i;
+  const memoryIndexKey = /^(?:memory[\s_-]*index|connected$|sourceTable$|count$|database$|databaseName$|database_name$|table$|schema$|source$|backend$)/i;
   for (const source of sources) {
     for (const [key, value] of Object.entries(source)) {
       if (memoryIndexKey.test(key)) result[key] = sanitizeStructured(value, token);
