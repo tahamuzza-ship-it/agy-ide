@@ -23,7 +23,7 @@ function fail(code, message, status) {
 function config(env) {
   const rawBase = typeof env.YARBIS_READ_BASE_URL === 'string'
     ? env.YARBIS_READ_BASE_URL.trim()
-    : '';
+    : 'https://yarbis-autonomous-control-production.up.railway.app';
   if (!rawBase) throw fail('YARBIS_READ_CONFIG', 'YARBIS_READ_BASE_URL is required.');
   let base;
   try {
@@ -45,7 +45,7 @@ function config(env) {
       'YARBIS_READ_BASE_URL must be an HTTPS origin without credentials, path, query, or fragment.',
     );
   }
-  if (env.YARBIS_READ_CLIENT_ID !== CLIENT_ID) {
+  if ((env.YARBIS_READ_CLIENT_ID ?? CLIENT_ID) !== CLIENT_ID) {
     throw fail('YARBIS_READ_CONFIG', 'YARBIS_READ_CLIENT_ID must be exactly AGY-IDE.');
   }
   const token = typeof env.YARBIS_READ_TOKEN === 'string' ? env.YARBIS_READ_TOKEN.trim() : '';
