@@ -1496,6 +1496,30 @@ app.get('/api/morning/pending-missions', requireMorningPeer, async (_req, res) =
   }
 });
 
+app.get('/api/morning/pc1-verification', (_req, res) => {
+  const status = _morningCurrentStatus();
+  const continuityCode = status.continuity_state && status.continuity_state.short_code || null;
+  const pc1Current = Boolean(status.pc1 && status.pc1.current === true);
+  const pc1Matches = Boolean(status.pc1 && status.pc1.matches === true);
+  const verified = status.ok === true && status.state === 'synchronized' && pc1Current && pc1Matches;
+  const message = typeof status.message === 'string'
+    ? status.message
+    : verified
+      ? 'PC1 VERIFICADO'
+      : 'PC1 NO VERIFICADO';
+  res.set('Cache-Control', 'no-store');
+  res.status(status.ok ? 200 : 503).json({
+    ok: status.ok === true,
+    state: status.state || 'unverifiable',
+    continuity_code: continuityCode,
+    pc1_code: verified ? continuityCode : null,
+    pc1_current: pc1Current,
+    pc1_matches: pc1Matches,
+    missing_evidence: Array.isArray(status.missing_evidence) ? status.missing_evidence : [],
+    message: message
+  });
+});
+
 app.get('/api/morning/status', requirePwd, (_req, res) => {
   const status = _morningCurrentStatus();
   res.status(status.ok ? 200 : 503).json(status);
