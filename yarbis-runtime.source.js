@@ -190,8 +190,17 @@ async function queryMorningStatus() {
     return { ok: false, state: 'error', message: 'La consulta de sincronización no está configurada.' };
   }
   try {
+    const headers = { 'x-agyide-pwd': encodeURIComponent(password) };
+    const refresh = await fetch(`http://127.0.0.1:${port}/api/morning/sync`, {
+      method: 'POST',
+      headers,
+      signal: AbortSignal.timeout(30000)
+    });
+    if (!refresh.ok) {
+      return { ok: false, state: 'error', message: 'Railway no pudo actualizar la evidencia de PC1.' };
+    }
     const response = await fetch(`http://127.0.0.1:${port}/api/morning/status`, {
-      headers: { 'x-agyide-pwd': encodeURIComponent(password) },
+      headers,
       signal: AbortSignal.timeout(15000)
     });
     const payload = await response.json();
