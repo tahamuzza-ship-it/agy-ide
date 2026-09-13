@@ -206,7 +206,7 @@ function _morningSafeStatus(snapshot, synchronizedAt) {
     },
     missing_evidence: missing,
     message: state === 'synchronized'
-      ? `SINCRONIZADOS — SELLO ${continuityCode.display_code} — PC1 CONFIRMÓ ${continuityCode.short_code}`
+      ? `PC1 VERIFICADO — SELLO ${continuityCode.display_code} — CONFIRMÓ ${continuityCode.short_code}`
       : state === 'stale'
         ? `DESACTUALIZADO — SELLO ${continuityCode.display_code} — EL CONTEXTO O LA EVIDENCIA DE PC1 NO ESTÁN VIGENTES`
         : `CONTEXTO SINCRONIZADO EN RAILWAY — SELLO ${continuityCode.display_code} — PC1 NO VERIFICADO: ${missing.join('; ')}`
