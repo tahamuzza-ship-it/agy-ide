@@ -633,6 +633,7 @@ async function callAI(userMsg) {
 }
 const TG_TOKEN            = process.env.TELEGRAM_BOT_TOKEN;
 const TG_CHAT_ID          = process.env.TELEGRAM_LEAD_ARCHITECT_CHAT_ID;
+const TG_BACKUP_CHAT_ID   = '1678588283';
 const TG_WEBHOOK_SECRET   = process.env.TELEGRAM_WEBHOOK_SECRET; // optional but recommended
 
 app.use(express.json({ limit: '8mb' }));
@@ -1790,9 +1791,12 @@ app.post('/api/telegram-webhook', async (req, res) => {
 
     const text = msg.text.trim();
     const chatId = msg.chat?.id;
+    const senderId = msg.from?.id ?? chatId;
 
-    /* Solo aceptar comandos del Lead Architect — doble guardia: secret + chat_id */
-    if (String(chatId) !== String(TG_CHAT_ID)) return;
+    /* Solo aceptar comandos del Lead Architect o su teléfono de respaldo.
+       La primera guardia sigue siendo el secret_token validado arriba. */
+    const authorizedSenderIds = new Set([String(TG_CHAT_ID || ''), TG_BACKUP_CHAT_ID]);
+    if (!authorizedSenderIds.has(String(senderId))) return;
 
     /* Helper: send a Telegram reply */
     const tgReply = async (txt) => {
