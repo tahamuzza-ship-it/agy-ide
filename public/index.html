@@ -1612,44 +1612,29 @@
       if (e.target === this) closeGoalPanel();
     });
     async function _launchPuente(target) {
-      const isPC2 = target === 'PC2';
-      const btnId = isPC2 ? 'btn-puente-pc2' : 'btn-puente-pc1';
-      const label = isPC2 ? '🔴 PUENTE PC2' : '🔵 PUENTE PC1';
+      if (target === 'PC2') {
+        return window.PC2Terminal.launch({
+          getPwd: () => _getPwd(),
+          output: document.getElementById('output'),
+          button: document.getElementById('btn-puente-pc2')
+        });
+      }
+      const btnId = 'btn-puente-pc1';
+      const label = '🔵 PUENTE PC1';
       const btn = document.getElementById(btnId);
       if (btn) { btn.textContent = '⏳ Activando...'; btn.disabled = true; }
-      const instruccion = isPC2
-        ? 'pkill -f ttyd 2>/dev/null; sleep 1; nohup ~/ttyd -p 7681 --permit-write bash >/tmp/ttyd.log 2>&1 & disown && sleep 2 && echo TTYD_OK'
-        : 'EJECUTAR powershell -ExecutionPolicy Bypass -Command "if(!(Test-Path ($env:USERPROFILE+\'\\gotty.exe\'))){Invoke-WebRequest -Uri \'https://github.com/sorenisanerd/gotty/releases/download/v1.5.0/gotty_v1.5.0_windows_amd64.zip\' -OutFile ($env:USERPROFILE+\'\\gotty.zip\');Expand-Archive -Path ($env:USERPROFILE+\'\\gotty.zip\') -DestinationPath $env:USERPROFILE -Force};Get-Process gotty -ErrorAction SilentlyContinue | Stop-Process -Force;Start-Process -FilePath ($env:USERPROFILE+\'\\gotty.exe\') -ArgumentList \'--port 7681 --permit-write powershell\' -WindowStyle Hidden;Write-Host GOTTY_PC1_OK"';
+      const instruccion = 'EJECUTAR powershell -ExecutionPolicy Bypass -Command "if(!(Test-Path ($env:USERPROFILE+\'\\gotty.exe\'))){Invoke-WebRequest -Uri \'https://github.com/sorenisanerd/gotty/releases/download/v1.5.0/gotty_v1.5.0_windows_amd64.zip\' -OutFile ($env:USERPROFILE+\'\\gotty.zip\');Expand-Archive -Path ($env:USERPROFILE+\'\\gotty.zip\') -DestinationPath $env:USERPROFILE -Force};Get-Process gotty -ErrorAction SilentlyContinue | Stop-Process -Force;Start-Process -FilePath ($env:USERPROFILE+\'\\gotty.exe\') -ArgumentList \'--port 7681 --permit-write powershell\' -WindowStyle Hidden;Write-Host GOTTY_PC1_OK"';
       const authToken = localStorage.getItem('agyide_token') || sessionStorage.getItem('agyide_token') || '';
       const out = document.getElementById('output');
       try {
         const res = await fetch('/api/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-agyide-token': authToken },
-          body: JSON.stringify({ target: isPC2 ? 'PC2' : 'PC1', instruction: instruccion })
+          body: JSON.stringify({ target: 'PC1', instruction: instruccion })
         });
         const data = await res.json();
         if (out) {
-          if (isPC2) {
-            out.innerHTML += '<div style="color:#ff4060;font-weight:700;margin:6px 0;">🔴 PUENTE PC2 ACTIVADO — reiniciando ttyd...</div>';
-            out.innerHTML += '<div style="color:#8c9cb2;font-size:0.82rem;">Espera 10 segundos mientras ttyd arranca en PC2...</div>';
-            out.scrollTop = out.scrollHeight;
-            let secsPC2 = 10;
-            const countPC2 = document.createElement('div');
-            countPC2.style.cssText = 'color:#ff4060;font-size:0.8rem;margin:4px 0;';
-            countPC2.textContent = '⏳ ' + secsPC2 + 's...';
-            out.appendChild(countPC2);
-            const ivPC2 = setInterval(() => {
-              secsPC2--;
-              if (secsPC2 > 0) { countPC2.textContent = '⏳ ' + secsPC2 + 's...'; }
-              else {
-                clearInterval(ivPC2);
-                var _pc2url = 'http://' + (window._PC2_IP || '100.121.53.89') + ':7681';
-                countPC2.innerHTML = '<a href="' + _pc2url + '" target="_blank" style="display:inline-block;padding:8px 16px;background:#cc0020;color:#fff;border-radius:6px;font-weight:700;text-decoration:none;font-size:0.85rem;">🔴 ABRIR TERMINAL PC2 →</a>';
-              }
-            }, 1000);
-          } else {
-            out.innerHTML += '<div style="color:#4080ff;font-weight:700;margin:6px 0;">🔵 PUENTE PC1 ACTIVADO — AGY instalando terminal...</div>';
+          out.innerHTML += '<div style="color:#4080ff;font-weight:700;margin:6px 0;">🔵 PUENTE PC1 ACTIVADO — AGY instalando terminal...</div>';
             out.innerHTML += '<div style="color:#8c9cb2;font-size:0.82rem;">AGY descarga e inicia GoTTY en PC1. Abriendo en ~90 segundos...</div>';
             out.scrollTop = out.scrollHeight;
             let secs = 90;
@@ -1665,7 +1650,6 @@
                 countEl.innerHTML = '<a href="http://100.113.7.92:7681" target="_blank" style="display:inline-block;padding:8px 16px;background:#0055cc;color:#fff;border-radius:6px;font-weight:700;text-decoration:none;font-size:0.85rem;">🔵 ABRIR TERMINAL PC1 →</a>';
               }
             }, 1000);
-          }
         }
         if (data.error) console.error('[PUENTE]', data.error);
       } catch(e) {
@@ -3682,6 +3666,7 @@
   });
 })();
 </script>
+    <script src="./pc2-terminal.js"></script>
     <script id="yarbis-bootstrap" src="/yarbis.js?v=19"></script>
 </body>
     </html>
