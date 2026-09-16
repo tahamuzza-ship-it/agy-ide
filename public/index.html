@@ -96,6 +96,7 @@
         <button class="hbtn hbtn-clr" id="btn-clear-out" type="button" title="Vaciar completamente el panel de salida" onclick="document.getElementById('output').replaceChildren();document.getElementById('out-status').textContent='listo';document.getElementById('out-status').style.color='';">🗑 LIMPIAR OUTPUT</button>
         <button class="hbtn hbtn-clr"  id="btn-clear-chat">🗑 Chat</button>
         <button class="hbtn" id="btn-puente-pc2" title="Abrir la consola no interactiva de PC2" style="background:linear-gradient(135deg,#5a0010,#cc0020);color:#fff;border:none;font-weight:700;">🖥 CONSOLA PC2</button>
+        <button class="hbtn" id="btn-console-pc3" title="Abrir la consola no interactiva de PC3 Miami" aria-label="Abrir consola PC3 Miami" style="background:linear-gradient(135deg,#12305a,#1479b8);color:#fff;border:none;font-weight:700;">🖥 CONSOLA PC3 MIAMI</button>
         <button class="hbtn" id="btn-puente-pc1" title="PUENTE PC1 — SSH Windows. Termius: ssh Roberto1@192.168.1.2" style="background:linear-gradient(135deg,#003a7f,#0055cc);color:#fff;border:none;font-weight:700;">🔵 PUENTE PC1</button>
         <button class="hbtn" id="btn-comandos" onclick="toggleComandos()" style="background:linear-gradient(135deg,#1a4731,#22c55e);color:#fff;border:none;font-weight:700;">📋 COMANDOS</button>
         <button class="hbtn" id="btn-files" style="background:linear-gradient(135deg,#0a1f3a,#1a4700);color:#86efac;border:1px solid rgba(134,239,172,0.4);font-weight:700;">📁 ARCHIVOS</button>
@@ -1659,6 +1660,11 @@
       }
     }
     document.getElementById('btn-puente-pc2').addEventListener('click', () => _launchPuente('PC2'));
+    document.getElementById('btn-console-pc3').addEventListener('click', () => {
+      const output = document.getElementById('output');
+      const button = document.getElementById('btn-console-pc3');
+      return window.PC2Terminal.launch({ target: 'PC3', getPwd: () => _getPwd(), output, button });
+    });
     document.getElementById('btn-puente-pc1').addEventListener('click', () => _launchPuente('PC1'));
     document.getElementById('btn-clear-out').addEventListener('click', function() {
       document.getElementById('output').innerHTML = '';

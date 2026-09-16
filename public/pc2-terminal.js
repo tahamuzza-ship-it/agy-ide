@@ -5,8 +5,39 @@
   'use strict';
   var MAX_MS = 90 * 1000;
   var INTERVAL_MS = 2000;
-  var STORAGE_KEY = 'agyide.pc2.console.pending-id';
+  var TARGETS = {
+    PC2: {
+      key: 'PC2',
+      storageKey: 'agyide.pc2.console.pending-id',
+      title: 'Consola PC2 — Railway',
+      titleId: 'pc2-console-title',
+      commandName: 'pc2-command',
+      endpoint: '/api/pc-command',
+      statusText: 'Listo: no se ejecuta nada al abrir.',
+      description: 'Consola de comandos no interactiva. Cada comando se ejecuta por separado; no hay PTY, stdin ni directorio de trabajo persistente.',
+      help: 'Para cambiar de carpeta y ejecutar algo en la misma orden usa: cd ruta && comando.',
+      shortcuts: [['pwd', 'pwd'], ['ls -la', 'ls -la'], ['hostname && uptime -p', 'hostname && uptime -p']]
+    },
+    PC3: {
+      key: 'PC3',
+      storageKey: 'agyide.pc3.console.pending-id',
+      title: 'Consola PC3 Miami — Windows',
+      titleId: 'pc3-console-title',
+      commandName: 'pc3-command',
+      endpoint: '/api/pc3-console/commands',
+      statusText: 'Comprobando estado de PC3…',
+      description: 'Consola de comandos no interactiva de Windows. Cada comando se ejecuta por separado; no hay PTY, stdin ni directorio de trabajo persistente.',
+      help: 'Para cambiar de carpeta y ejecutar algo en la misma orden usa: cd ruta && comando.',
+      shortcuts: [['hostname', 'hostname'], ['dir', 'dir'], ['ver', 'ver']]
+    }
+  };
+  var STORAGE_KEY = TARGETS.PC2.storageKey;
+  var PC3_STORAGE_KEY = TARGETS.PC3.storageKey;
   var instances = typeof WeakMap === 'function' ? new WeakMap() : null;
+  function targetFor(options) {
+    var requested = options && options.target != null ? String(options.target).toUpperCase() : 'PC2';
+    return TARGETS[requested] || TARGETS.PC2;
+  }
   function documentFor(options, output) {
     return options.document || (output && output.ownerDocument) || (root && root.document);
   }
@@ -14,17 +45,17 @@
     if (options && options.sessionStorage) return options.sessionStorage;
     try { return root && root.sessionStorage; } catch (_) { return null; }
   }
-  function readPending(storage) {
+  function readPending(storage, key) {
     try {
-      var id = storage && storage.getItem(STORAGE_KEY);
+      var id = storage && storage.getItem(key || STORAGE_KEY);
       return typeof id === 'string' && id.trim() ? id.trim() : '';
     } catch (_) { return ''; }
   }
-  function savePending(storage, id) {
-    try { if (storage) storage.setItem(STORAGE_KEY, id); } catch (_) {}
+  function savePending(storage, key, id) {
+    try { if (storage) storage.setItem(key || STORAGE_KEY, id); } catch (_) {}
   }
-  function removePending(storage) {
-    try { if (storage) storage.removeItem(STORAGE_KEY); } catch (_) {}
+  function removePending(storage, key) {
+    try { if (storage) storage.removeItem(key || STORAGE_KEY); } catch (_) {}
   }
   function now(options) {
     return options && typeof options.now === 'function' ? options.now() : Date.now();
@@ -87,11 +118,16 @@
     if (typeof record.log.scrollHeight === 'number') record.log.scrollTop = record.log.scrollHeight;
   }
   function setControls(record) {
-    var pending = !!readPending(record.storage) || (!!record.lastId && !record.terminal);
-    record.input.disabled = pending || record.queryBusy;
-    record.send.disabled = pending || record.queryBusy;
+    var pending = !!readPending(record.storage, record.config.storageKey) || (!!record.lastId && !record.terminal);
+    var offline = record.config.key === 'PC3' && (!record.statusKnown || record.offline);
+    record.input.disabled = pending || record.queryBusy || offline;
+    record.send.disabled = pending || record.queryBusy || offline;
     record.check.disabled = !record.lastId || record.queryBusy;
     setDisplay(record.check, record.lastId ? 'inline-block' : 'none');
+    if (record.refresh) {
+      record.refresh.disabled = !!record.statusBusy;
+      setDisplay(record.refresh, 'inline-block');
+    }
     if (record.queryBusy) record.send.textContent = 'Enviando…';
     else record.send.textContent = 'Enviar';
   }
@@ -100,7 +136,7 @@
   }
   function commandInput(record, command) {
     record.input.value = command;
-    setBanner(record, 'Comando preparado. Pulsa Enviar para ejecutarlo en PC2.', 'info');
+    setBanner(record, 'Comando preparado. Pulsa Enviar para ejecutarlo en ' + record.config.key + '.', 'info');
     focusInput(record);
   }
   function closeConsole(record) {
@@ -124,49 +160,68 @@
   function terminalResult(record, id, data) {
     record.lastId = id;
     record.terminal = true;
-    removePending(record.storage);
+    removePending(record.storage, record.config.storageKey);
     setControls(record);
     if (String(data.status).toLowerCase() === 'done') {
       setBanner(record, '✅ Orden terminada.', 'success');
-      addLog(record, data && data.result != null && String(data.result) ? String(data.result) : '(PC2 no devolvió salida de texto)');
+      addLog(record, data && data.result != null && String(data.result) ? String(data.result) : '(' + record.config.key + ' no devolvió salida de texto)');
     } else {
       setBanner(record, '❌ La orden terminó con error.', 'error');
-      addLog(record, 'Error de ejecución en PC2: ' + messageFor(data, 'la orden terminó con error'));
+      addLog(record, 'Error de ejecución en ' + record.config.key + ': ' + messageFor(data, 'la orden terminó con error'));
     }
   }
   async function postCommand(record, command) {
+    var config = record.config;
     var response;
     try {
-      response = await fetchFor(record.options)('/api/pc-command', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': typeof record.options.getPwd === 'function' ? record.options.getPwd() : '' },
-        body: JSON.stringify({ text: '/pc2 ' + command })
-      });
+      if (config.key === 'PC3') {
+        response = await fetchFor(record.options)(config.endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': typeof record.options.getPwd === 'function' ? record.options.getPwd() : '' },
+          body: JSON.stringify({ command: command })
+        });
+      } else {
+        response = await fetchFor(record.options)('/api/pc-command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': typeof record.options.getPwd === 'function' ? record.options.getPwd() : '' },
+          body: JSON.stringify({ text: '/pc2 ' + command })
+        });
+      }
     } catch (error) {
-      throw new Error('No fue posible enviar la orden a PC2: ' + (error && error.message || error));
+      throw new Error('No fue posible enviar la orden a ' + config.key + ': ' + (error && error.message || error));
     }
     var data = await jsonFor(response);
-    if (!responseOK(response)) throw errorFor(response, data, 'No fue posible enviar la orden a PC2');
-    if (data && data.ok === false) throw new Error('Error de ejecución en PC2: ' + messageFor(data, 'la orden fue rechazada'));
-    if (!data || typeof data.id !== 'string' || !data.id.trim()) throw new Error('PC2 no devolvió un ID de tarea; la orden no se puede consultar.');
+    if (response && response.status === 503 && config.key === 'PC3') {
+      record.statusKnown = true;
+      record.offline = true;
+      setControls(record);
+      throw new Error('PC3 disconnected: ' + messageFor(data, 'el equipo está offline'));
+    }
+    if (!responseOK(response)) throw errorFor(response, data, 'No fue posible enviar la orden a ' + config.key);
+    if (data && data.ok === false) throw new Error('Error de ejecución en ' + config.key + ': ' + messageFor(data, 'la orden fue rechazada'));
+    if (!data || typeof data.id !== 'string' || !data.id.trim()) throw new Error(config.key + ' no devolvió un ID de tarea; la orden no se puede consultar.');
     return data.id.trim();
   }
   async function pollStatus(record, id) {
+    var config = record.config;
     var fetchFunction = fetchFor(record.options);
     var maxMs = Number.isFinite(record.options.maxMs) ? Math.min(MAX_MS, Math.max(0, record.options.maxMs)) : MAX_MS;
     var intervalMs = Number.isFinite(record.options.intervalMs) ? Math.max(0, record.options.intervalMs) : INTERVAL_MS, started = now(record.options), wait = delayFor(record.options);
     while (now(record.options) - started < maxMs) {
       var response;
       try {
-        response = await fetchFunction('/api/status/' + encodeURIComponent(id) + '?target=PC2', {
+        var url = config.key === 'PC3'
+          ? config.endpoint + '/' + encodeURIComponent(id)
+          : '/api/status/' + encodeURIComponent(id) + '?target=PC2';
+        response = await fetchFunction(url, {
           method: 'GET',
           headers: { 'x-agyide-pwd': typeof record.options.getPwd === 'function' ? record.options.getPwd() : '' }
         });
       } catch (error) {
-        throw new Error('No fue posible consultar el estado de PC2: ' + (error && error.message || error));
+        throw new Error('No fue posible consultar el estado de ' + config.key + ': ' + (error && error.message || error));
       }
       var data = await jsonFor(response);
-      if (!responseOK(response) || (data && data.ok === false)) throw errorFor(response, data, 'No fue posible consultar el estado de PC2');
+      if (!responseOK(response) || (data && data.ok === false)) throw errorFor(response, data, 'No fue posible consultar el estado de ' + config.key);
       if (now(record.options) - started >= maxMs) {
         throw new Error('Tiempo de espera agotado (' + Math.round(maxMs / 1000) + ' segundos). Puedes consultar estado de nuevo.');
       }
@@ -195,11 +250,11 @@
       if (!id) {
         id = await postCommand(record, command);
         record.lastId = id;
-        savePending(record.storage, id);
-        addLog(record, '📤 Orden enviada a PC2 (' + id + ')');
+        savePending(record.storage, record.config.storageKey, id);
+        addLog(record, '📤 Orden enviada a ' + record.config.key + ' (' + id + ')');
       } else {
         record.lastId = id;
-        savePending(record.storage, id);
+        savePending(record.storage, record.config.storageKey, id);
         setBanner(record, 'Consultando estado de ' + id + '…', 'pending');
       }
       var data = await pollStatus(record, id);
@@ -210,7 +265,7 @@
         record.lastId = id;
         if (error && error.terminal && error.data) terminalResult(record, id, error.data);
         else {
-          savePending(record.storage, id);
+          savePending(record.storage, record.config.storageKey, id);
           record.terminal = false;
           setBanner(record, '⚠️ ' + message + ' Pulsa «Consultar estado» para reintentar; no se enviará otra orden.', 'error');
           addLog(record, message);
@@ -226,41 +281,84 @@
       setControls(record);
     }
   }
+  async function refreshStatus(record) {
+    if (record.config.key !== 'PC3' || record.statusBusy) return !record.offline;
+    record.statusBusy = true;
+    setBanner(record, 'Comprobando estado de PC3…', 'info');
+    setControls(record);
+    try {
+      var response = await fetchFor(record.options)('/api/pc3-console/status', {
+        method: 'GET',
+        headers: { 'x-agyide-pwd': typeof record.options.getPwd === 'function' ? record.options.getPwd() : '' }
+      });
+      var data = await jsonFor(response);
+      if (!responseOK(response)) throw errorFor(response, data, 'No fue posible consultar el estado de PC3');
+      record.statusKnown = true;
+      record.offline = !(data && data.ok !== false && data.online === true && data.connected === true);
+      if (record.offline) {
+        setBanner(record, 'PC3 disconnected' + (messageFor(data, '') ? ': ' + messageFor(data, '') : '.'), 'error');
+      } else {
+        setBanner(record, 'PC3 online — conectado.', 'success');
+      }
+    } catch (error) {
+      record.statusKnown = true;
+      record.offline = true;
+      setBanner(record, 'PC3 disconnected: ' + (error && error.message || error), 'error');
+    } finally {
+      record.statusBusy = false;
+      setControls(record);
+    }
+    return !record.offline;
+  }
   function createConsole(options) {
+    var config = targetFor(options);
     var output = options.output;
     var doc = documentFor(options, output);
     if (!doc || typeof doc.createElement !== 'function') return null;
     installStyles(doc);
-    var record = { options: options, output: output, document: doc, storage: storageFor(options), lines: [], lastId: '', terminal: false, queryBusy: false };
-    var panel = makeNode(doc, 'section', null, 'pc2-console');
+    var record = {
+      options: options,
+      config: config,
+      output: output,
+      document: doc,
+      storage: storageFor(options),
+      lines: [],
+      lastId: '',
+      terminal: false,
+      queryBusy: false,
+      statusKnown: config.key !== 'PC3',
+      offline: false,
+      statusBusy: false
+    };
+    var panel = makeNode(doc, 'section', null, 'pc2-console ' + config.key.toLowerCase() + '-console');
     panel.setAttribute('role', 'dialog');
     panel.setAttribute('aria-modal', 'false');
-    panel.setAttribute('aria-labelledby', 'pc2-console-title');
-    var heading = makeNode(doc, 'h2', 'Consola PC2 — Railway');
-    heading.id = 'pc2-console-title';
+    panel.setAttribute('aria-labelledby', config.titleId);
+    var heading = makeNode(doc, 'h2', config.title);
+    heading.id = config.titleId;
     panel.appendChild(heading);
     var close = makeNode(doc, 'button', 'Cerrar', 'pc2-console-close');
     close.type = 'button';
-    close.setAttribute('aria-label', 'Cerrar consola PC2');
+    close.setAttribute('aria-label', 'Cerrar consola ' + config.key);
     heading.appendChild(close);
-    panel.appendChild(makeNode(doc, 'p', 'Consola de comandos no interactiva. Cada comando se ejecuta por separado; no hay PTY, stdin ni directorio de trabajo persistente.', 'pc2-console-notice'));
-    panel.appendChild(makeNode(doc, 'p', 'Para cambiar de carpeta y ejecutar algo en la misma orden usa: cd ruta && comando. Cerrar esta vista no cancela una orden en PC2.', 'pc2-console-help'));
+    panel.appendChild(makeNode(doc, 'p', config.description, 'pc2-console-notice'));
+    panel.appendChild(makeNode(doc, 'p', config.help + ' Cerrar esta vista no cancela una orden en ' + config.key + '.', 'pc2-console-help'));
     var form = makeNode(doc, 'form');
     var input = makeNode(doc, 'input');
     input.type = 'text';
-    input.name = 'pc2-command';
+    input.name = config.commandName;
     input.autocomplete = 'off';
     input.spellcheck = false;
     input.placeholder = 'Escribe un comando de una sola línea…';
-    input.setAttribute('aria-label', 'Comando para PC2');
+    input.setAttribute('aria-label', 'Comando para ' + config.key);
     var send = makeNode(doc, 'button', 'Enviar');
     send.type = 'submit';
     form.appendChild(input);
     form.appendChild(send);
     panel.appendChild(form);
     var shortcuts = makeNode(doc, 'div', null, 'pc2-console-shortcuts');
-    shortcuts.setAttribute('aria-label', 'Atajos explícitos');
-    [['pwd', 'pwd'], ['ls -la', 'ls -la'], ['hostname && uptime -p', 'hostname && uptime -p']].forEach(function (item) {
+    shortcuts.setAttribute('aria-label', 'Atajos explícitos de ' + config.key);
+    config.shortcuts.forEach(function (item) {
       var shortcut = makeNode(doc, 'button', item[0]);
       shortcut.type = 'button';
       shortcut.setAttribute('aria-label', 'Preparar ' + item[1]);
@@ -268,29 +366,41 @@
       shortcuts.appendChild(shortcut);
     });
     panel.appendChild(shortcuts);
-    var status = makeNode(doc, 'div', 'Listo: no se ejecuta nada al abrir.', 'pc2-console-status');
+    var status = makeNode(doc, 'div', config.statusText, 'pc2-console-status');
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
     var log = makeNode(doc, 'pre', null, 'pc2-console-log');
-    log.setAttribute('aria-label', 'Salida de la consola PC2');
+    log.setAttribute('aria-label', 'Salida de la consola ' + config.key);
     panel.appendChild(status);
     panel.appendChild(log);
     var actions = makeNode(doc, 'div', null, 'pc2-console-actions');
     var check = makeNode(doc, 'button', 'Consultar estado de nuevo');
     check.type = 'button';
+    var refresh = null;
+    if (config.key === 'PC3') {
+      refresh = makeNode(doc, 'button', 'Actualizar estado de PC3');
+      refresh.type = 'button';
+      refresh.setAttribute('aria-label', 'Actualizar estado de PC3');
+      actions.appendChild(refresh);
+    }
     var clear = makeNode(doc, 'button', 'Limpiar salida');
     clear.type = 'button';
     actions.appendChild(check);
     actions.appendChild(clear);
     panel.appendChild(actions);
-    record.panel = panel; record.form = form; record.input = input; record.send = send; record.check = check; record.clear = clear; record.status = status; record.log = log; record.button = options.button;
+    record.panel = panel; record.form = form; record.input = input; record.send = send; record.check = check; record.refresh = refresh; record.clear = clear; record.status = status; record.log = log; record.button = options.button;
     close.addEventListener('click', function () { closeConsole(record); });
     clear.addEventListener('click', function () { clearConsole(record); });
     check.addEventListener('click', function () { return execute(record, '', record.lastId); });
+    if (refresh) refresh.addEventListener('click', function () { return refreshStatus(record); });
     function submitCommand(event) {
       if (event && typeof event.preventDefault === 'function') event.preventDefault();
       var command = String(input.value || '');
-      if (record.queryBusy || readPending(record.storage) || (record.lastId && !record.terminal)) return;
+      if (record.queryBusy || readPending(record.storage, record.config.storageKey) || (record.lastId && !record.terminal)) return;
+      if (record.config.key === 'PC3' && (!record.statusKnown || record.offline)) {
+        setBanner(record, 'PC3 disconnected. Actualiza el estado antes de enviar.', 'error');
+        return;
+      }
       if (!command.trim()) { setBanner(record, 'Escribe un comando antes de enviarlo.', 'error'); return; }
       if (/[\r\n]/.test(command)) { setBanner(record, 'Solo se permite una línea por comando.', 'error'); return; }
       input.value = command.trim();
@@ -320,13 +430,21 @@
     });
     return record;
   }
-  function launch(options) {
+  async function launch(options) {
     options = options || {};
+    var config = targetFor(options);
     var output = options.output;
-    var record = output && instances ? instances.get(output) : null;
+    var targetInstances = output && instances ? instances.get(output) : null;
+    var record = targetInstances ? targetInstances.get(config.key) : null;
     if (!record) {
       record = createConsole(options);
-      if (output && instances && record) instances.set(output, record);
+      if (output && instances && record) {
+        if (!targetInstances) {
+          targetInstances = new Map();
+          instances.set(output, targetInstances);
+        }
+        targetInstances.set(config.key, record);
+      }
     } else {
       record.options = options;
       record.storage = storageFor(options);
@@ -335,16 +453,19 @@
     if (!record) return Promise.resolve(null);
     var parent = record.output || (record.document && record.document.body);
     if (record.panel.parentNode !== parent && parent) parent.appendChild(record.panel);
-    var pending = readPending(record.storage);
+    if (config.key === 'PC3') await refreshStatus(record);
+    var pending = readPending(record.storage, record.config.storageKey);
     if (pending) showPending(record, pending);
     else setControls(record);
-    if (!pending) focusInput(record);
-    return Promise.resolve(record);
+    if (!pending && !(record.config.key === 'PC3' && record.offline)) focusInput(record);
+    return record;
   }
   return {
     launch: launch,
     DEFAULT_MAX_MS: MAX_MS,
     DEFAULT_INTERVAL_MS: INTERVAL_MS,
-    STORAGE_KEY: STORAGE_KEY
+    STORAGE_KEY: STORAGE_KEY,
+    PC3_STORAGE_KEY: PC3_STORAGE_KEY,
+    STORAGE_KEYS: { PC2: STORAGE_KEY, PC3: PC3_STORAGE_KEY }
   };
 });
