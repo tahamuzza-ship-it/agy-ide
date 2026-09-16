@@ -1,260 +1,350 @@
 (function (root, factory) {
-  if (typeof module === 'object' && module.exports) {
-    module.exports = factory(typeof globalThis === 'object' ? globalThis : {});
-  } else {
-    root.PC2Terminal = factory(root);
-  }
+  if (typeof module === 'object' && module.exports) module.exports = factory(typeof globalThis === 'object' ? globalThis : {});
+  else root.PC2Terminal = factory(root);
 })(typeof window === 'object' ? window : this, function (root) {
   'use strict';
-
-  var TAILSCALE_FIRST_OCTET = 100;
-  var TAILSCALE_SECOND_MIN = 64;
-  var TAILSCALE_SECOND_MAX = 127;
-  var DEFAULT_MAX_MS = 60 * 1000;
-  var DEFAULT_INTERVAL_MS = 2 * 1000;
-  var activePromise = null;
-
-  /*
-   * The executor receives one shell line. The base64 payload only preserves
-   * the recipe's shell syntax while it crosses the EJECUTAR instruction.
-   */
-  var SAFE_LAUNCHER_B64 = 'c2V0IC1ldQpjb21tYW5kIC12IHRhaWxzY2FsZSA+L2Rldi9udWxsIDI+JjEgfHwgeyBlY2hvICJUYWlsc2NhbGUgbm8gZXN0w6EgZGlzcG9uaWJsZSBlbiBQQzIiID4mMjsgZXhpdCAxOyB9CmNvbW1hbmQgLXYgcHl0aG9uMyA+L2Rldi9udWxsIDI+JjEgfHwgeyBlY2hvICJweXRob24zIGVzIG9ibGlnYXRvcmlvIHBhcmEgY29tcHJvYmFyIGxhIHRlcm1pbmFsIiA+JjI7IGV4aXQgMTsgfQppcD0iJCh0YWlsc2NhbGUgaXAgLTQgMj4vZGV2L251bGwgfCBhd2sgJ05GIHsgcHJpbnQgJDE7IGV4aXQgfScpIgpbIC1uICIkaXAiIF0gfHwgeyBlY2hvICJUYWlsc2NhbGUgbm8gZGV2b2x2acOzIHVuYSBJUHY0IHBhcmEgUEMyIiA+JjI7IGV4aXQgMTsgfQp2YWxpZF9pcD0iJChwcmludGYgJyVzXG4nICIkaXAiIHwgYXdrIC1GLiAnTkYgPT0gNCAmJiAkMSB+IC9eWzAtOV0rJC8gJiYgJDIgfiAvXlswLTldKyQvICYmICQzIH4gL15bMC05XSskLyAmJiAkNCB+IC9eWzAtOV0rJC8gJiYgJDEgPT0gMTAwICYmICQyID49IDY0ICYmICQyIDw9IDEyNyAmJiAkMyA+PSAwICYmICQzIDw9IDI1NSAmJiAkNCA+PSAwICYmICQ0IDw9IDI1NSB7IHByaW50OyBleGl0IH0nKSIKWyAiJHZhbGlkX2lwIiA9ICIkaXAiIF0gfHwgeyBlY2hvICJMYSBJUCBUYWlsc2NhbGUgZGUgUEMyIG5vIHBlcnRlbmVjZSBhIDEwMC42NC4wLjAvMTAiID4mMjsgZXhpdCAxOyB9CnVybD0iaHR0cDovLyRpcDo3NjgxIgpwcm9iZSgpIHsgY29kZT0iJChweXRob24zIC1jICdpbXBvcnQgc3lzLCB1cmxsaWIucmVxdWVzdDsgcHJpbnQodXJsbGliLnJlcXVlc3QuYnVpbGRfb3BlbmVyKHVybGxpYi5yZXF1ZXN0LlByb3h5SGFuZGxlcih7fSkpLm9wZW4oc3lzLmFyZ3ZbMV0sIHRpbWVvdXQ9MSkuZ2V0Y29kZSgpKScgIiR1cmwvIiAyPi9kZXYvbnVsbCB8fCB0cnVlKSI7IFsgIiRjb2RlIiA9ICIyMDAiIF07IH0KaWYgcHJvYmU7IHRoZW4gcHJpbnRmICdBR1lfUEMyX1RFUk1JTkFMX1JFQURZPSVzXG4nICIkdXJsIjsgZXhpdCAwOyBmaQppZiBjb21tYW5kIC12IHNzID4vZGV2L251bGwgMj4mMTsgdGhlbiBpZiBzcyAtSCAtbHRuICdzcG9ydCA9IDo3NjgxJyAyPi9kZXYvbnVsbCB8IGdyZXAgLXEgTElTVEVOOyB0aGVuIGVjaG8gIkVsIHB1ZXJ0byA3NjgxIGVzdMOhIG9jdXBhZG8geSBubyByZXNwb25kZSBjb21vIHRlcm1pbmFsIiA+JjI7IGV4aXQgMTsgZmkKZWxpZiBjb21tYW5kIC12IGxzb2YgPi9kZXYvbnVsbCAyPiYxOyB0aGVuIGlmIGxzb2YgLW5QIC1pVENQOjc2ODEgLXNUQ1A6TElTVEVOID4vZGV2L251bGwgMj4mMTsgdGhlbiBlY2hvICJFbCBwdWVydG8gNzY4MSBlc3TDoSBvY3VwYWRvIHkgbm8gcmVzcG9uZGUgY29tbyB0ZXJtaW5hbCIgPiYyOyBleGl0IDE7IGZpOyBmaQppZiBbIC14ICIkSE9NRS90dHlkIiBdOyB0aGVuIHR0eWRfYmluPSIkSE9NRS90dHlkIjsgZWxpZiBjb21tYW5kIC12IHR0eWQgPi9kZXYvbnVsbCAyPiYxOyB0aGVuIHR0eWRfYmluPSIkKGNvbW1hbmQgLXYgdHR5ZCkiOyBlbHNlIGVjaG8gIk5vIHNlIGVuY29udHLDsyB+L3R0eWQgbmkgdHR5ZCBlbiBQQVRIIiA+JjI7IGV4aXQgMTsgZmkKbm9odXAgIiR0dHlkX2JpbiIgLWkgIiRpcCIgLXAgNzY4MSAtVyBiYXNoIDwvZGV2L251bGwgPj4vdG1wL3R0eWRfcGMyLmxvZyAyPiYxICYKYXR0ZW1wdD0wCndoaWxlIFsgIiRhdHRlbXB0IiAtbHQgMTAgXTsgZG8gaWYgcHJvYmU7IHRoZW4gcHJpbnRmICdBR1lfUEMyX1RFUk1JTkFMX1JFQURZPSVzXG4nICIkdXJsIjsgZXhpdCAwOyBmaTsgYXR0ZW1wdD0kKChhdHRlbXB0ICsgMSkpOyBzbGVlcCAxOyBkb25lCmVjaG8gInR0eWQgbm8gcmVzcG9uZGnDsyBjb24gSFRUUCAyMDAgZW4gUEMyIiA+JjIKZXhpdCAxCg==';
-  var SAFE_LAUNCHER_COMMAND = "printf '%s' " + SAFE_LAUNCHER_B64 + ' | base64 -d | bash';
-
-  function now(options) {
-    return typeof options.now === 'function' ? options.now() : Date.now();
-  }
-
-  function getDelay(options) {
-    if (typeof options.delay === 'function') return options.delay;
-    return function (milliseconds) {
-      return new Promise(function (resolve) {
-        setTimeout(resolve, milliseconds);
-      });
-    };
-  }
-
-  function getFetch(options) {
-    if (typeof options.fetch === 'function') return options.fetch;
-    if (root && typeof root.fetch === 'function') return root.fetch.bind(root);
-    if (typeof fetch === 'function') return fetch;
-    throw new Error('No hay una función fetch disponible para el puente PC2.');
-  }
-
-  function getDocument(options, output) {
+  var MAX_MS = 90 * 1000;
+  var INTERVAL_MS = 2000;
+  var STORAGE_KEY = 'agyide.pc2.console.pending-id';
+  var instances = typeof WeakMap === 'function' ? new WeakMap() : null;
+  function documentFor(options, output) {
     return options.document || (output && output.ownerDocument) || (root && root.document);
   }
-
-  function responseIsOk(response) {
-    if (!response) return false;
-    if (typeof response.ok === 'boolean') return response.ok;
-    return response.status >= 200 && response.status < 300;
+  function storageFor(options) {
+    if (options && options.sessionStorage) return options.sessionStorage;
+    try { return root && root.sessionStorage; } catch (_) { return null; }
   }
-
-  async function responseJson(response) {
+  function readPending(storage) {
     try {
-      return response && typeof response.json === 'function' ? await response.json() : {};
-    } catch (_) {
-      return {};
-    }
+      var id = storage && storage.getItem(STORAGE_KEY);
+      return typeof id === 'string' && id.trim() ? id.trim() : '';
+    } catch (_) { return ''; }
   }
-
-  function responseMessage(data, fallback) {
+  function savePending(storage, id) {
+    try { if (storage) storage.setItem(STORAGE_KEY, id); } catch (_) {}
+  }
+  function removePending(storage) {
+    try { if (storage) storage.removeItem(STORAGE_KEY); } catch (_) {}
+  }
+  function now(options) {
+    return options && typeof options.now === 'function' ? options.now() : Date.now();
+  }
+  function delayFor(options) {
+    if (options && typeof options.delay === 'function') return options.delay;
+    return function (ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); };
+  }
+  function fetchFor(options) {
+    if (options && typeof options.fetch === 'function') return options.fetch;
+    if (root && typeof root.fetch === 'function') return root.fetch.bind(root);
+    if (typeof fetch === 'function') return fetch;
+    throw new Error('No hay una función fetch disponible para la consola PC2.');
+  }
+  function responseOK(response) {
+    return !!response && (typeof response.ok === 'boolean'
+      ? response.ok : response.status >= 200 && response.status < 300);
+  }
+  async function jsonFor(response) {
+    try { return response && typeof response.json === 'function' ? await response.json() : {}; }
+    catch (_) { return {}; }
+  }
+  function messageFor(data, fallback) {
     if (data && typeof data.error === 'string' && data.error.trim()) return data.error.trim();
     if (data && typeof data.result === 'string' && data.result.trim()) return data.result.trim();
     return fallback;
   }
-
-  function appendText(output, doc, text, className) {
-    if (!output || !doc || typeof doc.createElement !== 'function') return null;
-    var node = doc.createElement('div');
+  function errorFor(response, data, operation) {
+    var status = response && response.status ? ' (HTTP ' + response.status + ')' : '';
+    if (response && response.status === 401) return new Error('No autorizado: la sesión de AGYIDE no es válida.');
+    return new Error(operation + status + ': ' + messageFor(data, 'respuesta HTTP no válida'));
+  }
+  function makeNode(doc, tag, text, className) {
+    var node = doc.createElement(tag);
     if (className) node.className = className;
-    node.textContent = String(text);
-    output.appendChild(node);
-    if (typeof output.scrollHeight === 'number') output.scrollTop = output.scrollHeight;
+    if (text != null) node.textContent = String(text);
     return node;
   }
-
-  function isTailnetIPv4(ip) {
-    if (typeof ip !== 'string') return false;
-    var parts = ip.split('.');
-    if (parts.length !== 4 || parts.some(function (part) { return !/^\d+$/.test(part); })) return false;
-    var numbers = parts.map(Number);
-    return numbers[0] === TAILSCALE_FIRST_OCTET &&
-      numbers[1] >= TAILSCALE_SECOND_MIN &&
-      numbers[1] <= TAILSCALE_SECOND_MAX &&
-      numbers[2] >= 0 && numbers[2] <= 255 &&
-      numbers[3] >= 0 && numbers[3] <= 255;
+  function setDisplay(node, value) {
+    if (node && node.style) node.style.display = value;
   }
-
-  function extractReadyUrl(result) {
-    var lines = String(result == null ? '' : result).split(/\r?\n/).map(function (line) {
-      return line.trim();
-    }).filter(function (line) {
-      return line.indexOf('AGY_PC2_TERMINAL_READY=') === 0;
-    });
-    if (lines.length !== 1) return null;
-    var match = lines[0].match(/^AGY_PC2_TERMINAL_READY=(http:\/\/([0-9.]+):7681)$/);
-    if (!match || !isTailnetIPv4(match[2])) return null;
-    return match[1];
+  function installStyles(doc) {
+    if (!doc || !doc.createElement || !doc.head || doc.__agyPc2Styles) return;
+    var style = makeNode(doc, 'style');
+    style.textContent =
+      '.pc2-console{box-sizing:border-box;margin:12px 0;padding:16px;border:1px solid rgba(0,243,255,.35);border-radius:12px;background:rgba(7,12,26,.96);color:#e0e8ff;font:14px Inter,system-ui,sans-serif;max-width:760px;box-shadow:0 8px 28px rgba(0,0,0,.28)}' +
+      '.pc2-console *{box-sizing:border-box}.pc2-console h2{margin:0;color:#00f3ff;font-size:1rem}.pc2-console p{margin:8px 0;color:#a9b8cc;line-height:1.45}.pc2-console-notice{padding:9px 10px;border-left:3px solid #00f3ff;background:rgba(0,243,255,.07)}' +
+      '.pc2-console form,.pc2-console-actions,.pc2-console-shortcuts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.pc2-console input{min-width:0;flex:1 1 260px;padding:10px;border:1px solid #45617b;border-radius:7px;background:#0c1628;color:#fff;font:14px ui-monospace,monospace}.pc2-console button{padding:9px 12px;border:1px solid #3c6d85;border-radius:7px;background:#102d43;color:#e0f7ff;cursor:pointer;font-weight:600}.pc2-console button:hover{background:#164765}.pc2-console button:disabled{cursor:not-allowed;opacity:.5}.pc2-console-status,.pc2-console-log{display:block;min-height:1.4em;margin-top:12px;padding:10px;white-space:pre-wrap;overflow:auto;border-radius:7px;background:#050b14;color:#b9f6ff;font:13px/1.45 ui-monospace,SFMono-Regular,monospace}.pc2-console-log{max-height:230px;color:#d5ddeb}.pc2-console-close{margin-left:auto!important;background:transparent!important}.pc2-console-shortcuts button{font-size:.8rem}.pc2-console-help{font-size:.82rem!important}.pc2-console:focus-within{outline:2px solid rgba(0,243,255,.25);outline-offset:2px}@media(max-width:600px){.pc2-console{margin:8px 0;padding:12px}.pc2-console form>*{flex:1 1 100%}.pc2-console-actions button{flex:1 1 40%}}';
+    doc.head.appendChild(style);
+    doc.__agyPc2Styles = true;
   }
-
-  function addTerminalLink(output, doc, url, navigatorObject) {
-    if (!output || !doc || typeof doc.createElement !== 'function') return;
-    var link = doc.createElement('a');
-    link.className = 'pc2-terminal-link';
-    link.href = url;
-    link.textContent = '🔴 ABRIR TERMINAL PC2 →';
-    link.setAttribute('aria-label', 'Abrir terminal de PC2');
-    output.appendChild(link);
-
-    var copy = doc.createElement('button');
-    copy.type = 'button';
-    copy.className = 'pc2-terminal-copy';
-    copy.textContent = '📋 Copiar enlace';
-    copy.addEventListener('click', function () {
-      copyLink(url, doc, navigatorObject).then(function () {
-        copy.textContent = '✅ Enlace copiado';
-      }).catch(function () {
-        copy.textContent = '⚠️ Copia manual: ' + url;
-      });
-    });
-    output.appendChild(copy);
+  function setBanner(record, text, kind) {
+    record.status.textContent = text;
+    record.status.className = 'pc2-console-status pc2-console-' + (kind || 'info');
   }
-
-  function copyLink(value, doc, navigatorObject) {
-    var clipboard = navigatorObject && navigatorObject.clipboard;
-    if (clipboard && typeof clipboard.writeText === 'function') {
-      return Promise.resolve(clipboard.writeText(value)).catch(function () {
-        return copyWithSelection(value, doc);
-      });
-    }
-    return copyWithSelection(value, doc);
+  function addLog(record, text) {
+    if (!text) return;
+    record.lines.push(String(text));
+    record.log.textContent = record.lines.join('\n');
+    if (typeof record.log.scrollHeight === 'number') record.log.scrollTop = record.log.scrollHeight;
   }
-
-  function copyWithSelection(value, doc) {
-    if (!doc || typeof doc.createElement !== 'function' || !doc.body) {
-      return Promise.reject(new Error('El navegador no permite copiar el enlace automáticamente.'));
-    }
-    var area = doc.createElement('textarea');
-    area.value = value;
-    area.setAttribute('readonly', '');
-    if (area.style) area.style.position = 'fixed';
-    doc.body.appendChild(area);
-    if (typeof area.select === 'function') area.select();
-    var copied = typeof doc.execCommand === 'function' && doc.execCommand('copy');
-    if (area.parentNode) area.parentNode.removeChild(area);
-    return copied
-      ? Promise.resolve()
-      : Promise.reject(new Error('El navegador no permite copiar el enlace automáticamente.'));
+  function setControls(record) {
+    var pending = !!readPending(record.storage) || (!!record.lastId && !record.terminal);
+    record.input.disabled = pending || record.queryBusy;
+    record.send.disabled = pending || record.queryBusy;
+    record.check.disabled = !record.lastId || record.queryBusy;
+    setDisplay(record.check, record.lastId ? 'inline-block' : 'none');
+    if (record.queryBusy) record.send.textContent = 'Enviando…';
+    else record.send.textContent = 'Enviar';
   }
-
-  async function postLauncher(options, fetchFunction, getPwd) {
-    var response = await fetchFunction('/api/pc-command', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-agyide-pwd': getPwd()
-      },
-      body: JSON.stringify({
-        text: '/pc2 ' + SAFE_LAUNCHER_COMMAND
-      })
-    });
-    var data = await responseJson(response);
-    if (!responseIsOk(response)) {
-      var status = response && response.status ? ' (HTTP ' + response.status + ')' : '';
-      throw new Error(response.status === 401
-        ? 'No autorizado: la sesión de AGYIDE no es válida.'
-        : 'No fue posible enviar la orden a PC2' + status + ': ' + responseMessage(data, 'respuesta HTTP no válida'));
-    }
-    if (data && data.ok === false) {
-      throw new Error('Error de ejecución en PC2: ' + responseMessage(data, 'la orden fue rechazada'));
-    }
-    if (!data || typeof data.id !== 'string' || !data.id.trim()) {
-      throw new Error('PC2 no devolvió un ID de tarea; la terminal no se activó.');
-    }
-    return data.id;
+  function focusInput(record) {
+    if (record.input && typeof record.input.focus === 'function' && !record.input.disabled) record.input.focus();
   }
-
-  async function pollLauncher(id, options, fetchFunction, getPwd) {
-    var maxMs = Number.isFinite(options.maxMs) ? options.maxMs : DEFAULT_MAX_MS;
-    var intervalMs = Number.isFinite(options.intervalMs) ? options.intervalMs : DEFAULT_INTERVAL_MS;
-    var startedAt = now(options);
-    while (now(options) - startedAt < maxMs) {
-      var response = await fetchFunction('/api/status/' + encodeURIComponent(id), {
-        method: 'GET',
-        headers: { 'x-agyide-pwd': getPwd() }
-      });
-      var data = await responseJson(response);
-      if (!responseIsOk(response)) {
-        var status = response && response.status ? ' (HTTP ' + response.status + ')' : '';
-        throw new Error(response.status === 401
-          ? 'No autorizado: la sesión de AGYIDE no es válida.'
-          : 'No fue posible consultar el estado de PC2' + status + ': ' + responseMessage(data, 'respuesta HTTP no válida'));
-      }
-      if (data.status === 'done') return data;
-      if (data.status === 'error') {
-        throw new Error('Error de ejecución en PC2: ' + responseMessage(data, 'la orden terminó con error'));
-      }
-      var remaining = maxMs - (now(options) - startedAt);
-      if (remaining <= 0) break;
-      await getDelay(options)(Math.min(intervalMs, remaining));
-    }
-    throw new Error('Tiempo de espera agotado: PC2 no terminó la orden en 60 segundos.');
+  function commandInput(record, command) {
+    record.input.value = command;
+    setBanner(record, 'Comando preparado. Pulsa Enviar para ejecutarlo en PC2.', 'info');
+    focusInput(record);
   }
-
-  async function run(options) {
-    var output = options.output;
-    var button = options.button;
-    var doc = getDocument(options, output);
-    var fetchFunction = getFetch(options);
-    var getPwd = typeof options.getPwd === 'function' ? options.getPwd : function () { return ''; };
-    var navigatorObject = options.navigator || (root && root.navigator);
-    var originalLabel = button && button.textContent;
-
-    if (button) {
-      button.disabled = true;
-      button.textContent = '⏳ Activando...';
+  function closeConsole(record) {
+    if (record.panel && record.panel.parentNode) record.panel.parentNode.removeChild(record.panel);
+    if (record.button && typeof record.button.focus === 'function') record.button.focus();
+  }
+  function clearConsole(record) {
+    record.lines = [];
+    record.log.textContent = '';
+    setBanner(record, 'Salida limpiada.', 'info');
+  }
+  function showPending(record, id) {
+    record.lastId = id || record.lastId;
+    record.terminal = false;
+    if (record.lastId) {
+      setBanner(record, 'Hay una orden pendiente (' + record.lastId + '). Consultar estado no la vuelve a enviar.', 'pending');
+      addLog(record, '⏳ Estado pendiente: ' + record.lastId);
     }
-    appendText(output, doc, '⏳ Preparando la terminal segura de PC2…', 'pc2-terminal-pending');
+    setControls(record);
+  }
+  function terminalResult(record, id, data) {
+    record.lastId = id;
+    record.terminal = true;
+    removePending(record.storage);
+    setControls(record);
+    if (String(data.status).toLowerCase() === 'done') {
+      setBanner(record, '✅ Orden terminada.', 'success');
+      addLog(record, data && data.result != null && String(data.result) ? String(data.result) : '(PC2 no devolvió salida de texto)');
+    } else {
+      setBanner(record, '❌ La orden terminó con error.', 'error');
+      addLog(record, 'Error de ejecución en PC2: ' + messageFor(data, 'la orden terminó con error'));
+    }
+  }
+  async function postCommand(record, command) {
+    var response;
     try {
-      var id = await postLauncher(options, fetchFunction, getPwd);
-      var result = await pollLauncher(id, options, fetchFunction, getPwd);
-      var url = extractReadyUrl(result.result);
-      if (!url) {
-        throw new Error('PC2 terminó sin una señal de terminal válida; no se abrirá ningún enlace.');
+      response = await fetchFor(record.options)('/api/pc-command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': typeof record.options.getPwd === 'function' ? record.options.getPwd() : '' },
+        body: JSON.stringify({ text: '/pc2 ' + command })
+      });
+    } catch (error) {
+      throw new Error('No fue posible enviar la orden a PC2: ' + (error && error.message || error));
+    }
+    var data = await jsonFor(response);
+    if (!responseOK(response)) throw errorFor(response, data, 'No fue posible enviar la orden a PC2');
+    if (data && data.ok === false) throw new Error('Error de ejecución en PC2: ' + messageFor(data, 'la orden fue rechazada'));
+    if (!data || typeof data.id !== 'string' || !data.id.trim()) throw new Error('PC2 no devolvió un ID de tarea; la orden no se puede consultar.');
+    return data.id.trim();
+  }
+  async function pollStatus(record, id) {
+    var fetchFunction = fetchFor(record.options);
+    var maxMs = Number.isFinite(record.options.maxMs) ? Math.min(MAX_MS, Math.max(0, record.options.maxMs)) : MAX_MS;
+    var intervalMs = Number.isFinite(record.options.intervalMs) ? Math.max(0, record.options.intervalMs) : INTERVAL_MS, started = now(record.options), wait = delayFor(record.options);
+    while (now(record.options) - started < maxMs) {
+      var response;
+      try {
+        response = await fetchFunction('/api/status/' + encodeURIComponent(id) + '?target=PC2', {
+          method: 'GET',
+          headers: { 'x-agyide-pwd': typeof record.options.getPwd === 'function' ? record.options.getPwd() : '' }
+        });
+      } catch (error) {
+        throw new Error('No fue posible consultar el estado de PC2: ' + (error && error.message || error));
       }
-      appendText(output, doc, '✅ PC2 terminó la preparación de la terminal.', 'pc2-terminal-success');
-      appendText(output, doc, 'Tailscale debe estar activo en el teléfono. La comprobación local no garantiza que el navegador pueda alcanzar PC2.', 'pc2-terminal-note');
-      addTerminalLink(output, doc, url, navigatorObject);
-      return { id: id, url: url, result: result };
+      var data = await jsonFor(response);
+      if (!responseOK(response) || (data && data.ok === false)) throw errorFor(response, data, 'No fue posible consultar el estado de PC2');
+      if (now(record.options) - started >= maxMs) {
+        throw new Error('Tiempo de espera agotado (' + Math.round(maxMs / 1000) + ' segundos). Puedes consultar estado de nuevo.');
+      }
+      var status = String(data && data.status || '').toLowerCase();
+      addLog(record, 'Estado: ' + (status || 'desconocido'));
+      if (status === 'done') return data;
+      if (status === 'error' || status === 'failed' || status === 'cancelled') {
+        var terminalError = new Error(messageFor(data, 'la orden terminó con error'));
+        terminalError.terminal = true;
+        terminalError.data = data;
+        throw terminalError;
+      }
+      var remaining = maxMs - (now(record.options) - started);
+      if (remaining <= 0) break;
+      await wait(Math.min(intervalMs, remaining));
+    }
+    throw new Error('Tiempo de espera agotado (' + Math.round(maxMs / 1000) + ' segundos). Puedes consultar estado de nuevo.');
+  }
+  async function execute(record, command, existingId) {
+    if (record.queryBusy) return;
+    record.queryBusy = true;
+    record.terminal = false;
+    setControls(record);
+    var id = existingId || '';
+    try {
+      if (!id) {
+        id = await postCommand(record, command);
+        record.lastId = id;
+        savePending(record.storage, id);
+        addLog(record, '📤 Orden enviada a PC2 (' + id + ')');
+      } else {
+        record.lastId = id;
+        savePending(record.storage, id);
+        setBanner(record, 'Consultando estado de ' + id + '…', 'pending');
+      }
+      var data = await pollStatus(record, id);
+      terminalResult(record, id, data);
     } catch (error) {
       var message = error && error.message ? error.message : String(error);
-      appendText(output, doc, '❌ Error PUENTE PC2: ' + message, 'pc2-terminal-error');
-      throw error;
-    } finally {
-      if (button) {
-        button.disabled = false;
-        button.textContent = originalLabel || '🔴 PUENTE PC2';
+      if (id) {
+        record.lastId = id;
+        if (error && error.terminal && error.data) terminalResult(record, id, error.data);
+        else {
+          savePending(record.storage, id);
+          record.terminal = false;
+          setBanner(record, '⚠️ ' + message + ' Pulsa «Consultar estado» para reintentar; no se enviará otra orden.', 'error');
+          addLog(record, message);
+          setControls(record);
+        }
+      } else {
+        setBanner(record, '❌ ' + message, 'error');
+        addLog(record, message);
+        setControls(record);
       }
+    } finally {
+      record.queryBusy = false;
+      setControls(record);
     }
   }
-
+  function createConsole(options) {
+    var output = options.output;
+    var doc = documentFor(options, output);
+    if (!doc || typeof doc.createElement !== 'function') return null;
+    installStyles(doc);
+    var record = { options: options, output: output, document: doc, storage: storageFor(options), lines: [], lastId: '', terminal: false, queryBusy: false };
+    var panel = makeNode(doc, 'section', null, 'pc2-console');
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'false');
+    panel.setAttribute('aria-labelledby', 'pc2-console-title');
+    var heading = makeNode(doc, 'h2', 'Consola PC2 — Railway');
+    heading.id = 'pc2-console-title';
+    panel.appendChild(heading);
+    var close = makeNode(doc, 'button', 'Cerrar', 'pc2-console-close');
+    close.type = 'button';
+    close.setAttribute('aria-label', 'Cerrar consola PC2');
+    heading.appendChild(close);
+    panel.appendChild(makeNode(doc, 'p', 'Consola de comandos no interactiva. Cada comando se ejecuta por separado; no hay PTY, stdin ni directorio de trabajo persistente.', 'pc2-console-notice'));
+    panel.appendChild(makeNode(doc, 'p', 'Para cambiar de carpeta y ejecutar algo en la misma orden usa: cd ruta && comando. Cerrar esta vista no cancela una orden en PC2.', 'pc2-console-help'));
+    var form = makeNode(doc, 'form');
+    var input = makeNode(doc, 'input');
+    input.type = 'text';
+    input.name = 'pc2-command';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.placeholder = 'Escribe un comando de una sola línea…';
+    input.setAttribute('aria-label', 'Comando para PC2');
+    var send = makeNode(doc, 'button', 'Enviar');
+    send.type = 'submit';
+    form.appendChild(input);
+    form.appendChild(send);
+    panel.appendChild(form);
+    var shortcuts = makeNode(doc, 'div', null, 'pc2-console-shortcuts');
+    shortcuts.setAttribute('aria-label', 'Atajos explícitos');
+    [['pwd', 'pwd'], ['ls -la', 'ls -la'], ['hostname && uptime -p', 'hostname && uptime -p']].forEach(function (item) {
+      var shortcut = makeNode(doc, 'button', item[0]);
+      shortcut.type = 'button';
+      shortcut.setAttribute('aria-label', 'Preparar ' + item[1]);
+      shortcut.addEventListener('click', function () { commandInput(record, item[1]); });
+      shortcuts.appendChild(shortcut);
+    });
+    panel.appendChild(shortcuts);
+    var status = makeNode(doc, 'div', 'Listo: no se ejecuta nada al abrir.', 'pc2-console-status');
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    var log = makeNode(doc, 'pre', null, 'pc2-console-log');
+    log.setAttribute('aria-label', 'Salida de la consola PC2');
+    panel.appendChild(status);
+    panel.appendChild(log);
+    var actions = makeNode(doc, 'div', null, 'pc2-console-actions');
+    var check = makeNode(doc, 'button', 'Consultar estado de nuevo');
+    check.type = 'button';
+    var clear = makeNode(doc, 'button', 'Limpiar salida');
+    clear.type = 'button';
+    actions.appendChild(check);
+    actions.appendChild(clear);
+    panel.appendChild(actions);
+    record.panel = panel; record.form = form; record.input = input; record.send = send; record.check = check; record.clear = clear; record.status = status; record.log = log; record.button = options.button;
+    close.addEventListener('click', function () { closeConsole(record); });
+    clear.addEventListener('click', function () { clearConsole(record); });
+    check.addEventListener('click', function () { return execute(record, '', record.lastId); });
+    function submitCommand(event) {
+      if (event && typeof event.preventDefault === 'function') event.preventDefault();
+      var command = String(input.value || '');
+      if (record.queryBusy || readPending(record.storage) || (record.lastId && !record.terminal)) return;
+      if (!command.trim()) { setBanner(record, 'Escribe un comando antes de enviarlo.', 'error'); return; }
+      if (/[\r\n]/.test(command)) { setBanner(record, 'Solo se permite una línea por comando.', 'error'); return; }
+      input.value = command.trim();
+      return execute(record, input.value, '');
+    }
+    form.addEventListener('submit', submitCommand);
+    send.addEventListener('click', submitCommand);
+    input.addEventListener('paste', function (event) {
+      var text = event && event.clipboardData && event.clipboardData.getData ? event.clipboardData.getData('text') : '';
+      if (/[\r\n]/.test(text)) {
+        if (event && typeof event.preventDefault === 'function') event.preventDefault();
+        setBanner(record, 'Pegado rechazado: solo se permite una línea por comando.', 'error');
+      }
+    });
+    input.addEventListener('input', function () {
+      if (/[\r\n]/.test(String(input.value || ''))) {
+        input.value = String(input.value || '').replace(/[\r\n]/g, '');
+        setBanner(record, 'Solo se permite una línea por comando.', 'error');
+      }
+    });
+    input.addEventListener('keydown', function (event) {
+      if (event && event.key === 'Enter') {
+        if (typeof event.preventDefault === 'function') event.preventDefault();
+        if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else form.dispatchEvent && form.dispatchEvent({ type: 'submit', preventDefault: function () {} });
+      }
+    });
+    return record;
+  }
   function launch(options) {
     options = options || {};
-    if (activePromise) return activePromise;
-    activePromise = run(options).finally(function () {
-      activePromise = null;
-    });
-    return activePromise;
+    var output = options.output;
+    var record = output && instances ? instances.get(output) : null;
+    if (!record) {
+      record = createConsole(options);
+      if (output && instances && record) instances.set(output, record);
+    } else {
+      record.options = options;
+      record.storage = storageFor(options);
+      record.button = options.button;
+    }
+    if (!record) return Promise.resolve(null);
+    var parent = record.output || (record.document && record.document.body);
+    if (record.panel.parentNode !== parent && parent) parent.appendChild(record.panel);
+    var pending = readPending(record.storage);
+    if (pending) showPending(record, pending);
+    else setControls(record);
+    if (!pending) focusInput(record);
+    return Promise.resolve(record);
   }
-
   return {
     launch: launch,
-    buildLauncherCommand: function () { return SAFE_LAUNCHER_COMMAND; },
-    extractReadyUrl: extractReadyUrl,
-    isTailnetIPv4: isTailnetIPv4,
-    DEFAULT_MAX_MS: DEFAULT_MAX_MS,
-    DEFAULT_INTERVAL_MS: DEFAULT_INTERVAL_MS
+    DEFAULT_MAX_MS: MAX_MS,
+    DEFAULT_INTERVAL_MS: INTERVAL_MS,
+    STORAGE_KEY: STORAGE_KEY
   };
 });
