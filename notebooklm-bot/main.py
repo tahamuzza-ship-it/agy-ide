@@ -27,6 +27,7 @@ import subprocess
 import tempfile
 import threading
 import time
+import unicodedata
 import uuid
 from pathlib import Path
 from typing import Any, Callable
@@ -48,6 +49,10 @@ URL_RE = re.compile(r"^https?://", re.I)
 
 class UserError(Exception):
     """An actionable, safe-to-show error caused by user/configuration input."""
+
+    def __init__(self, message: str, result: dict[str, Any] | None = None):
+        super().__init__(message)
+        self.result = result
 
 
 def utf16_code_units(value: str) -> int:
@@ -389,6 +394,11 @@ class SQLiteStore:
                 );
                 CREATE INDEX IF NOT EXISTS news_drafts_owner_idx
                     ON news_drafts(actor, notebook_id, expires_at);
+                CREATE TABLE IF NOT EXISTS research_requests (
+                    actor TEXT NOT NULL, request_id TEXT NOT NULL,
+                    topic TEXT NOT NULL, job_id TEXT NOT NULL,
+                    PRIMARY KEY(actor, request_id)
+                );
                 """
             )
             self.db.commit()
@@ -452,12 +462,39 @@ class SQLiteStore:
             self.db.commit()
         return job_id
 
+    def create_research_job(self, actor: str, request_id: str | None,
+                            topic: str) -> tuple[str, bool]:
+        """Create a job or return the actor-scoped durable idempotent job."""
+        if not request_id:
+            return self.create_job(actor, "notebook_research"), True
+        with self.lock:
+            row = self.db.execute(
+                "SELECT job_id, topic FROM research_requests "
+                "WHERE actor=? AND request_id=?", (actor, request_id)
+            ).fetchone()
+            if row:
+                if row["topic"] != topic:
+                    raise UserError("requestId ya se usó con otro tema.")
+                return str(row["job_id"]), False
+            job_id = uuid.uuid4().hex
+            now = time.time()
+            self.db.execute(
+                "INSERT INTO jobs VALUES(?,?,?,?,?,?,?,?)",
+                (job_id, actor, "notebook_research", "queued", None, None, now, now),
+            )
+            self.db.execute(
+                "INSERT INTO research_requests(actor,request_id,topic,job_id) VALUES(?,?,?,?)",
+                (actor, request_id, topic, job_id),
+            )
+            self.db.commit()
+            return job_id, True
+
     def update_job(self, job_id: str, status: str, message: str | None = None,
                    result: dict[str, Any] | None = None) -> None:
         with self.lock:
             self.db.execute(
                 "UPDATE jobs SET status=?, message=?, result_json=?, updated_at=? WHERE id=?",
-                (status, message, json.dumps(result, ensure_ascii=False) if result else None,
+                (status, message, json.dumps(result, ensure_ascii=False) if result is not None else None,
                  time.time(), job_id),
             )
             self.db.commit()
@@ -679,10 +716,21 @@ class NotebookService:
         self.publisher = publisher
         self._artifact_locks: dict[str, threading.Lock] = {}
         self._artifact_locks_guard = threading.Lock()
+        self._topic_locks: dict[str, threading.Lock] = {}
+        self._topic_locks_guard = threading.Lock()
 
     def _artifact_lock(self, notebook_id: str) -> threading.Lock:
         with self._artifact_locks_guard:
             return self._artifact_locks.setdefault(notebook_id, threading.Lock())
+
+    def _topic_lock(self, topic: str) -> threading.Lock:
+        with self._topic_locks_guard:
+            return self._topic_locks.setdefault(topic, threading.Lock())
+
+    @staticmethod
+    def _normalized_topic(value: str) -> str:
+        folded = unicodedata.normalize("NFKD", value.casefold())
+        return " ".join("".join(c for c in folded if not unicodedata.combining(c)).split())
 
     def _notebook_id(self, actor: str, supplied: str | None = None) -> str:
         value = supplied or self.store.active(actor)
@@ -818,6 +866,153 @@ class NotebookService:
         ident = self._notebook_id(actor, notebook_id)
         data = self.cli.json(["summary", "-n", ident, "--json"], timeout=900)
         return {"text": _as_text(data)}
+
+    def notebook_ask(self, actor: str, notebook_id: str, question: str) -> dict[str, Any]:
+        """Answer from an explicitly selected notebook, without audio or mutation."""
+        ident = self._notebook_id(actor, notebook_id)
+        question = question.strip()
+        existing = self.sources(actor, ident)["sources"]
+        if not existing:
+            raise UserError("El cuaderno no tiene fuentes para responder la pregunta.")
+        prompt = (
+            "Responde en español basándote exclusivamente en las fuentes que ya existen en "
+            "este cuaderno. No añadas fuentes, no investigues en la web y no generes audio. "
+            "Da primero las conclusiones y deja los detalles para el final. Usa texto limpio "
+            "sin Markdown, encabezados, asteriscos ni listas. Pregunta: " + question
+        )
+        answer = self.cli.json(
+            ["ask", prompt, "-n", ident, "--new", "--yes", "--json"], timeout=300
+        )
+        text = clean_plain_text(_as_text(answer))
+        if not text:
+            raise UserError("NotebookLM no devolvió texto para la pregunta.")
+        return {"notebookId": ident, "text": text, "sources": existing}
+
+    def notebook_research(self, actor: str, topic: str) -> dict[str, Any]:
+        """Reuse an exact title match, or create and populate one real notebook."""
+        normalized = self._normalized_topic(topic)
+        with self._topic_lock(normalized):
+            notebooks = self.notebooks(actor)["notebooks"]
+            exact_matches = [
+                row for row in notebooks
+                if self._normalized_topic(str(row.get("title", ""))) == normalized
+            ]
+            # Exact matches always win. Only when there is no exact title do
+            # we reuse titles containing the complete normalized topic (for
+            # example, "Trading" reuses "Trading avanzado").
+            matches = exact_matches or [
+                row for row in notebooks
+                if normalized in self._normalized_topic(str(row.get("title", "")))
+            ]
+            if len(matches) > 1:
+                choices = [{"id": row["id"], "title": row["title"]} for row in matches]
+                return {
+                    "needsSelection": True,
+                    "notebooks": choices,
+                    "text": "Hay varios cuadernos con ese tema; selecciona uno.",
+                }
+            if len(matches) == 1:
+                row = matches[0]
+                sources = self.sources(actor, row["id"])["sources"]
+                text = (
+                    f"Ya existe el cuaderno «{row['title']}» con {len(sources)} fuentes."
+                )
+                if sources:
+                    prompt = (
+                        "Resume en español las conclusiones sobre este tema usando únicamente "
+                        "las fuentes existentes. Conclusiones primero y detalles al final, en "
+                        "texto limpio sin Markdown. Tema: " + topic
+                    )
+                    answer = self.cli.json(
+                        ["ask", prompt, "-n", row["id"], "--new", "--yes", "--json"],
+                        timeout=300,
+                    )
+                    generated = clean_plain_text(_as_text(answer))
+                    if generated:
+                        text = generated
+                return {
+                    "notebookId": row["id"], "title": row["title"], "created": False,
+                    "sources": sources, "sourceCount": len(sources), "text": text,
+                }
+
+            created = self.cli.json(["create", topic, "--json"], timeout=120)
+            notebook_id = _first_value(created, ("id", "notebook_id"))
+            title = str(_first_value(created, ("title", "name")) or topic)
+            if not notebook_id:
+                raise UserError("NotebookLM creó el cuaderno pero no devolvió su identificador.")
+            notebook_id = str(notebook_id)
+            partial: dict[str, Any] = {
+                "notebookId": notebook_id, "title": title, "created": True,
+                "sources": [], "sourceCount": 0,
+            }
+            try:
+                started = self.cli.json([
+                    "source", "add-research", topic, "-n", notebook_id,
+                    "--from", "web", "--mode", "fast", "--no-wait", "--json",
+                ], timeout=120)
+                run_id = _first_value(started, ("task_id", "run_id", "runId", "taskId"))
+                if not run_id:
+                    raise UserError("NotebookLM inició la búsqueda sin devolver run id.")
+                run_id = str(run_id)
+                waited = self.cli.json([
+                    "research", "wait", "--run-id", run_id, "-n", notebook_id,
+                    "--timeout", "240", "--json",
+                ], timeout=270)
+                if not isinstance(waited, dict) or waited.get("status") != "completed":
+                    raise UserError("La búsqueda web no terminó correctamente.")
+                self.cli.json([
+                    "research", "import", "--run-id", run_id, "-n", notebook_id,
+                    "--max-sources", "5", "--timeout", "240", "--json",
+                ], timeout=270)
+                sources = self.sources(actor, notebook_id)["sources"]
+                # research import verifies that the source rows were committed,
+                # but indexing remains asynchronous. Use the CLI's supported
+                # readiness command under one shared four-minute budget before
+                # asking a question over those sources.
+                ready_deadline = time.monotonic() + 240
+                for source in sources[:5]:
+                    remaining = int(ready_deadline - time.monotonic())
+                    if remaining < 1:
+                        raise UserError("Las fuentes importadas no terminaron de indexarse a tiempo.")
+                    wait_seconds = min(120, remaining)
+                    self.cli.json([
+                        "source", "wait", source["id"], "-n", notebook_id,
+                        "--timeout", str(wait_seconds), "--json",
+                    ], timeout=wait_seconds + 15)
+                sources = self.sources(actor, notebook_id)["sources"]
+                partial["sources"] = sources
+                partial["sourceCount"] = len(sources)
+                if not sources:
+                    raise UserError("La búsqueda terminó, pero no se importó ninguna fuente real.")
+                prompt = (
+                    "Resume en español las conclusiones del tema usando exclusivamente las "
+                    "fuentes importadas. Conclusiones primero y detalles al final, en texto "
+                    "limpio sin Markdown. Tema: " + topic
+                )
+                answer = self.cli.json(
+                    ["ask", prompt, "-n", notebook_id, "--new", "--yes", "--json"],
+                    timeout=300,
+                )
+                text = clean_plain_text(_as_text(answer))
+                if not text:
+                    raise UserError("Las fuentes se importaron, pero NotebookLM no devolvió texto.")
+                partial["text"] = text
+                return partial
+            except Exception as exc:
+                # Import can time out after the server accepted it. Reconcile
+                # against the canonical source list so failed jobs still expose
+                # every verified piece of partial state.
+                try:
+                    verified = self.sources(actor, notebook_id)["sources"]
+                    partial["sources"] = verified
+                    partial["sourceCount"] = len(verified)
+                except Exception:
+                    pass
+                message = (
+                    str(exc) if isinstance(exc, UserError)
+                    else "La investigación falló por un error interno; inténtalo de nuevo."
+                )
+                raise UserError(message, partial) from exc
 
     def research(self, actor: str, kind: str, notebook_id: str | None = None,
                  question: str | None = None) -> dict[str, Any]:
@@ -1037,22 +1232,36 @@ class JobManager:
             raise UserError("La publicación de noticias requiere confirmed:true.")
         if not self.slots.acquire(blocking=False):
             raise UserError("La cola está llena; inténtalo de nuevo más tarde.")
-        # Snapshot the active notebook now, not when a worker eventually gets
-        # CPU time.  This prevents a later selection change from retargeting a
-        # queued source/news/research operation.
-        frozen_payload = dict(payload)
-        frozen_payload["notebookId"] = (
-            frozen_payload.get("notebookId") or self.service.store.active(actor)
-        )
-        job_id = self.service.store.create_job(actor, action)
-        self.executor.submit(self._run, job_id, actor, action, frozen_payload)
-        return job_id
+        submitted = False
+        try:
+            # Snapshot the active notebook now, not when a worker eventually
+            # gets CPU time. This prevents later selection changes from
+            # retargeting queued operations.
+            frozen_payload = dict(payload)
+            if action not in {"notebook_ask", "notebook_research"}:
+                frozen_payload["notebookId"] = (
+                    frozen_payload.get("notebookId") or self.service.store.active(actor)
+                )
+            if action == "notebook_research":
+                job_id, created = self.service.store.create_research_job(
+                    actor, frozen_payload.get("requestId"), frozen_payload["normalizedTopic"]
+                )
+                if not created:
+                    return job_id
+            else:
+                job_id = self.service.store.create_job(actor, action)
+            self.executor.submit(self._run, job_id, actor, action, frozen_payload)
+            submitted = True
+            return job_id
+        finally:
+            if not submitted:
+                self.slots.release()
 
     def _run(self, job_id: str, actor: str, action: str, payload: dict[str, Any]) -> None:
         self.service.store.update_job(job_id, "running")
         try:
             notebook_id = payload.get("notebookId")
-            if notebook_id:
+            if notebook_id and action not in {"notebook_ask", "notebook_research"}:
                 self.service.set_active(actor, notebook_id)
             if action == "source_url":
                 result = self.service.add_url(actor, payload.get("url", ""), notebook_id)
@@ -1068,14 +1277,21 @@ class JobManager:
                     actor, notebook_id, payload.get("draftId", ""),
                     payload.get("confirmed") is True,
                 )
+            elif action == "notebook_ask":
+                result = self.service.notebook_ask(
+                    actor, payload["notebookId"], payload["question"]
+                )
+            elif action == "notebook_research":
+                result = self.service.notebook_research(actor, payload["topic"])
             else:
                 raise UserError("Acción desconocida.")
             self.service.store.update_job(job_id, "completed", result=result)
             self._deliver(job_id, actor, action, "completed", None, result)
         except UserError as exc:
             message = str(exc)[:500] or "La tarea falló."
-            self.service.store.update_job(job_id, "failed", message=message)
-            self._deliver(job_id, actor, action, "failed", message, None)
+            partial = getattr(exc, "result", None)
+            self.service.store.update_job(job_id, "failed", message=message, result=partial)
+            self._deliver(job_id, actor, action, "failed", message, partial)
         except Exception:
             # Never reflect arbitrary exception text: subprocess/network
             # libraries can include credentials or profile paths.
@@ -1162,7 +1378,7 @@ def create_app(service: NotebookService | None = None, manager: JobManager | Non
         action = data.get("action")
         valid = {
             "source_url", "source_pdf", "podcast", "report", "voice",
-            "news_draft", "news_publish",
+            "news_draft", "news_publish", "notebook_ask", "notebook_research",
         }
         if action not in valid:
             if action == "news":
@@ -1205,6 +1421,33 @@ def create_app(service: NotebookService | None = None, manager: JobManager | Non
                 validate_pdf_bytes(raw)
             except (binascii.Error, UserError):
                 return jsonify({"error": "pdfBase64 debe contener un PDF válido de hasta 4 MB."}), 400
+        if action == "notebook_ask":
+            notebook_id = data.get("notebookId")
+            question = data.get("question")
+            if not isinstance(notebook_id, str) or not notebook_id.strip():
+                return jsonify({"error": "notebook_ask requiere notebookId."}), 400
+            if not isinstance(question, str) or not question.strip():
+                return jsonify({"error": "notebook_ask requiere question."}), 400
+            if len(notebook_id) > 200 or len(question) > 4000:
+                return jsonify({"error": "notebookId o question supera el límite permitido."}), 400
+            data["notebookId"] = notebook_id.strip()
+            data["question"] = question.strip()
+        if action == "notebook_research":
+            topic = data.get("topic")
+            request_id = data.get("requestId")
+            if not isinstance(topic, str) or not topic.strip():
+                return jsonify({"error": "notebook_research requiere topic."}), 400
+            if len(topic) > 200:
+                return jsonify({"error": "topic supera el límite de 200 caracteres."}), 400
+            if request_id is not None and (
+                not isinstance(request_id, str) or not request_id.strip()
+                or len(request_id) > 200 or any(c in request_id for c in "\r\n")
+            ):
+                return jsonify({"error": "requestId no es válido."}), 400
+            data["topic"] = topic.strip()
+            data["normalizedTopic"] = service._normalized_topic(data["topic"])
+            if request_id is not None:
+                data["requestId"] = request_id.strip()
         try:
             job_id = manager.enqueue(_actor(), action, data)
         except UserError as exc:

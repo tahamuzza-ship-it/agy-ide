@@ -6,7 +6,7 @@ const { pipeline } = require('node:stream/promises');
 const { registerNotebookEndpointRoutes, createSupabaseStore, validateStored } = require('./notebooklm-endpoint.cjs');
 const PREFIX = '/api/notebooklm';
 const ID = /^[a-zA-Z0-9_-]{1,100}$/;
-const ACTIONS = new Set(['source_url', 'source_pdf', 'podcast', 'report', 'voice', 'news_draft', 'news_publish']);
+const ACTIONS = new Set(['source_url', 'source_pdf', 'podcast', 'report', 'voice', 'news_draft', 'news_publish', 'notebook_ask', 'notebook_research']);
 
 function hubBase(env) {
   if (!env.HUB_ENDPOINT_URL || !(env.CONEXION_NOTEBOOK_PUENTE || env.SGN_SECRET_TOKEN)) {
@@ -33,7 +33,7 @@ function sanitizedBody(suffix, body = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Solicitud no válida.');
   const output = {};
   const keys = suffix === '/notebooks' ? ['title'] : suffix === '/active' ? ['notebookId']
-    : ['action', 'notebookId', 'url', 'filename', 'pdfBase64', 'question', 'confirmed', 'draftId'];
+    : ['action', 'notebookId', 'url', 'filename', 'pdfBase64', 'question', 'topic', 'requestId', 'confirmed', 'draftId'];
   for (const key of keys) {
     if (body[key] === undefined) continue;
     if (key === 'confirmed') {
@@ -49,6 +49,13 @@ function sanitizedBody(suffix, body = {}) {
   }
   if (output.notebookId && !ID.test(output.notebookId)) throw new Error('Cuaderno no válido.');
   if (suffix === '/jobs' && !ACTIONS.has(output.action)) throw new Error('Acción no válida.');
+  if (output.action === 'notebook_ask') {
+    if (!output.notebookId || !String(output.question || '').trim()) throw new Error('Cuaderno y pregunta son obligatorios.');
+  }
+  if (output.action === 'notebook_research') {
+    if (!String(output.topic || '').trim()) throw new Error('El tema de investigación es obligatorio.');
+    if (output.requestId && !ID.test(output.requestId)) throw new Error('Identificador de solicitud no válido.');
+  }
   if (output.action === 'news_publish') {
     if (output.confirmed !== true) throw new Error('Revisa el borrador y confirma la publicación antes de continuar.');
     if (!/^[A-Za-z0-9_-]{16,160}$/.test(output.draftId || '')) throw new Error('Borrador no válido.');

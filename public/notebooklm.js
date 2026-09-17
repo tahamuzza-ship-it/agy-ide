@@ -13,6 +13,10 @@
   var newsDraft = null;
   var newsDraftToken = 0;
   var MAX_NEWS_SUMMARY_UTF16 = 3500;
+  var notebookRefreshTimer = null;
+  var notebookRefreshInFlight = false;
+  var notebookOptionsFingerprint = '';
+  var NOTEBOOK_REFRESH_MS = 20000;
 
   /* La API vive en la raíz incluso cuando el IDE se sirve bajo un prefijo. */
   function apiUrl(path) {
@@ -205,18 +209,37 @@
     confirmButton.addEventListener('click', function () { submitNews(confirmBox, confirmText, confirmButton, cancelButton); });
     document.getElementById('btn-notebooklm').addEventListener('click', open);
     document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && opened) close(); });
+    document.addEventListener('visibilitychange', function () {
+      if (!opened) return;
+      if (document.hidden) stopNotebookRefresh();
+      else { loadNotebooks(); scheduleNotebookRefresh(); }
+    });
     renderJobs([]);
+  }
+  function stopNotebookRefresh() {
+    if (notebookRefreshTimer) clearTimeout(notebookRefreshTimer);
+    notebookRefreshTimer = null;
+  }
+  function scheduleNotebookRefresh() {
+    stopNotebookRefresh();
+    if (!opened || document.hidden) return;
+    notebookRefreshTimer = setTimeout(function () {
+      notebookRefreshTimer = null;
+      loadNotebooks().finally(scheduleNotebookRefresh);
+    }, NOTEBOOK_REFRESH_MS);
   }
   async function open() {
     if (!overlay) createPanel();
     opened = true; overlay.classList.add('open'); overlay.setAttribute('aria-hidden', 'false');
     document.getElementById('notebooklm-close').focus();
     setStatus('Comprobando configuración y acceso…', '');
+    scheduleNotebookRefresh();
     await Promise.all([loadStatus(), loadNotebooks()]);
   }
   function close() {
     if (!overlay) return;
     opened = false; overlay.classList.remove('open'); overlay.setAttribute('aria-hidden', 'true');
+    stopNotebookRefresh();
     if (audioUrl) { URL.revokeObjectURL(audioUrl); audioUrl = ''; }
     document.getElementById('btn-notebooklm').focus();
   }
@@ -227,8 +250,19 @@
       else setStatus(data.message || 'Notebook LM no está configurado o la sesión no está autenticada. Revisa la configuración del servidor.', 'warn');
     } catch (error) { setStatus(error.message, 'error'); }
   }
-  function renderNotebooks() {
+  function renderNotebooks(errorMessage) {
+    var fingerprint = errorMessage
+      ? 'error:' + errorMessage
+      : JSON.stringify(notebooks.map(function (notebook) {
+        return [String(notebook.id), String(notebook.title || notebook.id)];
+      })) + ':' + activeNotebookId;
+    if (fingerprint === notebookOptionsFingerprint) return;
+    notebookOptionsFingerprint = fingerprint;
     notebookSelect.replaceChildren();
+    if (errorMessage) {
+      notebookSelect.appendChild(el('option', { value: '' }, 'No se pudieron cargar los notebooks'));
+      return;
+    }
     if (!notebooks.length) {
       notebookSelect.appendChild(el('option', { value: '' }, 'Sin notebooks todavía'));
       return;
@@ -239,17 +273,26 @@
     });
   }
   async function loadNotebooks() {
+    if (notebookRefreshInFlight) return;
+    notebookRefreshInFlight = true;
     try {
       var data = await request('/notebooks');
-      notebooks = Array.isArray(data.notebooks) ? data.notebooks : [];
-      var nextNotebookId = data.activeNotebookId || (notebooks[0] && notebooks[0].id) || '';
+      var nextNotebooks = Array.isArray(data.notebooks) ? data.notebooks : [];
+      var currentStillExists = nextNotebooks.some(function (notebook) { return String(notebook.id) === String(activeNotebookId); });
+      var serverStillExists = nextNotebooks.some(function (notebook) { return String(notebook.id) === String(data.activeNotebookId || ''); });
+      notebooks = nextNotebooks;
+      var nextNotebookId = currentStillExists
+        ? activeNotebookId
+        : (serverStillExists ? data.activeNotebookId : ((notebooks[0] && notebooks[0].id) || ''));
       if (activeNotebookId && nextNotebookId !== activeNotebookId) invalidateNewsDraft();
       activeNotebookId = nextNotebookId;
       renderNotebooks(); await loadSources();
     } catch (error) {
       invalidateNewsDraft();
-      notebooks = []; activeNotebookId = ''; renderNotebooks(); renderSources([]);
+      notebooks = []; activeNotebookId = ''; renderNotebooks(error.message); renderSources([]);
       setStatus(error.message, 'error');
+    } finally {
+      notebookRefreshInFlight = false;
     }
   }
   async function createNotebook(input, actionButton) {
@@ -263,6 +306,7 @@
       if (data.notebook) notebooks.push(data.notebook);
       activeNotebookId = data.activeNotebookId || (data.notebook && data.notebook.id) || activeNotebookId;
       input.value = ''; renderNotebooks(); await loadSources(); setStatus('Notebook creado y seleccionado.', 'ok');
+      await loadNotebooks();
     } catch (error) { setStatus(error.message, 'error'); }
     finally { setBusy(false); }
   }
