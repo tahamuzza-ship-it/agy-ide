@@ -40,11 +40,20 @@ MAX_TELEGRAM_FILE_BYTES = 45 * 1024 * 1024
 REMOTE_PUBLISHER_TIMEOUT_SECONDS = 30
 MAX_JOB_QUEUE = 32
 MAX_WORKERS = 2
+MAX_NEWS_TEXT_UTF16 = 3500
+NEWS_DRAFT_TTL_SECONDS = 30 * 60
 URL_RE = re.compile(r"^https?://", re.I)
 
 
 class UserError(Exception):
     """An actionable, safe-to-show error caused by user/configuration input."""
+
+
+def utf16_code_units(value: str) -> int:
+    """Count the units Telegram applies to its text limit (not Python chars)."""
+    if not isinstance(value, str):
+        return 0
+    return len(value.encode("utf-16-le", "surrogatepass")) // 2
 
 
 def timing_safe_equal(provided: str | bytes, expected: str | bytes) -> bool:
@@ -163,15 +172,21 @@ class RemoteNotebookPublisher:
         if result.get("ready") is not True:
             raise UserError("El canal de publicación remoto no está listo.")
 
-    def __call__(self, text: str) -> dict[str, Any]:
-        # This ID is generated exactly once for this explicit confirmed action.
-        # A failed/uncertain callback is deliberately surfaced, never retried.
-        if not isinstance(text, str) or not text or len(text) > 3900:
-            raise UserError("La noticia supera el límite de publicación de 3900 caracteres.")
-        request_id = uuid.uuid4().hex
+    def __call__(self, text: str, draft_id: str) -> dict[str, Any]:
+        """Publish one claimed draft using its durable ID as the idempotency key."""
+        # The draft ID is created and durably claimed by SQLite before this
+        # callback. Never substitute a new random request ID: an uncertain
+        # network send must remain non-repeatable across process restarts.
+        if (not isinstance(text, str) or not text
+                or utf16_code_units(text) > MAX_NEWS_TEXT_UTF16):
+            raise UserError(
+                "La noticia supera el límite de publicación de 3500 unidades UTF-16."
+            )
+        if not isinstance(draft_id, str) or not re.fullmatch(r"[a-f0-9]{32}", draft_id):
+            raise UserError("El identificador del borrador no es válido.")
         result = self._request("POST", "/api/notebooklm/publish", {
             "text": str(text),
-            "requestId": request_id,
+            "requestId": draft_id,
             "confirmed": True,
         })
         if result.get("ok") is not True:
@@ -286,6 +301,13 @@ class SQLiteStore:
                     job_id TEXT PRIMARY KEY, status TEXT NOT NULL,
                     message TEXT, updated_at REAL NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS news_drafts (
+                    id TEXT PRIMARY KEY, actor TEXT NOT NULL, notebook_id TEXT NOT NULL,
+                    text TEXT NOT NULL, created_at REAL NOT NULL, expires_at REAL NOT NULL,
+                    claimed_at REAL
+                );
+                CREATE INDEX IF NOT EXISTS news_drafts_owner_idx
+                    ON news_drafts(actor, notebook_id, expires_at);
                 """
             )
             self.db.commit()
@@ -387,6 +409,49 @@ class SQLiteStore:
                 return True
             except sqlite3.IntegrityError:
                 return False
+
+    def create_news_draft(self, actor: str, notebook_id: str, text: str) -> str:
+        """Persist preview text before it can be shown to a caller."""
+        draft_id = uuid.uuid4().hex
+        now = time.time()
+        with self.lock:
+            self.db.execute(
+                "INSERT INTO news_drafts(id,actor,notebook_id,text,created_at,expires_at,claimed_at) "
+                "VALUES(?,?,?,?,?,?,NULL)",
+                (draft_id, actor, notebook_id, text, now, now + NEWS_DRAFT_TTL_SECONDS),
+            )
+            self.db.commit()
+        return draft_id
+
+    def claim_news_draft(self, draft_id: str, actor: str, notebook_id: str) -> dict[str, Any]:
+        """Atomically claim one unexpired owner-scoped draft before a send.
+
+        A committed claim is intentionally never released, including after a
+        restart or callback timeout. This makes a possibly sent message unable
+        to replay.
+        """
+        now = time.time()
+        with self.lock:
+            row = self.db.execute(
+                "SELECT id, actor, notebook_id, text, expires_at, claimed_at "
+                "FROM news_drafts WHERE id=?", (draft_id,)
+            ).fetchone()
+            if not row or row["actor"] != actor or row["notebook_id"] != notebook_id:
+                raise UserError("El borrador no existe para este actor y cuaderno.")
+            if row["expires_at"] <= now:
+                raise UserError("El borrador de noticia caducó; genera una vista previa nueva.")
+            if row["claimed_at"] is not None:
+                raise UserError("Este borrador ya fue reclamado y no se volverá a publicar.")
+            claimed = self.db.execute(
+                "UPDATE news_drafts SET claimed_at=? WHERE id=? AND actor=? AND notebook_id=? "
+                "AND expires_at>? AND claimed_at IS NULL",
+                (now, draft_id, actor, notebook_id, now),
+            )
+            self.db.commit()
+            if claimed.rowcount != 1:
+                # This covers concurrent processes which pass the first read.
+                raise UserError("Este borrador ya fue reclamado o caducó; no se volverá a publicar.")
+            return {"id": row["id"], "text": row["text"]}
 
     def finish_delivery(self, job_id: str, status: str, message: str | None = None) -> None:
         with self.lock:
@@ -690,30 +755,73 @@ class NotebookService:
                 return dict(self._store_result(target, "respuesta.mp3", "audio/mpeg"), text=text)
         raise UserError("Acción de investigación no reconocida.")
 
-    def news(self, actor: str, url: str, notebook_id: str | None = None,
-             confirmed: bool = False) -> dict[str, Any]:
-        if not confirmed:
-            raise UserError("La publicación requiere confirmación explícita.")
+    def news_draft(self, actor: str, notebook_id: str | None = None) -> dict[str, str]:
+        """Summarize the sources already in one notebook without publishing."""
+        ident = self._notebook_id(actor, notebook_id)
+        existing_sources = self.sources(actor, ident)["sources"]
+        if not existing_sources:
+            raise UserError(
+                "El cuaderno no tiene fuentes; añade fuentes al cuaderno antes de crear una noticia."
+            )
+        prompt = (
+            "Redacta un resumen de noticias en español basado exclusivamente en las fuentes "
+            "ya seleccionadas de este cuaderno. Incluye datos y contexto. Debe caber en "
+            f"un único mensaje de Telegram: máximo {MAX_NEWS_TEXT_UTF16} unidades UTF-16 "
+            "(los emoji fuera de BMP cuentan como dos). No añadas fuentes ni propongas publicar."
+        )
+        answer = self.cli.json(
+            ["ask", prompt, "-n", ident, "--new", "--yes", "--json"], timeout=900
+        )
+        text = _as_text(answer).strip()
+        if not text:
+            raise UserError("NotebookLM no devolvió texto para la vista previa de la noticia.")
+        if utf16_code_units(text) > MAX_NEWS_TEXT_UTF16:
+            shortening_prompt = (
+                "Reescribe el siguiente borrador como un resumen de noticias en español, "
+                f"sin perder sus datos y contexto esenciales y con un máximo estricto de "
+                f"{MAX_NEWS_TEXT_UTF16} unidades UTF-16 para un único mensaje de Telegram. "
+                "Devuelve solo el texto final, sin explicación.\n\nBORRADOR:\n" + text
+            )
+            shortened = self.cli.json(
+                ["ask", shortening_prompt, "-n", ident, "--new", "--yes", "--json"],
+                timeout=900,
+            )
+            text = _as_text(shortened).strip()
+        if not text or utf16_code_units(text) > MAX_NEWS_TEXT_UTF16:
+            raise UserError(
+                "NotebookLM devolvió una noticia que supera 3500 unidades UTF-16; "
+                "no se truncó ni publicó. Genera una vista previa nueva."
+            )
+        draft_id = self.store.create_news_draft(actor, ident, text)
+        return {"text": text, "draftId": draft_id, "notebookId": ident}
+
+    def news_publish(self, actor: str, notebook_id: str | None, draft_id: str,
+                     confirmed: bool = False) -> dict[str, Any]:
+        """Claim an exact persisted preview, then send it once if confirmed."""
+        if confirmed is not True:
+            raise UserError("La publicación de noticias requiere confirmed:true.")
+        ident = self._notebook_id(actor, notebook_id)
+        if not isinstance(draft_id, str) or not re.fullmatch(r"[a-f0-9]{32}", draft_id):
+            raise UserError("draftId no es válido.")
         if not self.publisher:
-            # API-only mode intentionally has no Telegram credentials. Fail
-            # before doing any NotebookLM work so an unavailable publication
-            # destination is explicit and cannot consume a queued job.
             raise UserError("No hay canal de Telegram configurado para publicar noticias.")
+        # A read-only preflight may happen before the irreversible claim. The
+        # external publication call itself is always after the durable claim.
         preflight = getattr(self.publisher, "preflight", None)
         if callable(preflight):
-            # Publication configuration/permissions are checked before source
-            # ingestion and NotebookLM generation consume work.
             preflight()
-        added = self.add_url(actor, url, notebook_id)
-        ident = self._notebook_id(actor, notebook_id)
-        source_id = added["source"].get("id")
-        args = ["ask", "Resume esta noticia con datos y contexto, en español.", "-n", ident, "--new", "--yes", "--json"]
-        if source_id:
-            args += ["-s", source_id]
-        answer = self.cli.json(args, timeout=900)
-        text = _as_text(answer)
-        self.publisher(text)
-        return {"text": text}
+        draft = self.store.claim_news_draft(draft_id, actor, ident)
+        # Do not catch/retry here: after this point a timeout is an uncertain
+        # send and this draft must remain claimed across restarts.
+        self.publisher(draft["text"], draft_id)
+        return {"text": draft["text"], "published": True}
+
+    def news(self, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        """Reject the removed URL-ingestion flow instead of providing a bypass."""
+        raise UserError(
+            "La acción news anterior ya no publica. Usa news_draft y después "
+            "news_publish con draftId y confirmed:true."
+        )
 
     def _store_result(self, path: Path, file_name: str, mime_type: str) -> dict[str, Any]:
         if path.stat().st_size > MAX_TELEGRAM_FILE_BYTES:
@@ -767,6 +875,8 @@ class JobManager:
         self.notifier = notifier
 
     def enqueue(self, actor: str, action: str, payload: dict[str, Any]) -> str:
+        if action == "news_publish" and payload.get("confirmed") is not True:
+            raise UserError("La publicación de noticias requiere confirmed:true.")
         if not self.slots.acquire(blocking=False):
             raise UserError("La cola está llena; inténtalo de nuevo más tarde.")
         # Snapshot the active notebook now, not when a worker eventually gets
@@ -793,8 +903,13 @@ class JobManager:
                 result = self.service.add_pdf(actor, raw, payload.get("filename", "fuente.pdf"), notebook_id)
             elif action in {"podcast", "report", "voice"}:
                 result = self.service.research(actor, action, notebook_id, payload.get("question"))
-            elif action == "news":
-                result = self.service.news(actor, payload.get("url", ""), notebook_id, True)
+            elif action == "news_draft":
+                result = self.service.news_draft(actor, notebook_id)
+            elif action == "news_publish":
+                result = self.service.news_publish(
+                    actor, notebook_id, payload.get("draftId", ""),
+                    payload.get("confirmed") is True,
+                )
             else:
                 raise UserError("Acción desconocida.")
             self.service.store.update_job(job_id, "completed", result=result)
@@ -887,12 +1002,41 @@ def create_app(service: NotebookService | None = None, manager: JobManager | Non
     def api_job():
         data = request.get_json(silent=True) or {}
         action = data.get("action")
-        valid = {"source_url", "source_pdf", "podcast", "report", "voice", "news"}
+        valid = {
+            "source_url", "source_pdf", "podcast", "report", "voice",
+            "news_draft", "news_publish",
+        }
         if action not in valid:
-            return jsonify({"error": "action debe ser source_url, source_pdf, podcast, report, voice o news."}), 400
-        if action == "news" and data.get("confirmed") is not True:
-            return jsonify({"error": "La publicación de noticias requiere confirmed:true."}), 400
-        if action == "source_url" or action == "news":
+            if action == "news":
+                return jsonify({
+                    "error": (
+                        "La acción news anterior no publica. Usa news_draft y después "
+                        "news_publish con draftId y confirmed:true."
+                    )
+                }), 400
+            return jsonify({
+                "error": (
+                    "action debe ser source_url, source_pdf, podcast, report, voice, "
+                    "news_draft o news_publish."
+                )
+            }), 400
+        if action == "news_draft":
+            if not data.get("notebookId"):
+                return jsonify({"error": "news_draft requiere notebookId."}), 400
+            if "text" in data or "destination" in data:
+                return jsonify({
+                    "error": "news_draft genera el texto desde las fuentes del cuaderno; no acepta texto ni destino."
+                }), 400
+        if action == "news_publish":
+            if not data.get("notebookId") or not data.get("draftId"):
+                return jsonify({"error": "news_publish requiere notebookId y draftId."}), 400
+            if data.get("confirmed") is not True:
+                return jsonify({"error": "La publicación de noticias requiere confirmed:true."}), 400
+            if "text" in data or "destination" in data:
+                return jsonify({
+                    "error": "news_publish usa únicamente el texto y destino fijados en el borrador."
+                }), 400
+        if action == "source_url":
             try:
                 validate_public_url(data.get("url", ""))
             except UserError as exc:
@@ -956,7 +1100,7 @@ def build_bot(service: NotebookService, manager: JobManager | None = None):
     if channel:
         # Kept as a callback on the shared service so API and Telegram jobs
         # apply the same confirmation and summarisation logic.
-        service.publisher = lambda text: bot.send_message(channel, text)
+        service.publisher = lambda text, _draft_id: bot.send_message(channel, text)
     manager = manager or JobManager(service)
     pending: dict[int, dict[str, Any]] = {}
     callbacks: dict[str, tuple[int, str]] = {}
@@ -1023,9 +1167,6 @@ def build_bot(service: NotebookService, manager: JobManager | None = None):
             source = result.get("source", {})
             bot.send_message(chat_id, f"Fuente indexada: {source.get('title', 'fuente')}.",
                              reply_markup=panel_markup())
-            return
-        if action == "news":
-            send_chunks(chat_id, result.get("text", ""), "Noticia publicada en el canal:\n")
             return
         download_url = result.get("downloadUrl", "")
         file_id = download_url.rsplit("/", 1)[-1] if "/files/" in download_url else ""
@@ -1112,9 +1253,12 @@ def build_bot(service: NotebookService, manager: JobManager | None = None):
             bot.send_message(chat_id, "Crear cuaderno: escribe un título. Resultado: se crea y queda seleccionado.", reply_markup=cancel_markup())
             return
         if text == "📰 Publicar noticia":
-            with pending_lock:
-                pending[chat_id] = {"kind": "news_url"}
-            bot.send_message(chat_id, "Publicar noticia: escribe una URL pública. Primero indexaré y resumiré; antes de publicar en el canal pediré confirmación.", reply_markup=cancel_markup())
+            bot.send_message(
+                chat_id,
+                "La publicación de noticias del bot independiente está desactivada: "
+                "usa la vista previa news_draft y la confirmación news_publish de la API.",
+                reply_markup=panel_markup(),
+            )
             return
         if text == "🗣 Preguntar por voz":
             with pending_lock:
@@ -1138,14 +1282,6 @@ def build_bot(service: NotebookService, manager: JobManager | None = None):
             elif kind == "create":
                 result = service.create_notebook(str(chat_id), text)
                 bot.send_message(chat_id, f"Cuaderno creado y seleccionado: {result['notebook']['title']}.", reply_markup=panel_markup())
-            elif kind == "news_url":
-                validate_public_url(text)
-                with pending_lock:
-                    pending[chat_id] = {"kind": "news_confirm", "url": text}
-                mark = types.InlineKeyboardMarkup()
-                mark.add(types.InlineKeyboardButton("✅ Confirmar publicación", callback_data="nl:newsok"),
-                         types.InlineKeyboardButton("Cancelar", callback_data="nl:cancel"))
-                bot.send_message(chat_id, "URL validada. Al confirmar, la indexaré, resumiré esa fuente y publicaré el resultado en el canal.", reply_markup=mark)
             elif kind == "voice":
                 job = manager.enqueue(str(chat_id), "voice", {"question": text})
                 bot.send_message(chat_id, f"Pregunta en cola ({job[:8]}). Te enviaré el MP3 al terminar.")
@@ -1222,13 +1358,11 @@ def build_bot(service: NotebookService, manager: JobManager | None = None):
                 bot.answer_callback_query(call.id)
                 bot.send_message(chat_id, "Crear cuaderno: escribe un título.", reply_markup=cancel_markup())
             elif data == "nl:newsok":
-                state = pending.get(chat_id)
-                if not state or state.get("kind") != "news_confirm":
-                    raise UserError("La confirmación caducó; vuelve a iniciar Publicar noticia.")
-                job = manager.enqueue(str(chat_id), "news", {"url": state["url"]})
                 pending.pop(chat_id, None)
-                bot.answer_callback_query(call.id, "Publicación confirmada.")
-                bot.send_message(chat_id, f"Publicación confirmada. Trabajo en cola: {job[:8]}.")
+                raise UserError(
+                    "La publicación por URL ya no está disponible. Usa news_draft y "
+                    "news_publish con draftId y confirmed:true en la API."
+                )
             elif data == "nl:cancel":
                 pending.pop(chat_id, None)
                 bot.answer_callback_query(call.id, "Cancelado.")
@@ -1237,18 +1371,6 @@ def build_bot(service: NotebookService, manager: JobManager | None = None):
             bot.answer_callback_query(call.id, "Error")
             bot.send_message(chat_id, str(exc))
 
-    def request_news_confirmation(chat_id: int, url: str):
-        validate_public_url(url)
-        pending[chat_id] = {"kind": "news_confirm", "url": url}
-        mark = types.InlineKeyboardMarkup()
-        mark.add(types.InlineKeyboardButton("✅ Confirmar publicación", callback_data="nl:newsok"),
-                 types.InlineKeyboardButton("Cancelar", callback_data="nl:cancel"))
-        bot.send_message(
-            chat_id,
-            "URL validada. Al confirmar, la indexaré, resumiré esa fuente y publicaré el resultado en el canal.",
-            reply_markup=mark,
-        )
-
     # Compatibility commands remain optional; buttons are the primary UX.
     @bot.message_handler(commands=["noticia", "voz"])
     def compatibility(message):
@@ -1256,14 +1378,11 @@ def build_bot(service: NotebookService, manager: JobManager | None = None):
             return
         command, _, rest = (message.text or "").partition(" ")
         if command == "/noticia":
-            if rest.strip():
-                try:
-                    request_news_confirmation(int(message.chat.id), rest.strip())
-                except Exception as exc:
-                    bot.send_message(message.chat.id, str(exc))
-            else:
-                pending[int(message.chat.id)] = {"kind": "news_url"}
-                bot.send_message(message.chat.id, "Compatibilidad /noticia: envía la URL; pediré confirmación antes de publicar.")
+            bot.send_message(
+                message.chat.id,
+                "/noticia no acepta URLs ni publica directamente. Usa news_draft y "
+                "news_publish con confirmación explícita en la API.",
+            )
         else:
             pending[int(message.chat.id)] = {"kind": "voice"}
             if rest.strip():

@@ -45,11 +45,14 @@ obligatorias:
   opcional): URL HTTPS del registro AGY. Si se omite usa
   `https://agy-ide-production.up.railway.app/api/notebooklm/endpoint`.
 
-`TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHANNEL_ID` no son necesarios en modo API:
-ese modo no crea un bot, nunca inicia polling y deja la publicación de noticias
-sin configurar. En modo bot independiente (`python main.py`) sí son obligatorios.
-Las peticiones de noticias en modo API devuelven un error explícito indicando
-que no hay canal configurado; las demás funciones de la API siguen disponibles.
+`TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHANNEL_ID` no son necesarios en modo API.
+Para permitir noticias desde ese modo, configura opcionalmente
+`NOTEBOOKLM_PUBLISHER_URL` con el **origen** HTTPS público de CiberCode/Railway
+(sin ruta, credenciales, query ni fragment). Python llama al callback
+autenticado con `CONEXION_NOTEBOOK_PUENTE`, pero nunca recibe un token de
+Telegram. Si no se configura, aún se pueden crear vistas previas de noticias,
+pero la publicación confirmada falla explícitamente sin reclamar ni enviar el
+borrador; las demás funciones siguen disponibles.
 
 El nombre anterior `SGN_SECRET_TOKEN` sigue aceptándose por compatibilidad,
 pero las nuevas configuraciones deben usar `CONEXION_NOTEBOOK_PUENTE`.
@@ -77,16 +80,16 @@ El webhook existente de **Code Arquitect** sigue en CiberCode/Railway y conserva
 las misiones de PC3. Su botón **Notebook LM** y `/panel` usan esta API como Hub.
 Para esta integración, ejecuta Python **solo con `--api-only`**: no crea un
 bot, no inicia un segundo polling ni borra el webhook actual. En este modo la
-publicación de noticias queda deliberadamente sin configurar. Si se necesita
-publicar desde Code Arquitect, hay que añadir un publicador autorizado sin
-activar polling. El modo bot independiente es exclusivamente para otro bot
-sin webhook activo; no se debe usar con el token de Code Arquitect.
+publicación de noticias se habilita únicamente mediante
+`NOTEBOOKLM_PUBLISHER_URL` hacia el callback Railway, sin activar polling. El
+modo bot independiente es exclusivamente para otro bot sin webhook activo; no
+se debe usar con el token de Code Arquitect.
 
 Configura `HUB_ENDPOINT_URL` y la misma `CONEXION_NOTEBOOK_PUENTE` en Python, AGY IDE
 y el servicio CiberCode que atiende a Code Arquitect. La sesión Google se inicia
-en el equipo del Hub. La publicación futura necesita un canal autorizado y
-debe conservar el bot y chat de origen. Los tokens de los distintos bots del
-workspace no son intercambiables.
+en el equipo del Hub. La publicación se hace solo por el callback Railway al
+canal fijo autorizado; los tokens de los distintos bots del workspace no son
+intercambiables.
 
 La botonera y la ayuda se pueden abrir sin Hub configurado. La ingesta,
 investigación y generación real requieren la conexión y la sesión Google.
@@ -112,8 +115,10 @@ explica el dato requerido y el resultado:
 * **➕ Añadir Fuente**: URL web/YouTube o PDF de hasta 4 MB.
 * **🚀 Iniciar Investigación**: **🎙 Podcast** o **📑 Reporte**.
 * **📊 Ver Fuentes**, **📂 Cuadernos**, **➕ Crear cuaderno** y selección segura.
-* **📰 Publicar noticia**: indexa y resume una URL, pero siempre muestra una
-  confirmación antes de publicar en el canal.
+* **📰 Publicar noticia**: en el modo API se crea primero un borrador usando
+  exclusivamente las fuentes ya presentes en el cuaderno; la publicación es un
+  paso separado y confirmado. El bot independiente no ofrece el antiguo flujo
+  de URL para que no exista un atajo de publicación.
 * **🗣 Preguntar por voz**: respuesta del cuaderno y MP3 neural en español.
 * **🌐 Estado de nodos**, **❓ Ayuda**, **⬅ Volver** y **Cancelar**.
 
@@ -143,8 +148,8 @@ Implementadas:
 * `GET /api/notebooklm/nodes` →
   `{online,status,message,url?}`
 * `POST /api/notebooklm/jobs` con `action` en
-  `source_url|source_pdf|podcast|report|voice|news`; devuelve `202` con
-  `{id,status:"queued"}`.
+  `source_url|source_pdf|podcast|report|voice|news_draft|news_publish`;
+  devuelve `202` con `{id,status:"queued"}`.
 * `GET /api/notebooklm/jobs/:id`
 * `GET /api/notebooklm/files/:id`
 
@@ -156,8 +161,53 @@ ni el diagnóstico crudo de la CLI.
 Los trabajos tienen como máximo dos ejecuciones simultáneas y 32 posiciones de
 cola. Las tareas interrumpidas se marcan `failed` al reiniciar. El PDF debe
 llevar base64 con firma `%PDF-` y no superar 4 MB decodificados; el body total
-está limitado a 8 MB. `news` exige `confirmed:true`, además de ser una acción
-externa.
+está limitado a 8 MB.
+
+### Noticias: vista previa y publicación explícita
+
+No hay una ruta `/news`: se usa la cola existente.
+
+1. `POST /api/notebooklm/jobs` con
+   `{"action":"news_draft","notebookId":"..."}` crea una vista previa. No
+   requiere `confirmed:true`, no añade URLs/fuentes y no llama al publicador.
+   Lee las fuentes existentes del cuaderno; un cuaderno vacío falla de forma
+   explícita. Al completarse, el resultado es `{text,draftId,notebookId}`.
+2. Muestra `text` al usuario y solo después envía
+   `{"action":"news_publish","notebookId":"...","draftId":"...","confirmed":true}`.
+   No se aceptan `text` ni `destination` aportados por el cliente. Al
+   completarse devuelve `{text,published:true}` con el texto exacto del
+   borrador durable.
+
+El resumen le pide a NotebookLM español, datos y contexto y un máximo de
+**3500 unidades UTF-16** (Telegram cuenta un emoji fuera del BMP como dos
+unidades; `len()` de Python no sirve para este límite). Se comprueba el
+resultado y, solo si lo supera, se hace una única petición explícita para
+acortarlo. Si aún supera el límite, falla: nunca se corta ni se envía un mensaje
+largo.
+
+Los borradores viven 30 minutos en SQLite y pertenecen simultáneamente al actor
+y al cuaderno. Antes de enviar, SQLite los reclama de forma atómica y no
+repetible. El reclamo se conserva tras reiniciar; un timeout o resultado
+incierto nunca se reintenta automáticamente. La acción antigua `news` se
+rechaza explícitamente y no puede publicar.
+
+## Callback de publicación Railway
+
+El servicio CiberCode expone `GET /api/notebooklm/publication-status` (solo
+lectura) y `POST /api/notebooklm/publish`. Ambos requieren `X-SGN-Token` y
+comparan la clave en tiempo constante. La publicación acepta únicamente
+`{text, requestId, confirmed:true}`; no acepta destino aportado por el
+solicitante. Railway conserva el token del bot y publica solo en
+`TELEGRAM_CHANNEL_ID`, que es obligatorio en Railway y puede ser un ID numérico
+o un `@username` de canal. Si falta, el estado y la publicación fallan
+explícitamente; nunca hay un canal de reserva.
+
+Antes de cada envío verifica con Telegram que la identidad sea exactamente
+`Codearquitect_bot`, que el destino sea un canal y que el bot sea `creator` o
+tenga `can_post_messages:true`. El estado GET no expone tokens ni otros
+secretos. El callback recibe el mismo `draftId` durable como `requestId`: un
+duplicado ya confirmado no vuelve a enviar, y un timeout/error de envío queda
+incierto y no se reintenta automáticamente ni se redirige a otro canal.
 
 ## Cloudflare Tunnel
 

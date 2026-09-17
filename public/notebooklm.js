@@ -8,7 +8,11 @@
   var busy = false;
   var jobTimers = {};
   var jobActions = {};
+  var jobContexts = {};
   var audioUrl = '';
+  var newsDraft = null;
+  var newsDraftToken = 0;
+  var MAX_NEWS_SUMMARY_UTF16 = 3500;
 
   /* La API vive en la raíz incluso cuando el IDE se sirve bajo un prefijo. */
   function apiUrl(path) {
@@ -147,18 +151,18 @@
     voiceCard.appendChild(voiceForm);
     var newsCard = el('section', { className: 'notebooklm-card' });
     newsCard.appendChild(el('h3', {}, '5 · NOTICIAS'));
-    newsCard.appendChild(el('p', {}, 'Indexa, resume y publica una noticia en el canal. Entrada: URL. Resultado: trabajo asíncrono. Siempre pide confirmación antes de publicar.'));
+    newsCard.appendChild(el('p', {}, 'Prepara un resumen usando las fuentes existentes del notebook y publícalo en el canal. Siempre pide confirmación antes de publicar.'));
     var newsForm = el('form', { id: 'notebooklm-news-form', className: 'notebooklm-form' });
-    var newsInput = el('input', { id: 'notebooklm-news-url', className: 'notebooklm-input', type: 'url', placeholder: 'https://… noticia', 'aria-label': 'URL de noticia' });
-    var newsButton = button('notebooklm-news', '📰 Preparar noticia', 'Revisar y pedir confirmación para publicar la noticia', 'accent');
+    var newsButton = button('notebooklm-news', '📰 Preparar noticia', 'Preparar un resumen de noticias usando las fuentes existentes', 'accent');
     newsButton.setAttribute('data-nlm-submit', '');
-    newsForm.append(newsInput, newsButton);
+    newsForm.append(newsButton);
     var confirmBox = el('div', { id: 'notebooklm-news-confirm', className: 'notebooklm-confirm', role: 'alert' });
-    confirmBox.appendChild(el('div', {}, 'Se enviará esta URL para indexar, resumir y publicar en el canal. Confirma solo si quieres hacerlo:'));
-    var confirmUrl = el('div', { id: 'notebooklm-confirm-url' });
-    confirmBox.appendChild(confirmUrl);
+    confirmBox.hidden = true;
+    confirmBox.appendChild(el('div', {}, 'Vista previa del resumen generado con las fuentes existentes. Confirma solo si quieres publicarlo:'));
+    var confirmText = el('div', { id: 'notebooklm-confirm-text', className: 'notebooklm-result-text' });
+    confirmBox.appendChild(confirmText);
     var confirmActions = el('div', { className: 'notebooklm-confirm-actions' });
-    var confirmButton = button('notebooklm-news-confirm', '✓ Confirmar publicación', 'Confirmar el trabajo de noticias', 'accent');
+    var confirmButton = button('notebooklm-news-confirm', '✓ Publicar en grupo', 'Publicar este resumen en el grupo', 'accent');
     var cancelButton = button('notebooklm-news-cancel', 'Cancelar', 'Cancelar la publicación de noticias', 'secondary');
     confirmActions.append(confirmButton, cancelButton); confirmBox.appendChild(confirmActions);
     newsCard.append(newsForm, confirmBox);
@@ -176,7 +180,7 @@
     [['Elige o crea un notebook', 'selecciona el contexto donde se guardarán las fuentes.'],
      ['Añade fuentes', 'pega una URL web/YouTube o selecciona un PDF y pulsa su botón.'],
      ['Genera', 'usa Podcast MP3, Reporte o Preguntar; verás el progreso y el resultado real.'],
-     ['Noticias', 'escribe la URL y confirma explícitamente antes de publicar en el canal.'],
+     ['Noticias', 'prepara un resumen desde las fuentes existentes, revisa la vista previa y confirma explícitamente antes de publicar en el canal.'],
      ['Estado y ayuda', '◉ Nodo comprueba HTTPS; ❔ Ayuda muestra esta explicación; × cierra sin perder el IDE.']]
       .forEach(function (item) { var li = el('li'); li.appendChild(el('strong', {}, item[0] + ': ')); li.appendChild(el('span', {}, item[1])); helpList.appendChild(li); });
     help.appendChild(helpList); body.appendChild(help);
@@ -196,9 +200,9 @@
     podcastButton.addEventListener('click', function () { submitJob('podcast', podcastButton); });
     reportButton.addEventListener('click', function () { submitJob('report', reportButton); });
     voiceForm.addEventListener('submit', function (event) { event.preventDefault(); ask(questionInput, voiceButton); });
-    newsForm.addEventListener('submit', function (event) { event.preventDefault(); prepareNews(newsInput, confirmBox, confirmUrl); });
-    cancelButton.addEventListener('click', function () { confirmBox.classList.remove('open'); confirmBox.hidden = true; });
-    confirmButton.addEventListener('click', function () { submitNews(newsInput, confirmBox, confirmButton); });
+    newsForm.addEventListener('submit', function (event) { event.preventDefault(); prepareNews(confirmBox, confirmText, newsButton); });
+    cancelButton.addEventListener('click', function () { cancelNewsDraft(confirmBox, confirmText); });
+    confirmButton.addEventListener('click', function () { submitNews(confirmBox, confirmText, confirmButton, cancelButton); });
     document.getElementById('btn-notebooklm').addEventListener('click', open);
     document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && opened) close(); });
     renderJobs([]);
@@ -238,9 +242,12 @@
     try {
       var data = await request('/notebooks');
       notebooks = Array.isArray(data.notebooks) ? data.notebooks : [];
-      activeNotebookId = data.activeNotebookId || (notebooks[0] && notebooks[0].id) || '';
+      var nextNotebookId = data.activeNotebookId || (notebooks[0] && notebooks[0].id) || '';
+      if (activeNotebookId && nextNotebookId !== activeNotebookId) invalidateNewsDraft();
+      activeNotebookId = nextNotebookId;
       renderNotebooks(); await loadSources();
     } catch (error) {
+      invalidateNewsDraft();
       notebooks = []; activeNotebookId = ''; renderNotebooks(); renderSources([]);
       setStatus(error.message, 'error');
     }
@@ -249,6 +256,7 @@
     if (busy) return;
     var title = input.value.trim();
     if (!title) { setStatus('Escribe un título para crear el notebook.', 'warn'); input.focus(); return; }
+    invalidateNewsDraft();
     setBusy(true);
     try {
       var data = await request('/notebooks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: title }) });
@@ -261,6 +269,7 @@
   async function selectNotebook() {
     var id = notebookSelect.value;
     if (!id || id === activeNotebookId) return;
+    invalidateNewsDraft();
     try {
       var data = await request('/active', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notebookId: id }) });
       activeNotebookId = data.activeNotebookId || id; renderNotebooks(); await loadSources(); setStatus('Notebook activo actualizado.', 'ok');
@@ -316,19 +325,49 @@
     try { await startJob({ action: 'voice', question: question }, actionButton); jobStarted = true; input.value = ''; }
     catch (_) {} finally { if (!jobStarted) setBusy(false); }
   }
-  async function prepareNews(input, box, urlBox) {
-    if (busy || !requireNotebook()) return;
-    var url = input.value.trim();
-    if (!/^https?:\/\//i.test(url)) { setStatus('Escribe una URL válida de noticia.', 'warn'); input.focus(); return; }
-    box.dataset.url = url;
-    box.dataset.notebookId = selectedNotebook();
-    urlBox.textContent = url; box.hidden = false; box.classList.add('open'); document.getElementById('notebooklm-news-confirm').focus();
+  function invalidateNewsDraft() {
+    newsDraftToken++;
+    newsDraft = null;
+    var box = document.getElementById('notebooklm-news-confirm');
+    var textBox = document.getElementById('notebooklm-confirm-text');
+    if (box) { box.classList.remove('open'); box.hidden = true; }
+    if (textBox) textBox.textContent = '';
   }
-  async function submitNews(input, box, actionButton) {
+  function cancelNewsDraft(box, textBox) {
+    invalidateNewsDraft();
+    if (box) { box.classList.remove('open'); box.hidden = true; }
+    if (textBox) textBox.textContent = '';
+  }
+  async function prepareNews(box, textBox, actionButton) {
+    if (busy || !requireNotebook()) return;
+    invalidateNewsDraft();
+    var notebookId = selectedNotebook();
+    var token = newsDraftToken;
+    setBusy(true);
+    var jobStarted = false;
+    try {
+      await startJob({ action: 'news_draft', notebookId: notebookId }, actionButton, { notebookId: notebookId, newsDraftToken: token });
+      jobStarted = true;
+    } catch (_) {} finally { if (!jobStarted) setBusy(false); }
+  }
+  async function submitNews(box, textBox, actionButton, cancelButton) {
     if (busy) return;
+    var draft = newsDraft;
+    if (!draft || draft.token !== newsDraftToken || draft.notebookId !== selectedNotebook()) {
+      cancelNewsDraft(box, textBox);
+      setStatus('La vista previa ya no es válida porque cambió el notebook o se preparó otro borrador.', 'warn');
+      return;
+    }
+    newsDraft = null;
+    newsDraftToken++;
+    actionButton.disabled = true;
+    if (cancelButton) cancelButton.disabled = true;
     setBusy(true); box.classList.remove('open'); box.hidden = true;
     var jobStarted = false;
-    try { await startJob({ action: 'news', url: box.dataset.url, notebookId: box.dataset.notebookId, confirmed: true }, actionButton); jobStarted = true; input.value = ''; }
+    try {
+      await startJob({ action: 'news_publish', notebookId: draft.notebookId, draftId: draft.draftId, confirmed: true }, actionButton);
+      jobStarted = true;
+    }
     catch (_) {} finally { if (!jobStarted) setBusy(false); }
   }
   async function submitJob(action, actionButton) {
@@ -337,11 +376,12 @@
     try { await startJob({ action: action }, actionButton); jobStarted = true; }
     catch (_) {} finally { if (!jobStarted) setBusy(false); }
   }
-  async function startJob(payload, actionButton) {
+  async function startJob(payload, actionButton, context) {
     payload.notebookId = payload.notebookId || selectedNotebook();
     var data = await request('/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     if (!data.id) throw new Error('El servicio no devolvió un identificador de trabajo.');
     jobActions[data.id] = payload.action;
+    jobContexts[data.id] = context || { notebookId: payload.notebookId };
     setStatus('Trabajo enviado. Esperando resultado real…', '');
     addJob({ id: data.id, status: data.status || 'queued', message: 'En cola' });
     pollJob(data.id, payload.action, actionButton);
@@ -368,7 +408,46 @@
     if (!jobs.length) { jobsBox.appendChild(el('div', { className: 'notebooklm-empty' }, 'Todavía no hay trabajos en esta sesión.')); return; }
     jobs.forEach(addJob);
   }
-  function showResult(data, action) {
+  function showNewsDraft(data, context) {
+    var result = data && data.result;
+    if (!context || context.newsDraftToken !== newsDraftToken ||
+        context.notebookId !== selectedNotebook() ||
+        !result || result.notebookId !== context.notebookId) {
+      invalidateNewsDraft();
+      setStatus('La vista previa de noticias se descartó porque cambió el notebook o quedó antigua.', 'warn');
+      return false;
+    }
+    if (typeof result.text !== 'string' || !result.draftId) {
+      invalidateNewsDraft();
+      setStatus('El servicio no devolvió un borrador de noticias válido.', 'error');
+      return false;
+    }
+    if (result.text.length > MAX_NEWS_SUMMARY_UTF16) {
+      invalidateNewsDraft();
+      setStatus('El resumen de noticias supera el límite de 3500 caracteres.', 'error');
+      return false;
+    }
+    newsDraft = {
+      text: result.text,
+      draftId: result.draftId,
+      notebookId: result.notebookId,
+      token: newsDraftToken
+    };
+    var box = document.getElementById('notebooklm-news-confirm');
+    var textBox = document.getElementById('notebooklm-confirm-text');
+    if (!box || !textBox) return false;
+    var publishButton = document.getElementById('notebooklm-news-confirm');
+    var cancelButton = document.getElementById('notebooklm-news-cancel');
+    if (publishButton) publishButton.disabled = false;
+    if (cancelButton) cancelButton.disabled = false;
+    resultBox.hidden = true;
+    textBox.textContent = result.text;
+    box.hidden = false;
+    box.classList.add('open');
+    return true;
+  }
+  function showResult(data, action, context) {
+    if (action === 'news_draft') return showNewsDraft(data, context);
     resultBox.hidden = false; resultBox.replaceChildren();
     resultBox.appendChild(el('h4', {}, 'RESULTADO · ' + String(action || 'TRABAJO').toUpperCase()));
     if (data.text) resultBox.appendChild(el('div', { className: 'notebooklm-result-text' }, data.text));
@@ -406,7 +485,13 @@
     function tick() {
       request('/jobs/' + encodeURIComponent(id)).then(function (data) {
         addJob(data); var state = data.status;
-        if (state === 'completed') { setBusy(false); showResult(data, action); loadSources(); setStatus('Trabajo completado.', 'ok'); return; }
+        if (state === 'completed') {
+          setBusy(false);
+          var displayed = showResult(data, action, jobContexts[id]);
+          loadSources();
+          if (displayed !== false) setStatus('Trabajo completado.', 'ok');
+          return;
+        }
         if (state === 'failed') { setBusy(false); setStatus(data.message || 'El trabajo falló sin explicación adicional.', 'error'); return; }
         attempts++;
         if (attempts >= 1200) {

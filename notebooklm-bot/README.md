@@ -41,14 +41,18 @@ obligatorias:
 
 * `HUB_ENDPOINT_URL` (HTTPS público, sin redirecciones)
 * `CONEXION_NOTEBOOK_PUENTE`: clave privada nueva que elige el usuario; no es un token de Telegram.
+* `NOTEBOOKLM_REGISTRY_URL` (solo en el `hub-env.json` privado de PC2,
+  opcional): URL HTTPS del registro AGY. Si se omite usa
+  `https://agy-ide-production.up.railway.app/api/notebooklm/endpoint`.
 
 `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHANNEL_ID` no son necesarios en modo API.
 Para permitir noticias desde ese modo, configura opcionalmente
 `NOTEBOOKLM_PUBLISHER_URL` con el **origen** HTTPS público de CiberCode/Railway
 (sin ruta, credenciales, query ni fragment). Python llama al callback
 autenticado con `CONEXION_NOTEBOOK_PUENTE`, pero nunca recibe un token de
-Telegram. Si no se configura, las noticias fallan explícitamente antes de
-hacer trabajo de NotebookLM; las demás funciones siguen disponibles.
+Telegram. Si no se configura, aún se pueden crear vistas previas de noticias,
+pero la publicación confirmada falla explícitamente sin reclamar ni enviar el
+borrador; las demás funciones siguen disponibles.
 
 El nombre anterior `SGN_SECRET_TOKEN` sigue aceptándose por compatibilidad,
 pero las nuevas configuraciones deben usar `CONEXION_NOTEBOOK_PUENTE`.
@@ -111,8 +115,10 @@ explica el dato requerido y el resultado:
 * **➕ Añadir Fuente**: URL web/YouTube o PDF de hasta 4 MB.
 * **🚀 Iniciar Investigación**: **🎙 Podcast** o **📑 Reporte**.
 * **📊 Ver Fuentes**, **📂 Cuadernos**, **➕ Crear cuaderno** y selección segura.
-* **📰 Publicar noticia**: indexa y resume una URL, pero siempre muestra una
-  confirmación antes de publicar en el canal.
+* **📰 Publicar noticia**: en el modo API se crea primero un borrador usando
+  exclusivamente las fuentes ya presentes en el cuaderno; la publicación es un
+  paso separado y confirmado. El bot independiente no ofrece el antiguo flujo
+  de URL para que no exista un atajo de publicación.
 * **🗣 Preguntar por voz**: respuesta del cuaderno y MP3 neural en español.
 * **🌐 Estado de nodos**, **❓ Ayuda**, **⬅ Volver** y **Cancelar**.
 
@@ -142,8 +148,8 @@ Implementadas:
 * `GET /api/notebooklm/nodes` →
   `{online,status,message,url?}`
 * `POST /api/notebooklm/jobs` con `action` en
-  `source_url|source_pdf|podcast|report|voice|news`; devuelve `202` con
-  `{id,status:"queued"}`.
+  `source_url|source_pdf|podcast|report|voice|news_draft|news_publish`;
+  devuelve `202` con `{id,status:"queued"}`.
 * `GET /api/notebooklm/jobs/:id`
 * `GET /api/notebooklm/files/:id`
 
@@ -155,8 +161,35 @@ ni el diagnóstico crudo de la CLI.
 Los trabajos tienen como máximo dos ejecuciones simultáneas y 32 posiciones de
 cola. Las tareas interrumpidas se marcan `failed` al reiniciar. El PDF debe
 llevar base64 con firma `%PDF-` y no superar 4 MB decodificados; el body total
-está limitado a 8 MB. `news` exige `confirmed:true`, además de ser una acción
-externa.
+está limitado a 8 MB.
+
+### Noticias: vista previa y publicación explícita
+
+No hay una ruta `/news`: se usa la cola existente.
+
+1. `POST /api/notebooklm/jobs` con
+   `{"action":"news_draft","notebookId":"..."}` crea una vista previa. No
+   requiere `confirmed:true`, no añade URLs/fuentes y no llama al publicador.
+   Lee las fuentes existentes del cuaderno; un cuaderno vacío falla de forma
+   explícita. Al completarse, el resultado es `{text,draftId,notebookId}`.
+2. Muestra `text` al usuario y solo después envía
+   `{"action":"news_publish","notebookId":"...","draftId":"...","confirmed":true}`.
+   No se aceptan `text` ni `destination` aportados por el cliente. Al
+   completarse devuelve `{text,published:true}` con el texto exacto del
+   borrador durable.
+
+El resumen le pide a NotebookLM español, datos y contexto y un máximo de
+**3500 unidades UTF-16** (Telegram cuenta un emoji fuera del BMP como dos
+unidades; `len()` de Python no sirve para este límite). Se comprueba el
+resultado y, solo si lo supera, se hace una única petición explícita para
+acortarlo. Si aún supera el límite, falla: nunca se corta ni se envía un mensaje
+largo.
+
+Los borradores viven 30 minutos en SQLite y pertenecen simultáneamente al actor
+y al cuaderno. Antes de enviar, SQLite los reclama de forma atómica y no
+repetible. El reclamo se conserva tras reiniciar; un timeout o resultado
+incierto nunca se reintenta automáticamente. La acción antigua `news` se
+rechaza explícitamente y no puede publicar.
 
 ## Callback de publicación Railway
 
@@ -172,9 +205,9 @@ explícitamente; nunca hay un canal de reserva.
 Antes de cada envío verifica con Telegram que la identidad sea exactamente
 `Codearquitect_bot`, que el destino sea un canal y que el bot sea `creator` o
 tenga `can_post_messages:true`. El estado GET no expone tokens ni otros
-secretos. El callback conserva idempotencia por `requestId`: un duplicado ya
-confirmado no vuelve a enviar, y un timeout/error de envío queda incierto y no
-se reintenta automáticamente ni se redirige a otro canal.
+secretos. El callback recibe el mismo `draftId` durable como `requestId`: un
+duplicado ya confirmado no vuelve a enviar, y un timeout/error de envío queda
+incierto y no se reintenta automáticamente ni se redirige a otro canal.
 
 ## Cloudflare Tunnel
 
@@ -183,16 +216,31 @@ Ejecuta la API solo en loopback y mantiene las credenciales en un archivo
 privado con permisos 0600. El estado público se guarda en
 `~/notebooklm-hub/runtime-status.json`.
 
-**Límite operativo:** el túnel rápido actual tiene una dirección temporal.
-Puede cambiar al reiniciar el servicio o PC2. En ese caso hay que actualizar
-`HUB_ENDPOINT_URL` en AGY, Code Arquitect y desarrollo con el nuevo origen;
-no basta con que el servicio local vuelva a arrancar. Para continuidad
-automática se necesita un túnel con dirección estable o un registro seguro
-de cambios de dirección. No se ha verificado recuperación tras reiniciar PC2.
+El supervisor espera la resolución DNS, inicia la API y verifica
+`GET /api/notebooklm/status` con `configured:true` primero en loopback y luego
+por HTTPS. Solo después publica el origen en el registro durable de AGY:
 
-El origen HTTPS es igual en los tres entornos; los adaptadores añaden
-`/api/notebooklm` al llamar a la API. El supervisor espera la resolución DNS
-antes de arrancar Python para no rotar direcciones mientras se propagan.
+```text
+POST https://agy-ide-production.up.railway.app/api/notebooklm/endpoint
+X-SGN-Token: CONEXION_NOTEBOOK_PUENTE
+{"endpoint":"https://<túnel>.trycloudflare.com","generation":<unix-ms>}
+```
+
+El registro persiste en el almacenamiento durable de Supabase. `generation` es
+un número positivo de milisegundos persistido en
+`tunnel-generation.json`; permanece igual durante todos los reintentos de un
+túnel y avanza al reiniciar. Una misma pareja `endpoint` + `generation` es
+idempotente y una generación anterior recibe `409`. El supervisor conserva el
+mismo Hub y túnel durante una caída del registro: usa backoff acotado y vuelve
+a registrar cada 60 segundos cuando está sano. `runtime-status.json` distingue
+`registered:true` de `state:"registry_retry_failure"` sin incluir el secreto.
+No se siguen redirecciones en ninguna comprobación.
+
+Este mecanismo elimina la actualización manual de `HUB_ENDPOINT_URL` en AGY y
+Code Arquitect cada vez que PC2 reinicia. El origen HTTPS sigue siendo igual en
+los tres entornos; los adaptadores añaden `/api/notebooklm` al llamar a la API.
+El registro es solo de transporte: no transfiere cookies, cuentas Google,
+contraseñas ni secretos por la cola de comandos.
 
 Ejemplo conceptual en la máquina que ejecuta Python:
 
@@ -201,14 +249,50 @@ cloudflared tunnel --url http://127.0.0.1:8080
 ```
 
 Configura `HUB_ENDPOINT_URL=https://...` con el endpoint HTTPS público real del
-hub. En el servicio Node/AGY configura el mismo `HUB_ENDPOINT_URL` y el mismo
-`CONEXION_NOTEBOOK_PUENTE`; el proxy debe enviar `X-SGN-Token` a esta API. No pongas el
-token en una URL ni en el frontend. La comprobación de nodos no sigue
-redirecciones y no expone el token ni la salida cruda de la CLI.
+hub solo como valor inicial/compatibilidad. En el servicio Node/AGY configura
+el mismo `CONEXION_NOTEBOOK_PUENTE`; el proxy debe enviar `X-SGN-Token` a esta
+API. No pongas el token en una URL ni en el frontend. La comprobación de nodos
+no sigue redirecciones y no expone el token ni la salida cruda de la CLI.
+
+Para instalar o actualizar sin reinstalar dependencias existentes:
+
+```bash
+python tools/install_notebooklm_pc2.py --install-service
+```
+
+La opción escribe únicamente `~/.config/systemd/user/notebooklm-hub.service`,
+hace `daemon-reload`, habilita y arranca esa unidad. Detecta el estado de
+`loginctl` (linger) pero no lo modifica ni toca servicios de PC1, PC3 u otras
+aplicaciones. La cuenta Google y el `hub-env.json` privado permanecen en PC2.
 
 ## Pruebas
 
+Verificación en producción del 17 de septiembre de 2026:
+
+* Ambos repositorios (`agy-ide` y `cibercode-ide`) desplegaron el registro
+  persistente y la resolución dinámica en Railway.
+* Tras reiniciar únicamente `notebooklm-hub.service`, PC2 publicó una generación
+  nueva sin cambiar variables de Railway manualmente. AGY y el transporte con
+  actor Code Arquitect devolvieron los mismos 28 cuadernos; la sesión Google
+  permaneció autenticada.
+* El servicio de usuario está habilitado, con reinicio automático y `Linger=yes`.
+  No se reinició PC2 completo ni se modificaron servicios de PC3. La prueba de
+  reinicio completo sigue requiriendo autorización.
+* Las comprobaciones no crean trabajos ni cuadernos ni inyectan mensajes al
+  webhook de Telegram. Validan las consultas reales de la API y la copia del
+  adaptador que fue desplegada, no un recorrido manual por la botonera.
+
+Las herramientas de mantenimiento en `tools/` usan solo cabeceras HTTPS para
+autenticación. `upgrade_notebooklm_pc2.py` verifica la revisión y SHA-256 de las
+fuentes públicas antes de actualizar exclusivamente el supervisor.
+`restart_check_notebooklm_pc2.py` separa la solicitud de reinicio (`start_restart`)
+de la lectura de resultados (`check`): esperar dentro del comando puede superar
+el tiempo límite del puente aunque NotebookLM se recupere correctamente.
+
 ```bash
+node --test scripts/notebooklm-endpoint.test.cjs scripts/notebooklm-proxy.test.cjs
+node --test deploy/railway/cibercode-ide/scripts/notebooklm-telegram.test.cjs
+pytest -q tests/test_notebooklm_pc2.py
 pytest -q tests/test_notebooklm_bot.py
 ```
 
