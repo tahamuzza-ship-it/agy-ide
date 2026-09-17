@@ -397,6 +397,57 @@ class SQLiteStore:
         out.pop("updated_at", None)
         return out
 
+    def recent_news_jobs(self, actor: str, limit: int = 5) -> list[dict[str, Any]]:
+        """Return recent recoverable news drafts owned by ``actor``.
+
+        Job rows are the canonical API representation, while ``news_drafts`` is
+        the durable source of truth for whether a preview can still be
+        recovered.  Keep the job query bounded even if a caller supplies a
+        larger limit, and never return a draft whose owner or notebook differs
+        from the completed job result.
+        """
+        try:
+            requested = int(limit)
+        except (TypeError, ValueError):
+            requested = 5
+        bounded = min(max(requested, 0), 5)
+        if not bounded:
+            return []
+
+        now = time.time()
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT j.id FROM jobs j JOIN news_drafts d "
+                "ON d.id=json_extract(j.result_json, '$.draftId') "
+                "AND d.actor=j.actor "
+                "AND d.notebook_id=json_extract(j.result_json, '$.notebookId') "
+                "WHERE j.actor=? AND j.action='news_draft' AND j.status='completed' "
+                "AND d.expires_at>? AND d.claimed_at IS NULL "
+                "ORDER BY j.created_at DESC LIMIT ?",
+                (actor, now, bounded),
+            ).fetchall()
+            recovered: list[dict[str, Any]] = []
+            for row in rows:
+                job = self.job(row["id"])
+                if not job or job.get("actor") != actor:
+                    continue
+                result = job.get("result")
+                if not isinstance(result, dict):
+                    continue
+                draft_id = result.get("draftId")
+                notebook_id = result.get("notebookId")
+                if not isinstance(draft_id, str) or not isinstance(notebook_id, str):
+                    continue
+                draft = self.db.execute(
+                    "SELECT 1 FROM news_drafts "
+                    "WHERE id=? AND actor=? AND notebook_id=? "
+                    "AND expires_at>? AND claimed_at IS NULL",
+                    (draft_id, actor, notebook_id, now),
+                ).fetchone()
+                if draft:
+                    recovered.append(job)
+        return recovered
+
     def claim_delivery(self, job_id: str) -> bool:
         """Claim one immutable delivery attempt; retries cannot send twice."""
         with self.lock:
@@ -1052,6 +1103,10 @@ def create_app(service: NotebookService | None = None, manager: JobManager | Non
         except UserError as exc:
             return jsonify({"error": str(exc)}), 429
         return jsonify({"id": job_id, "status": "queued"}), 202
+
+    @app.get("/api/notebooklm/jobs")
+    def api_recent_jobs():
+        return jsonify({"jobs": service.store.recent_news_jobs(_actor(), limit=5)})
 
     @app.get("/api/notebooklm/jobs/<job_id>")
     def api_job_status(job_id):
