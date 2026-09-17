@@ -619,6 +619,11 @@ class NotebookService:
              confirmed: bool = False) -> dict[str, Any]:
         if not confirmed:
             raise UserError("La publicación requiere confirmación explícita.")
+        if not self.publisher:
+            # API-only mode intentionally has no Telegram credentials. Fail
+            # before doing any NotebookLM work so an unavailable publication
+            # destination is explicit and cannot consume a queued job.
+            raise UserError("No hay canal de Telegram configurado para publicar noticias.")
         added = self.add_url(actor, url, notebook_id)
         ident = self._notebook_id(actor, notebook_id)
         source_id = added["source"].get("id")
@@ -627,8 +632,6 @@ class NotebookService:
             args += ["-s", source_id]
         answer = self.cli.json(args, timeout=900)
         text = _as_text(answer)
-        if not self.publisher:
-            raise UserError("No hay canal de Telegram configurado para publicar noticias.")
         self.publisher(text)
         return {"text": text}
 
@@ -1201,24 +1204,23 @@ def run(args: argparse.Namespace) -> None:
     channel = os.environ.get("TELEGRAM_CHANNEL_ID", "")
     if not secret:
         raise SystemExit("Falta CONEXION_NOTEBOOK_PUENTE: la API nunca se inicia sin autenticación.")
-    if not channel:
-        raise SystemExit("Falta TELEGRAM_CHANNEL_ID.")
     try:
         validate_https_url(os.environ.get("HUB_ENDPOINT_URL", ""))
     except UserError as exc:
         raise SystemExit(str(exc)) from exc
-    if not args.api_only and not token:
-        raise SystemExit("Falta TELEGRAM_BOT_TOKEN (usa --api-only para ejecutar solo la API).")
     service = NotebookService()
     manager = JobManager(service)
     app = create_app(service, manager)
     if args.api_only:
-        # Constructing the bot installs the shared channel publisher without
-        # starting polling, so API news jobs behave identically in this mode.
-        if token:
-            build_bot(service, manager)
+        # API-only mode deliberately does not construct a Telegram bot. This
+        # keeps TELEGRAM_* optional and makes it impossible to start polling.
+        # News jobs fail explicitly because service.publisher remains unset.
         app.run(host=args.host, port=args.port, threaded=True)
         return
+    if not channel:
+        raise SystemExit("Falta TELEGRAM_CHANNEL_ID.")
+    if not token:
+        raise SystemExit("Falta TELEGRAM_BOT_TOKEN (usa --api-only para ejecutar solo la API).")
     bot = build_bot(service, manager)
     # Never delete another deployment's webhook. Polling is refused explicitly
     # until an operator resolves an active webhook.

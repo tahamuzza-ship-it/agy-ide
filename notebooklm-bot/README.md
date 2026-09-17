@@ -36,12 +36,17 @@ El botón Reporte usa `notebooklm summary` y entrega el texto y un archivo Markd
 
 ## Variables
 
-Son obligatorias para iniciar el servicio:
+Para iniciar el servicio en modo API (`python main.py --api-only`) son
+obligatorias:
 
-* `TELEGRAM_BOT_TOKEN`
-* `TELEGRAM_CHANNEL_ID`
 * `HUB_ENDPOINT_URL` (HTTPS público, sin redirecciones)
 * `CONEXION_NOTEBOOK_PUENTE`: clave privada nueva que elige el usuario; no es un token de Telegram.
+
+`TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHANNEL_ID` no son necesarios en modo API:
+ese modo no crea un bot, nunca inicia polling y deja la publicación de noticias
+sin configurar. En modo bot independiente (`python main.py`) sí son obligatorios.
+Las peticiones de noticias en modo API devuelven un error explícito indicando
+que no hay canal configurado; las demás funciones de la API siguen disponibles.
 
 El nombre anterior `SGN_SECRET_TOKEN` sigue aceptándose por compatibilidad,
 pero las nuevas configuraciones deben usar `CONEXION_NOTEBOOK_PUENTE`.
@@ -67,14 +72,17 @@ la configuración privada debe introducirse localmente o transferirse cifrada.
 
 El webhook existente de **Code Arquitect** sigue en CiberCode/Railway y conserva
 las misiones de PC3. Su botón **Notebook LM** y `/panel` usan esta API como Hub.
-Para esta integración, ejecuta Python **solo con `--api-only`**: no inicies un
-segundo polling ni borres el webhook actual.
+Para esta integración, ejecuta Python **solo con `--api-only`**: no crea un
+bot, no inicia un segundo polling ni borra el webhook actual. En este modo la
+publicación de noticias queda deliberadamente sin configurar. Si se necesita
+publicar, usa el modo bot independiente con las credenciales de Telegram
+correspondientes.
 
 Configura `HUB_ENDPOINT_URL` y la misma `CONEXION_NOTEBOOK_PUENTE` en Python, AGY IDE
 y el servicio CiberCode que atiende a Code Arquitect. La sesión Google se inicia
-en el equipo del Hub. Para publicar noticias, el Hub necesita el token correcto
-de Code Arquitect y un canal en el que ese bot pueda publicar. El token de otro
-bot del workspace no es intercambiable.
+en el equipo del Hub. Para publicar noticias en modo bot, el Hub necesita el
+token correcto de Code Arquitect y un canal en el que ese bot pueda publicar.
+El token de otro bot del workspace no es intercambiable.
 
 La botonera y la ayuda se pueden abrir sin Hub configurado. La ingesta,
 investigación y generación real requieren la conexión y la sesión Google.
@@ -83,8 +91,8 @@ de cuaderno de cada chat y la del IDE son independientes, pero pueden elegir
 el mismo cuaderno de la cuenta Google.
 
 ```bash
-python main.py --api-only      # integración elegida con Code Arquitect
-python main.py                 # únicamente para un bot independiente sin webhook
+python main.py --api-only      # API para Code Arquitect; no requiere Telegram
+python main.py                 # bot independiente; requiere token y canal
 ```
 
 No se borra el webhook existente automáticamente. Si otro despliegue tiene el
