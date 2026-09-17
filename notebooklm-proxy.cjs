@@ -3,6 +3,7 @@
 // The browser talks only to AGY. Google sessions and the SGN key stay on servers.
 const { Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
+const { registerNotebookEndpointRoutes, createSupabaseStore, validateStored } = require('./notebooklm-endpoint.cjs');
 const PREFIX = '/api/notebooklm';
 const ID = /^[a-zA-Z0-9_-]{1,100}$/;
 const ACTIONS = new Set(['source_url', 'source_pdf', 'podcast', 'report', 'voice', 'news']);
@@ -55,11 +56,31 @@ function sanitizedBody(suffix, body = {}) {
 function registerNotebookRoutes(app, requirePwd, options = {}) {
   const env = options.env || process.env;
   const fetchImpl = options.fetchImpl || globalThis.fetch;
+  const endpointStore = options.store || options.endpointStore || createSupabaseStore(env, options);
+  // This must be mounted before the password-protected proxy below. The
+  // endpoint is authenticated with the SGN bridge token, not the IDE pwd.
+  registerNotebookEndpointRoutes(app, { ...options, env, fetchImpl, store: endpointStore });
   app.use(PREFIX, requirePwd, async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const suffix = req.path.replace(/\/$/, '') || '/status';
     if (!allowedPath(req.method, suffix)) return res.status(404).json({ error: 'Operación Notebook LM no disponible.' });
-    const config = hubBase(env);
+    const token = env.CONEXION_NOTEBOOK_PUENTE || env.SGN_SECRET_TOKEN;
+    if (!token) {
+      const config = hubBase(env);
+      return res.status(503).json({ configured: false, authenticated: false, error: config.error, message: config.error });
+    }
+    let registeredEndpoint = null;
+    try {
+      if (endpointStore && endpointStore.configured !== false) {
+        const record = await endpointStore.get();
+        if (record) registeredEndpoint = validateStored(record).endpoint;
+      }
+    } catch {
+      // Once Supabase is configured, a read error is not permission to fall
+      // back to a stale HUB_ENDPOINT_URL.
+      return res.status(503).json({ configured: false, authenticated: false, error: 'No se pudo leer el endpoint Notebook LM registrado.' });
+    }
+    const config = registeredEndpoint ? { url: registeredEndpoint } : hubBase(env);
     if (config.error) return res.status(503).json({ configured: false, authenticated: false, error: config.error, message: config.error });
     let body;
     try {
@@ -83,7 +104,7 @@ function registerNotebookRoutes(app, requirePwd, options = {}) {
         headers: {
           Accept: suffix.startsWith('/files/') ? '*/*' : 'application/json',
           'Content-Type': 'application/json',
-          'X-SGN-Token': env.CONEXION_NOTEBOOK_PUENTE || env.SGN_SECRET_TOKEN,
+          'X-SGN-Token': token,
           'X-SGN-Actor': 'ide',
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
