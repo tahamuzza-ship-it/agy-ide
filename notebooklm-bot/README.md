@@ -11,6 +11,10 @@ python -m pip install -r requirements.txt
 notebooklm login
 ```
 
+La primera autenticación abre el navegador de Google y puede descargar Chromium.
+Hazla en el equipo que ejecutará este servicio. No copies cookies ni contraseñas
+en el chat: el perfil de NotebookLM debe permanecer privado en ese equipo.
+
 Se ha validado `notebooklm-py==0.8.2`. Los comandos importantes son:
 
 ```text
@@ -22,14 +26,13 @@ notebooklm source list -n NOTEBOOK_ID --json
 notebooklm summary -n NOTEBOOK_ID --json
 notebooklm ask QUESTION -n NOTEBOOK_ID --json
 notebooklm generate audio -n NOTEBOOK_ID --wait --json
-notebooklm download audio -n NOTEBOOK_ID --latest OUTPUT.m4a
-notebooklm generate report -n NOTEBOOK_ID --wait --json
-notebooklm download report -n NOTEBOOK_ID --latest OUTPUT.md
+notebooklm download audio -n NOTEBOOK_ID --artifact ARTIFACT_ID OUTPUT.m4a
 ```
 
 Cada operación que depende de un cuaderno lleva `-n NOTEBOOK_ID`; no se usa el
 contexto global de CLI. El podcast se convierte realmente de M4A a MP3 con
 `imageio-ffmpeg`, y no se cambia únicamente la extensión.
+El botón Reporte usa `notebooklm summary` y entrega el texto y un archivo Markdown.
 
 ## Variables
 
