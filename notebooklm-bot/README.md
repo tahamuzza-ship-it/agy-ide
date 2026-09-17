@@ -42,11 +42,13 @@ obligatorias:
 * `HUB_ENDPOINT_URL` (HTTPS público, sin redirecciones)
 * `CONEXION_NOTEBOOK_PUENTE`: clave privada nueva que elige el usuario; no es un token de Telegram.
 
-`TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHANNEL_ID` no son necesarios en modo API:
-ese modo no crea un bot, nunca inicia polling y deja la publicación de noticias
-sin configurar. En modo bot independiente (`python main.py`) sí son obligatorios.
-Las peticiones de noticias en modo API devuelven un error explícito indicando
-que no hay canal configurado; las demás funciones de la API siguen disponibles.
+`TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHANNEL_ID` no son necesarios en modo API.
+Para permitir noticias desde ese modo, configura opcionalmente
+`NOTEBOOKLM_PUBLISHER_URL` con el **origen** HTTPS público de CiberCode/Railway
+(sin ruta, credenciales, query ni fragment). Python llama al callback
+autenticado con `CONEXION_NOTEBOOK_PUENTE`, pero nunca recibe un token de
+Telegram. Si no se configura, las noticias fallan explícitamente antes de
+hacer trabajo de NotebookLM; las demás funciones siguen disponibles.
 
 El nombre anterior `SGN_SECRET_TOKEN` sigue aceptándose por compatibilidad,
 pero las nuevas configuraciones deben usar `CONEXION_NOTEBOOK_PUENTE`.
@@ -74,15 +76,16 @@ El webhook existente de **Code Arquitect** sigue en CiberCode/Railway y conserva
 las misiones de PC3. Su botón **Notebook LM** y `/panel` usan esta API como Hub.
 Para esta integración, ejecuta Python **solo con `--api-only`**: no crea un
 bot, no inicia un segundo polling ni borra el webhook actual. En este modo la
-publicación de noticias queda deliberadamente sin configurar. Si se necesita
-publicar, usa el modo bot independiente con las credenciales de Telegram
-correspondientes.
+publicación de noticias se habilita únicamente mediante
+`NOTEBOOKLM_PUBLISHER_URL` hacia el callback Railway, sin activar polling. El
+modo bot independiente es exclusivamente para otro bot sin webhook activo; no
+se debe usar con el token de Code Arquitect.
 
 Configura `HUB_ENDPOINT_URL` y la misma `CONEXION_NOTEBOOK_PUENTE` en Python, AGY IDE
 y el servicio CiberCode que atiende a Code Arquitect. La sesión Google se inicia
-en el equipo del Hub. Para publicar noticias en modo bot, el Hub necesita el
-token correcto de Code Arquitect y un canal en el que ese bot pueda publicar.
-El token de otro bot del workspace no es intercambiable.
+en el equipo del Hub. La publicación se hace solo por el callback Railway al
+canal fijo autorizado; los tokens de los distintos bots del workspace no son
+intercambiables.
 
 La botonera y la ayuda se pueden abrir sin Hub configurado. La ingesta,
 investigación y generación real requieren la conexión y la sesión Google.
@@ -155,7 +158,41 @@ llevar base64 con firma `%PDF-` y no superar 4 MB decodificados; el body total
 está limitado a 8 MB. `news` exige `confirmed:true`, además de ser una acción
 externa.
 
+## Callback de publicación Railway
+
+El servicio CiberCode expone `GET /api/notebooklm/publication-status` (solo
+lectura) y `POST /api/notebooklm/publish`. Ambos requieren `X-SGN-Token` y
+comparan la clave en tiempo constante. La publicación acepta únicamente
+`{text, requestId, confirmed:true}`; no acepta destino aportado por el
+solicitante. Railway conserva el token del bot y publica solo en
+`TELEGRAM_CHANNEL_ID`, que es obligatorio en Railway y puede ser un ID numérico
+o un `@username` de canal. Si falta, el estado y la publicación fallan
+explícitamente; nunca hay un canal de reserva.
+
+Antes de cada envío verifica con Telegram que la identidad sea exactamente
+`Codearquitect_bot`, que el destino sea un canal y que el bot sea `creator` o
+tenga `can_post_messages:true`. El estado GET no expone tokens ni otros
+secretos. El callback conserva idempotencia por `requestId`: un duplicado ya
+confirmado no vuelve a enviar, y un timeout/error de envío queda incierto y no
+se reintenta automáticamente ni se redirige a otro canal.
+
 ## Cloudflare Tunnel
+
+El supervisor de PC2 se instala como servicio de usuario `notebooklm-hub`.
+Ejecuta la API solo en loopback y mantiene las credenciales en un archivo
+privado con permisos 0600. El estado público se guarda en
+`~/notebooklm-hub/runtime-status.json`.
+
+**Límite operativo:** el túnel rápido actual tiene una dirección temporal.
+Puede cambiar al reiniciar el servicio o PC2. En ese caso hay que actualizar
+`HUB_ENDPOINT_URL` en AGY, Code Arquitect y desarrollo con el nuevo origen;
+no basta con que el servicio local vuelva a arrancar. Para continuidad
+automática se necesita un túnel con dirección estable o un registro seguro
+de cambios de dirección. No se ha verificado recuperación tras reiniciar PC2.
+
+El origen HTTPS es igual en los tres entornos; los adaptadores añaden
+`/api/notebooklm` al llamar a la API. El supervisor espera la resolución DNS
+antes de arrancar Python para no rotar direcciones mientras se propagan.
 
 Ejemplo conceptual en la máquina que ejecuta Python:
 

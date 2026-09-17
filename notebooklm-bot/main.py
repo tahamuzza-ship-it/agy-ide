@@ -37,6 +37,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 VOICE = "es-ES-AlvaroNeural"
 MAX_PDF_BYTES = 4 * 1024 * 1024
 MAX_TELEGRAM_FILE_BYTES = 45 * 1024 * 1024
+REMOTE_PUBLISHER_TIMEOUT_SECONDS = 30
 MAX_JOB_QUEUE = 32
 MAX_WORKERS = 2
 URL_RE = re.compile(r"^https?://", re.I)
@@ -102,6 +103,80 @@ def validate_https_url(value: str) -> str:
     if parsed.username or parsed.password or parsed.query or parsed.fragment or is_private_host(parsed.hostname):
         raise UserError("HUB_ENDPOINT_URL debe apuntar a un host HTTPS público.")
     return value.rstrip("/")
+
+
+def validate_notebooklm_publisher_url(value: str) -> str:
+    """Accept only a public HTTPS origin for the Railway publication callback."""
+    parsed = urlparse(value or "")
+    if (parsed.scheme.lower() != "https" or not parsed.hostname or parsed.username
+            or parsed.password or parsed.query or parsed.fragment
+            or parsed.path not in {"", "/"} or is_private_host(parsed.hostname)):
+        raise UserError(
+            "NOTEBOOKLM_PUBLISHER_URL debe ser el origen HTTPS público de CiberCode."
+        )
+    return f"https://{parsed.netloc}"
+
+
+class RemoteNotebookPublisher:
+    """Authenticated, no-retry callback to Railway; it has no Telegram token."""
+
+    def __init__(self, endpoint: str, secret: str, *, opener: Any | None = None):
+        self.endpoint = validate_notebooklm_publisher_url(endpoint)
+        if not secret:
+            raise UserError("Falta CONEXION_NOTEBOOK_PUENTE para el publicador remoto.")
+        self.secret = secret
+        self.opener = opener or build_opener(_NoRedirect())
+
+    def _request(self, method: str, pathname: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8") if payload is not None else None
+        request = Request(
+            f"{self.endpoint}{pathname}", data=data, method=method,
+            headers={
+                "X-SGN-Token": self.secret,
+                **({"Content-Type": "application/json"} if data is not None else {}),
+            },
+        )
+        try:
+            # Railway checks three Telegram read permissions and then sends;
+            # this exceeds its 5s-per-call timeout with operational margin.
+            with self.opener.open(request, timeout=REMOTE_PUBLISHER_TIMEOUT_SECONDS) as response:
+                raw = response.read(4096)
+                if not 200 <= int(response.status) < 300:
+                    raise UserError("El publicador remoto rechazó la solicitud.")
+        except HTTPError as exc:
+            if exc.code == 401:
+                raise UserError("El publicador remoto rechazó la autenticación.") from exc
+            raise UserError("El publicador remoto no pudo completar la solicitud.") from exc
+        except (URLError, OSError, TimeoutError) as exc:
+            raise UserError("No se pudo conectar al publicador remoto.") from exc
+        try:
+            result = json.loads(raw.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise UserError("El publicador remoto devolvió una respuesta inválida.") from exc
+        if not isinstance(result, dict):
+            raise UserError("El publicador remoto devolvió una respuesta inválida.")
+        return result
+
+    def preflight(self) -> None:
+        """Read-only check made before expensive NotebookLM news work."""
+        result = self._request("GET", "/api/notebooklm/publication-status")
+        if result.get("ready") is not True:
+            raise UserError("El canal de publicación remoto no está listo.")
+
+    def __call__(self, text: str) -> dict[str, Any]:
+        # This ID is generated exactly once for this explicit confirmed action.
+        # A failed/uncertain callback is deliberately surfaced, never retried.
+        if not isinstance(text, str) or not text or len(text) > 3900:
+            raise UserError("La noticia supera el límite de publicación de 3900 caracteres.")
+        request_id = uuid.uuid4().hex
+        result = self._request("POST", "/api/notebooklm/publish", {
+            "text": str(text),
+            "requestId": request_id,
+            "confirmed": True,
+        })
+        if result.get("ok") is not True:
+            raise UserError("El publicador remoto no confirmó la publicación.")
+        return result
 
 
 def validate_pdf_bytes(data: bytes) -> bytes:
@@ -624,6 +699,11 @@ class NotebookService:
             # before doing any NotebookLM work so an unavailable publication
             # destination is explicit and cannot consume a queued job.
             raise UserError("No hay canal de Telegram configurado para publicar noticias.")
+        preflight = getattr(self.publisher, "preflight", None)
+        if callable(preflight):
+            # Publication configuration/permissions are checked before source
+            # ingestion and NotebookLM generation consume work.
+            preflight()
         added = self.add_url(actor, url, notebook_id)
         ident = self._notebook_id(actor, notebook_id)
         source_id = added["source"].get("id")
@@ -1214,7 +1294,15 @@ def run(args: argparse.Namespace) -> None:
     if args.api_only:
         # API-only mode deliberately does not construct a Telegram bot. This
         # keeps TELEGRAM_* optional and makes it impossible to start polling.
-        # News jobs fail explicitly because service.publisher remains unset.
+        # A configured Railway callback owns the Telegram token and validates
+        # its fixed destination; this process never receives that token.
+        publisher_url = os.environ.get("NOTEBOOKLM_PUBLISHER_URL", "")
+        if publisher_url:
+            service.publisher = RemoteNotebookPublisher(
+                publisher_url,
+                os.environ.get("CONEXION_NOTEBOOK_PUENTE")
+                or os.environ.get("SGN_SECRET_TOKEN", ""),
+            )
         app.run(host=args.host, port=args.port, threaded=True)
         return
     if not channel:
