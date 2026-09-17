@@ -13,6 +13,7 @@ import base64
 import binascii
 import concurrent.futures
 import hashlib
+import html
 import ipaddress
 import json
 import mimetypes
@@ -272,6 +273,86 @@ def _as_text(data: Any) -> str:
             if isinstance(data.get(key), str):
                 return data[key]
     return json.dumps(data, ensure_ascii=False, indent=2)
+
+
+def clean_plain_text(value: str) -> str:
+    """Remove presentation markup without shortening or rewriting its content."""
+    if not isinstance(value, str):
+        return ""
+    text = value.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
+    # Keep URLs represented as Markdown autolinks before removing HTML tags.
+    text = re.sub(r"<(https?://[^<>\s]+)>", r"\1", text, flags=re.I)
+    text = re.sub(
+        r"<a\b[^>]*\bhref=[\"'](https?://[^\"']+)[\"'][^>]*>(.*?)</a>",
+        lambda match: f"{match.group(2)} ({match.group(1)})",
+        text,
+        flags=re.I | re.S,
+    )
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
+    text = re.sub(
+        r"</?(?:p|div|section|article|header|footer|h[1-6]|ul|ol|li|blockquote|pre|table|tr)\b[^>]*>",
+        "\n",
+        text,
+        flags=re.I,
+    )
+    text = re.sub(
+        r"</?(?:b|strong|i|em|u|s|del|span|code|mark|small|sub|sup|a)\b[^>]*>",
+        "",
+        text,
+        flags=re.I,
+    )
+    text = html.unescape(text)
+
+    # Preserve both the human-readable label and destination of Markdown links.
+    text = re.sub(
+        r"!?\[([^\]]*)\]\((https?://[^)\s]+)\)",
+        lambda match: (
+            f"{match.group(1)} ({match.group(2)})"
+            if match.group(1).strip()
+            else match.group(2)
+        ),
+        text,
+        flags=re.I,
+    )
+    urls: list[str] = []
+
+    def protect_url(match: re.Match[str]) -> str:
+        urls.append(match.group(0))
+        return f"\ue000{len(urls) - 1}\ue001"
+
+    text = re.sub(r"https?://[^\s<>()]+", protect_url, text, flags=re.I)
+    text = re.sub(r"(?m)^[ \t]*```[^\n]*$", "", text)
+    text = text.replace("`", "")
+    text = re.sub(r"(?m)^[ \t]{0,3}#{1,6}[ \t]+", "", text)
+    text = re.sub(r"(?m)^[ \t]*>[ \t]?", "", text)
+    text = re.sub(r"(?m)^[ \t]*[-+*][ \t]+", "", text)
+    text = re.sub(r"(?m)^[ \t]*[•●▪◦‣][ \t]*", "", text)
+    text = re.sub(r"(?m)^[ \t]*\d+[.)][ \t]+", "", text)
+    # Unwrap emphasis first. Word boundaries and non-space content prevent
+    # mathematical forms such as 2*3, a*b, or a * b from being mistaken for it.
+    for width in (3, 2, 1):
+        marker = re.escape("*" * width)
+        text = re.sub(
+            rf"(?<!\w){marker}(?!\s)([^\n]*?\S){marker}(?!\w)",
+            r"\1",
+            text,
+        )
+    # Multiplication remains mathematically equivalent without Markdown-like
+    # asterisks in the final plain text.
+    text = re.sub(r"(?<=[\w)])\s*\*\s*(?=[\w(])", " × ", text)
+    # Internal underscores in identifiers and URLs are deliberately untouched.
+    text = re.sub(
+        r"(?<!\w)_{1,2}([^\s_\n](?:[^_\n]*?[^\s_\n])?)_{1,2}(?!\w)",
+        r"\1",
+        text,
+    )
+    text = re.sub(r"(?m)[ \t]+$", "", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = text.strip()
+    for index, url in enumerate(urls):
+        text = text.replace(f"\ue000{index}\ue001", url)
+    return text
 
 
 class SQLiteStore:
@@ -784,10 +865,29 @@ class NotebookService:
                 # This avoids an unrelated Studio artifact and is also the
                 # stable command promised by the public API.
                 summary = self.summary(actor, ident)
-                text = summary["text"]
-                target = Path(tmp) / "reporte.md"
+                source_text = summary["text"].strip()
+                if not source_text:
+                    raise UserError("NotebookLM no devolvió contenido para preparar el informe.")
+                prompt = (
+                    "Reescribe el resumen delimitado abajo como un informe en español natural y "
+                    "cotidiano. Usa exclusivamente la información de ese resumen: no inventes, "
+                    "deduzcas ni añadas datos, conclusiones o fuentes. Empieza por las conclusiones "
+                    "que el propio resumen permita afirmar y deja los detalles técnicos necesarios "
+                    "para el final. Escribe párrafos de texto limpio, sin Markdown, asteriscos, "
+                    "encabezados, viñetas ni listas numeradas. Devuelve solo el informe.\n\n"
+                    "INICIO DEL RESUMEN SUMINISTRADO\n"
+                    f"{source_text}\n"
+                    "FIN DEL RESUMEN SUMINISTRADO"
+                )
+                answer = self.cli.json(
+                    ["ask", prompt, "-n", ident, "--new", "--yes", "--json"], timeout=900
+                )
+                text = clean_plain_text(_as_text(answer))
+                if not text:
+                    raise UserError("NotebookLM no devolvió texto para el informe.")
+                target = Path(tmp) / "reporte.txt"
                 target.write_text(text, encoding="utf-8")
-                result = self._store_result(target, "reporte.md", "text/markdown")
+                result = self._store_result(target, "reporte.txt", "text/plain")
                 result["text"] = text
                 return result
         if kind == "voice":
@@ -815,21 +915,28 @@ class NotebookService:
                 "El cuaderno no tiene fuentes; añade fuentes al cuaderno antes de crear una noticia."
             )
         prompt = (
-            "Redacta un resumen de noticias en español basado exclusivamente en las fuentes "
-            "ya seleccionadas de este cuaderno. Incluye datos y contexto. Debe caber en "
+            "Redacta un resumen de noticias en español natural y cotidiano basado exclusivamente "
+            "en las fuentes que ya existen en este cuaderno, sin añadir ni cambiar fuentes ni "
+            "inventar datos. Empieza por la conclusión principal, explica después el contexto y "
+            "deja los detalles técnicos necesarios para el final. Escribe solo párrafos de texto "
+            "limpio, sin Markdown, asteriscos, encabezados, viñetas ni listas numeradas. Debe caber en "
             f"un único mensaje de Telegram: máximo {MAX_NEWS_TEXT_UTF16} unidades UTF-16 "
             "(los emoji fuera de BMP cuentan como dos). No añadas fuentes ni propongas publicar."
         )
         answer = self.cli.json(
             ["ask", prompt, "-n", ident, "--new", "--yes", "--json"], timeout=900
         )
-        text = _as_text(answer).strip()
+        text = clean_plain_text(_as_text(answer))
         if not text:
             raise UserError("NotebookLM no devolvió texto para la vista previa de la noticia.")
         if utf16_code_units(text) > MAX_NEWS_TEXT_UTF16:
             shortening_prompt = (
-                "Reescribe el siguiente borrador como un resumen de noticias en español, "
-                f"sin perder sus datos y contexto esenciales y con un máximo estricto de "
+                "Reescribe el siguiente borrador en español natural y cotidiano usando "
+                "exclusivamente su contenido, sin inventar datos ni cambiar las fuentes. Empieza "
+                "por la conclusión principal, continúa con el contexto y deja los detalles técnicos "
+                "necesarios para el final. Usa solo párrafos de texto limpio, sin Markdown, "
+                "asteriscos, encabezados, viñetas ni listas numeradas. Conserva los datos y el "
+                f"contexto esenciales y respeta un máximo estricto de "
                 f"{MAX_NEWS_TEXT_UTF16} unidades UTF-16 para un único mensaje de Telegram. "
                 "Devuelve solo el texto final, sin explicación.\n\nBORRADOR:\n" + text
             )
@@ -837,7 +944,7 @@ class NotebookService:
                 ["ask", shortening_prompt, "-n", ident, "--new", "--yes", "--json"],
                 timeout=900,
             )
-            text = _as_text(shortened).strip()
+            text = clean_plain_text(_as_text(shortened))
         if not text or utf16_code_units(text) > MAX_NEWS_TEXT_UTF16:
             raise UserError(
                 "NotebookLM devolvió una noticia que supera 3500 unidades UTF-16; "
