@@ -299,7 +299,6 @@ function createGeminiSession(client, sendJson) {
     if (inputTurn.finalizeTimer) clearTimeout(inputTurn.finalizeTimer);
     const text = inputTurn.text.trim();
     inputTurn = null;
-    notebookPoller.close();
     sendJson(client, { type: 'input_turn_finalized', turnId: id });
     if (!text) return;
     sendJson(client, {
@@ -343,6 +342,7 @@ function createGeminiSession(client, sendJson) {
     if (inputTurn && inputTurn.finalizeTimer) clearTimeout(inputTurn.finalizeTimer);
     setupTimer = null;
     inputTurn = null;
+    notebookPoller.close();
     if (socket && socket.readyState < WebSocket.CLOSING) socket.close(1000);
     socket = null;
   }
