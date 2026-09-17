@@ -8,8 +8,8 @@ const ID = /^[a-zA-Z0-9_-]{1,100}$/;
 const ACTIONS = new Set(['source_url', 'source_pdf', 'podcast', 'report', 'voice', 'news']);
 
 function hubBase(env) {
-  if (!env.HUB_ENDPOINT_URL || !env.SGN_SECRET_TOKEN) {
-    return { error: 'Falta conectar Notebook LM: configura HUB_ENDPOINT_URL y SGN_SECRET_TOKEN en el servidor AGY.' };
+  if (!env.HUB_ENDPOINT_URL || !(env.CONEXION_NOTEBOOK_PUENTE || env.SGN_SECRET_TOKEN)) {
+    return { error: 'Falta conectar Notebook LM: configura HUB_ENDPOINT_URL y CONEXION_NOTEBOOK_PUENTE en el servidor AGY.' };
   }
   try {
     const url = new URL(env.HUB_ENDPOINT_URL);
@@ -83,7 +83,7 @@ function registerNotebookRoutes(app, requirePwd, options = {}) {
         headers: {
           Accept: suffix.startsWith('/files/') ? '*/*' : 'application/json',
           'Content-Type': 'application/json',
-          'X-SGN-Token': env.SGN_SECRET_TOKEN,
+          'X-SGN-Token': env.CONEXION_NOTEBOOK_PUENTE || env.SGN_SECRET_TOKEN,
           'X-SGN-Actor': 'ide',
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
@@ -91,7 +91,7 @@ function registerNotebookRoutes(app, requirePwd, options = {}) {
         signal: controller.signal,
       });
       if (upstream.status === 401 || upstream.status === 403) {
-        return res.status(502).json({ error: 'El Hub rechazó la conexión. Revisa que SGN_SECRET_TOKEN coincida en AGY y en el bot Python.' });
+        return res.status(502).json({ error: 'El Hub rechazó la conexión. Revisa que CONEXION_NOTEBOOK_PUENTE coincida en AGY y en el bot Python.' });
       }
       if (suffix.startsWith('/files/') && upstream.ok) {
         const type = upstream.headers.get('content-type') || 'application/octet-stream';

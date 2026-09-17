@@ -653,7 +653,7 @@ class NotebookService:
             # Redirects are disabled. The token is never put in a URL or output.
             opener = build_opener(_NoRedirect())
             headers = {}
-            token = os.environ.get("SGN_SECRET_TOKEN")
+            token = os.environ.get("CONEXION_NOTEBOOK_PUENTE") or os.environ.get("SGN_SECRET_TOKEN")
             if token:
                 headers["X-SGN-Token"] = token
             request.headers.update(headers)
@@ -747,7 +747,7 @@ class JobManager:
 
 def _auth_required(service: NotebookService):
     from flask import request, jsonify
-    token = os.environ.get("SGN_SECRET_TOKEN", "")
+    token = os.environ.get("CONEXION_NOTEBOOK_PUENTE") or os.environ.get("SGN_SECRET_TOKEN", "")
     supplied = request.headers.get("X-SGN-Token", "")
     if not token or not supplied or not timing_safe_equal(supplied, token):
         return jsonify({"error": "No autorizado."}), 401
@@ -1197,10 +1197,10 @@ def build_bot(service: NotebookService, manager: JobManager | None = None):
 
 def run(args: argparse.Namespace) -> None:
     token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-    secret = os.environ.get("SGN_SECRET_TOKEN", "")
+    secret = os.environ.get("CONEXION_NOTEBOOK_PUENTE") or os.environ.get("SGN_SECRET_TOKEN", "")
     channel = os.environ.get("TELEGRAM_CHANNEL_ID", "")
     if not secret:
-        raise SystemExit("Falta SGN_SECRET_TOKEN: la API nunca se inicia sin autenticación.")
+        raise SystemExit("Falta CONEXION_NOTEBOOK_PUENTE: la API nunca se inicia sin autenticación.")
     if not channel:
         raise SystemExit("Falta TELEGRAM_CHANNEL_ID.")
     try:

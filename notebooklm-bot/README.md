@@ -41,7 +41,10 @@ Son obligatorias para iniciar el servicio:
 * `TELEGRAM_BOT_TOKEN`
 * `TELEGRAM_CHANNEL_ID`
 * `HUB_ENDPOINT_URL` (HTTPS público, sin redirecciones)
-* `SGN_SECRET_TOKEN`
+* `CONEXION_NOTEBOOK_PUENTE`: clave privada nueva que elige el usuario; no es un token de Telegram.
+
+El nombre anterior `SGN_SECRET_TOKEN` sigue aceptándose por compatibilidad,
+pero las nuevas configuraciones deben usar `CONEXION_NOTEBOOK_PUENTE`.
 
 `TELEGRAM_ALLOWED_USER_IDS` es opcional (IDs separados por comas). Sin esa
 lista, el bot solo permite chats privados cuyo usuario sea
@@ -67,7 +70,7 @@ las misiones de PC3. Su botón **Notebook LM** y `/panel` usan esta API como Hub
 Para esta integración, ejecuta Python **solo con `--api-only`**: no inicies un
 segundo polling ni borres el webhook actual.
 
-Configura `HUB_ENDPOINT_URL` y el mismo `SGN_SECRET_TOKEN` en Python, AGY IDE
+Configura `HUB_ENDPOINT_URL` y la misma `CONEXION_NOTEBOOK_PUENTE` en Python, AGY IDE
 y el servicio CiberCode que atiende a Code Arquitect. La sesión Google se inicia
 en el equipo del Hub. Para publicar noticias, el Hub necesita el token correcto
 de Code Arquitect y un canal en el que ese bot pueda publicar. El token de otro
@@ -108,7 +111,7 @@ siempre elimina el estado pendiente.
 ## API para AGY/UI
 
 Todas las rutas requieren `X-SGN-Token` exactamente igual a
-`SGN_SECRET_TOKEN` (comparación resistente al tiempo). Opcionalmente
+`CONEXION_NOTEBOOK_PUENTE` (comparación resistente al tiempo). Opcionalmente
 `X-SGN-Actor` separa los cuadernos persistidos de la UI; tener un token válido
 es lo que autoriza la petición.
 
@@ -154,7 +157,7 @@ cloudflared tunnel --url http://127.0.0.1:8080
 
 Configura `HUB_ENDPOINT_URL=https://...` con el endpoint HTTPS público real del
 hub. En el servicio Node/AGY configura el mismo `HUB_ENDPOINT_URL` y el mismo
-`SGN_SECRET_TOKEN`; el proxy debe enviar `X-SGN-Token` a esta API. No pongas el
+`CONEXION_NOTEBOOK_PUENTE`; el proxy debe enviar `X-SGN-Token` a esta API. No pongas el
 token en una URL ni en el frontend. La comprobación de nodos no sigue
 redirecciones y no expone el token ni la salida cruda de la CLI.
 
