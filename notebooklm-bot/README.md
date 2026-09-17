@@ -51,6 +51,17 @@ lista, el bot solo permite chats privados cuyo usuario sea
 
 ### Modo elegido: Notebook LM dentro de Code Arquitect
 
+El equipo elegido para ejecutar el Hub es **PC2**. La instalación aislada vive en
+`~/notebooklm-hub`: sus paquetes no sustituyen los de otras aplicaciones.
+`tools/install_notebooklm_pc2.py` prepara dependencias y Cloudflare Tunnel,
+verificando la descarga con SHA-256. No arranca el servicio ni inicia polling.
+La cuenta de Google permanece en el perfil existente de NotebookLM en PC2.
+
+El lanzador `run-hub.py` espera un archivo privado `hub-env.json` en esa carpeta
+y escucha solo en `127.0.0.1:8086`; el túnel se conecta a ese puerto.
+No enviar claves en texto ni en base64 por la cola de comandos del puente:
+la configuración privada debe introducirse localmente o transferirse cifrada.
+
 El webhook existente de **Code Arquitect** sigue en CiberCode/Railway y conserva
 las misiones de PC3. Su botón **Notebook LM** y `/panel` usan esta API como Hub.
 Para esta integración, ejecuta Python **solo con `--api-only`**: no inicies un
@@ -121,6 +132,11 @@ Implementadas:
   `{id,status:"queued"}`.
 * `GET /api/notebooklm/jobs/:id`
 * `GET /api/notebooklm/files/:id`
+
+El estado de autenticación usa el contrato real de `notebooklm-py==0.8.2`:
+ejecuta `notebooklm auth check --test --json` y considera autenticada la sesión
+solo cuando la respuesta tiene `status: "ok"`. No se devuelven cookies, correos
+ni el diagnóstico crudo de la CLI.
 
 Los trabajos tienen como máximo dos ejecuciones simultáneas y 32 posiciones de
 cola. Las tareas interrumpidas se marcan `failed` al reiniciar. El PDF debe

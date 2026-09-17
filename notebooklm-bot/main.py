@@ -426,13 +426,26 @@ class NotebookService:
             return {"configured": False, "authenticated": False,
                     "message": "Instala notebooklm-py==0.8.2 y ejecuta notebooklm login."}
         try:
-            data = self.cli.json(["doctor", "--json"], timeout=30)
-            authenticated = bool(_first_value(data, ("authenticated", "authenticated_user", "email")))
+            # notebooklm-py 0.8.2's machine-readable auth contract is the
+            # top-level ``status`` from ``auth check --test --json``.  The
+            # doctor report has nested check statuses instead, and does not
+            # expose an ``authenticated`` boolean.
+            data = self.cli.json(["auth", "check", "--test", "--json"], timeout=30)
+            authenticated = isinstance(data, dict) and data.get("status") == "ok"
             message = "NotebookLM autenticado." if authenticated else (
                 "Falta autenticación: ejecuta notebooklm login en esta máquina.")
             return {"configured": True, "authenticated": authenticated, "message": message}
-        except UserError as exc:
-            return {"configured": True, "authenticated": False, "message": str(exc)}
+        except UserError:
+            # Never reflect CLI diagnostics: they may contain profile paths,
+            # cookie names/values, or account identifiers.
+            return {
+                "configured": True,
+                "authenticated": False,
+                "message": (
+                    "No se pudo comprobar la autenticación; ejecuta "
+                    "notebooklm login en esta máquina."
+                ),
+            }
 
     def notebooks(self, actor: str) -> dict[str, Any]:
         data = self.cli.json(["list", "--json"], timeout=60)
