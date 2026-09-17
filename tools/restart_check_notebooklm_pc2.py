@@ -16,16 +16,25 @@ def read_state():
 
 
 def service_pids():
+    listed = subprocess.run(
+        ["systemctl", "--user", "list-units", "--type=service", "--all",
+         "--plain", "--no-legend"], capture_output=True, text=True,
+        check=True, timeout=15,
+    )
+    names = [line.split()[0] for line in listed.stdout.splitlines() if line.strip()]
+    names = [name for name in names if name != "notebooklm-hub.service"]
+    if not names:
+        return {}
     result = subprocess.run(
-        ["systemctl", "--user", "show", "--type=service",
+        ["systemctl", "--user", "show", *names,
          "--property=Id,MainPID"], capture_output=True, text=True,
         check=True, timeout=15,
     )
     services = {}
     for block in result.stdout.strip().split("\n\n"):
         fields = dict(line.split("=", 1) for line in block.splitlines() if "=" in line)
-        if fields.get("Id") != "notebooklm-hub.service":
-            services[fields.get("Id")] = fields.get("MainPID")
+        if fields.get("Id"):
+            services[fields["Id"]] = fields.get("MainPID")
     return services
 
 
