@@ -295,7 +295,7 @@ class SQLiteStore:
             "SELECT status FROM deliveries WHERE job_id=?", (job_id,)
         ).fetchone()
         out["deliveryStatus"] = delivery["status"] if delivery else None
-        out.pop("actor", None)
+        # Keep the owner in canonical job data so API callers can verify origin.
         out.pop("created_at", None)
         out.pop("updated_at", None)
         return out
@@ -332,6 +332,23 @@ class SQLiteStore:
     def file(self, file_id: str) -> sqlite3.Row | None:
         with self.lock:
             return self.db.execute("SELECT * FROM files WHERE id=?", (file_id,)).fetchone()
+
+    def owns_file(self, actor: str, file_id: str) -> bool:
+        """Only a completed job of this caller can expose its result file."""
+        expected = f"/api/notebooklm/files/{file_id}"
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT result_json FROM jobs WHERE actor=? AND status='completed' "
+                "AND result_json IS NOT NULL", (actor,)
+            ).fetchall()
+        for row in rows:
+            try:
+                result = json.loads(row["result_json"])
+            except (ValueError, TypeError):
+                continue
+            if isinstance(result, dict) and result.get("downloadUrl") == expected:
+                return True
+        return False
 
     def close(self) -> None:
         self.db.close()
@@ -799,14 +816,14 @@ def create_app(service: NotebookService | None = None, manager: JobManager | Non
     @app.get("/api/notebooklm/jobs/<job_id>")
     def api_job_status(job_id):
         job = service.store.job(job_id)
-        if not job:
+        if not job or job["actor"] != _actor():
             return jsonify({"error": "Trabajo no encontrado."}), 404
         return jsonify(job)
 
     @app.get("/api/notebooklm/files/<file_id>")
     def api_file(file_id):
         row = service.store.file(file_id)
-        if not row or not Path(row["path"]).is_file():
+        if not row or not service.store.owns_file(_actor(), file_id) or not Path(row["path"]).is_file():
             return jsonify({"error": "Archivo no encontrado o caducado."}), 404
         return send_file(row["path"], mimetype=row["mime_type"], as_attachment=True,
                          download_name=row["file_name"], max_age=0)

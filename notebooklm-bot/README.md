@@ -49,9 +49,28 @@ lista, el bot solo permite chats privados cuyo usuario sea
 
 ## Arranque
 
+### Modo elegido: Notebook LM dentro de Code Arquitect
+
+El webhook existente de **Code Arquitect** sigue en CiberCode/Railway y conserva
+las misiones de PC3. Su botón **Notebook LM** y `/panel` usan esta API como Hub.
+Para esta integración, ejecuta Python **solo con `--api-only`**: no inicies un
+segundo polling ni borres el webhook actual.
+
+Configura `HUB_ENDPOINT_URL` y el mismo `SGN_SECRET_TOKEN` en Python, AGY IDE
+y el servicio CiberCode que atiende a Code Arquitect. La sesión Google se inicia
+en el equipo del Hub. Para publicar noticias, el Hub necesita el token correcto
+de Code Arquitect y un canal en el que ese bot pueda publicar. El token de otro
+bot del workspace no es intercambiable.
+
+La botonera y la ayuda se pueden abrir sin Hub configurado. La ingesta,
+investigación y generación real requieren la conexión y la sesión Google.
+Los resultados se devuelven únicamente al chat que los pidió. La selección
+de cuaderno de cada chat y la del IDE son independientes, pero pueden elegir
+el mismo cuaderno de la cuenta Google.
+
 ```bash
-python main.py                 # API y polling del bot
-python main.py --api-only      # solo API, útil para Cloudflare Tunnel
+python main.py --api-only      # integración elegida con Code Arquitect
+python main.py                 # únicamente para un bot independiente sin webhook
 ```
 
 No se borra el webhook existente automáticamente. Si otro despliegue tiene el
@@ -81,6 +100,10 @@ Todas las rutas requieren `X-SGN-Token` exactamente igual a
 `SGN_SECRET_TOKEN` (comparación resistente al tiempo). Opcionalmente
 `X-SGN-Actor` separa los cuadernos persistidos de la UI; tener un token válido
 es lo que autoriza la petición.
+
+Code Arquitect usa el actor `codearquitect:<chat_id>`; AGY utiliza `ide`.
+Las consultas de trabajos y sus descargas comprueban también este actor:
+un chat no puede leer resultados de otro chat ni del IDE.
 
 Implementadas:
 
