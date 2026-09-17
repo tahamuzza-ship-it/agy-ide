@@ -217,7 +217,32 @@ aplicaciones. La cuenta Google y el `hub-env.json` privado permanecen en PC2.
 
 ## Pruebas
 
+Verificación en producción del 17 de septiembre de 2026:
+
+* Ambos repositorios (`agy-ide` y `cibercode-ide`) desplegaron el registro
+  persistente y la resolución dinámica en Railway.
+* Tras reiniciar únicamente `notebooklm-hub.service`, PC2 publicó una generación
+  nueva sin cambiar variables de Railway manualmente. AGY y el transporte con
+  actor Code Arquitect devolvieron los mismos 28 cuadernos; la sesión Google
+  permaneció autenticada.
+* El servicio de usuario está habilitado, con reinicio automático y `Linger=yes`.
+  No se reinició PC2 completo ni se modificaron servicios de PC3. La prueba de
+  reinicio completo sigue requiriendo autorización.
+* Las comprobaciones no crean trabajos ni cuadernos ni inyectan mensajes al
+  webhook de Telegram. Validan las consultas reales de la API y la copia del
+  adaptador que fue desplegada, no un recorrido manual por la botonera.
+
+Las herramientas de mantenimiento en `tools/` usan solo cabeceras HTTPS para
+autenticación. `upgrade_notebooklm_pc2.py` verifica la revisión y SHA-256 de las
+fuentes públicas antes de actualizar exclusivamente el supervisor.
+`restart_check_notebooklm_pc2.py` separa la solicitud de reinicio (`start_restart`)
+de la lectura de resultados (`check`): esperar dentro del comando puede superar
+el tiempo límite del puente aunque NotebookLM se recupere correctamente.
+
 ```bash
+node --test scripts/notebooklm-endpoint.test.cjs scripts/notebooklm-proxy.test.cjs
+node --test deploy/railway/cibercode-ide/scripts/notebooklm-telegram.test.cjs
+pytest -q tests/test_notebooklm_pc2.py
 pytest -q tests/test_notebooklm_bot.py
 ```
 
