@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600&family=Inter:wght@300;400;600;700&family=Orbitron:wght@600;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="notebooklm.css">
     <style>
       /* Fondo personalizado de Roberto — imagen con velo suave para que el texto siga legible */
       html { background: #04080e !important; }
@@ -95,6 +96,7 @@
         <button class="hbtn hbtn-goal" id="btn-goal">/goal</button>
         <button class="hbtn hbtn-clr" id="btn-clear-out" type="button" title="Vaciar completamente el panel de salida" onclick="document.getElementById('output').replaceChildren();document.getElementById('out-status').textContent='listo';document.getElementById('out-status').style.color='';">🗑 LIMPIAR OUTPUT</button>
         <button class="hbtn hbtn-clr"  id="btn-clear-chat">🗑 Chat</button>
+        <button class="hbtn hbtn-notebooklm" id="btn-notebooklm" type="button" aria-haspopup="dialog" aria-controls="notebooklm-overlay" title="Abrir Notebook LM: investigar, generar audio y gestionar fuentes">📚 NOTEBOOK LM</button>
         <button class="hbtn" id="btn-puente-pc2" title="Abrir la consola no interactiva de PC2" style="background:linear-gradient(135deg,#5a0010,#cc0020);color:#fff;border:none;font-weight:700;">🖥 CONSOLA PC2</button>
         <button class="hbtn" id="btn-console-pc3" title="Abrir la consola no interactiva de PC3 Miami" aria-label="Abrir consola PC3 Miami" style="background:linear-gradient(135deg,#12305a,#1479b8);color:#fff;border:none;font-weight:700;">🖥 CONSOLA PC3 MIAMI</button>
         <button class="hbtn" id="btn-puente-pc1" title="PUENTE PC1 — SSH Windows. Termius: ssh Roberto1@192.168.1.2" style="background:linear-gradient(135deg,#003a7f,#0055cc);color:#fff;border:none;font-weight:700;">🔵 PUENTE PC1</button>
@@ -3674,5 +3676,6 @@
 </script>
     <script src="./pc2-terminal.js"></script>
     <script id="yarbis-bootstrap" src="/yarbis.js?v=19"></script>
+    <script src="./notebooklm.js"></script>
 </body>
     </html>

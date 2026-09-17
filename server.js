@@ -4,6 +4,7 @@ const fs      = require('fs');
 const crypto  = require('crypto');
 const { registerYarbisReadRoutes } = require('./yarbis-read-client.cjs');
 const { registerPc3Console } = require('./pc3-console.cjs');
+const { registerNotebookRoutes } = require('./notebooklm-proxy.cjs');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -1299,6 +1300,7 @@ function requirePwd(req, res, next) {
 
 registerYarbisReadRoutes(app, requirePwd);
 registerPc3Console(app, requirePwd);
+registerNotebookRoutes(app, requirePwd);
 
 /* ══════════════════════════════════════════
    RUTAS EXISTENTES
