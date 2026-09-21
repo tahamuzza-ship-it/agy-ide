@@ -163,7 +163,7 @@ function capabilityStateText(state) {
 
 function localToolsForCapabilities(state) {
   const active = new Set(
-    state && state.status === 'synchronized'
+    state && (state.synchronized === true || state.status === 'synchronized')
       ? state.capabilities
         .filter((entry) => {
           const policy = LOCAL_CAPABILITY_POLICIES.get(entry.id);

@@ -196,6 +196,24 @@ function testExactCrossContractManifest() {
   assert.deepStrictEqual(result.capabilities.map((entry) => entry.id), [...readIds, ...actionIds]);
 }
 
+function testValidatedResultActivatesAllKnownCapabilities() {
+  const { localToolsForCapabilities } = loadRuntimeHelpers();
+  const validated = capabilitiesResult(knownManifest(), 'token');
+  const active = localToolsForCapabilities(validated);
+  assert.strictEqual(validated.synchronized, true);
+  assert.deepStrictEqual([...active.activeIds].sort(), validated.capabilities.map((entry) => entry.id).sort());
+  assert.strictEqual(active.activeIds.length, 16);
+  const changed = {
+    ...validated,
+    capabilities: validated.capabilities.map((entry) => entry.id === 'mission.confirm'
+      ? { ...entry, requiresConfirmation: false }
+      : entry),
+  };
+  const safelyGated = localToolsForCapabilities(changed);
+  assert.ok(!safelyGated.activeIds.includes('mission.confirm'));
+  assert.strictEqual(safelyGated.activeIds.length, 15);
+}
+
 function testMissionUiGates() {
   const ui = fs.readFileSync('./public/yarbis.js', 'utf8');
   for (const id of ['mission.draft', 'mission.confirm', 'mission.status']) {
@@ -223,6 +241,7 @@ Promise.resolve()
   .then(testReadClientFixedRouteAndAuth)
   .then(testInvalidAndDuplicateManifestRejected)
   .then(testExactCrossContractManifest)
+  .then(testValidatedResultActivatesAllKnownCapabilities)
   .then(testMissionUiGates)
   .then(testUnknownCapabilityNeverBecomesTool)
   .then(testUnavailableState)
