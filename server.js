@@ -5,6 +5,10 @@ const crypto  = require('crypto');
 const { registerYarbisReadRoutes } = require('./yarbis-read-client.cjs');
 const { registerPc3Console } = require('./pc3-console.cjs');
 const { registerNotebookRoutes } = require('./notebooklm-proxy.cjs');
+const {
+  registerNotebookCloudAdmin,
+  getNotebookCloudNoVncRoot,
+} = require('./notebooklm-cloud-admin.cjs');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -1300,6 +1304,37 @@ function requirePwd(req, res, next) {
 
 registerYarbisReadRoutes(app, requirePwd);
 registerPc3Console(app, requirePwd);
+{
+  const cloudVariables = [
+    process.env.NOTEBOOKLM_CLOUD_URL,
+    process.env.NOTEBOOKLM_CLOUD_ADMIN_KEY,
+    process.env.AGY_PUBLIC_ORIGIN,
+  ];
+  if (cloudVariables.every((value) => !String(value || '').trim())) {
+    app.locals.notebookCloudAdmin = null;
+    app.locals.notebookCloudAdminReady = false;
+    app.get('/api/notebooklm/admin/ready', requirePwd, (_req, res) => {
+      res.status(503).json({ ready: false, error: 'NotebookLM cloud no está configurado.' });
+    });
+  } else {
+    // Partial or unsafe configuration deliberately aborts startup.
+    const notebookCloudAdmin = registerNotebookCloudAdmin(app, requirePwd);
+    app.locals.notebookCloudAdmin = notebookCloudAdmin;
+    app.locals.notebookCloudAdminReady = true;
+    app.use('/notebooklm-novnc', express.static(getNotebookCloudNoVncRoot(), {
+      dotfiles: 'deny',
+      index: false,
+      redirect: false,
+      immutable: true,
+      maxAge: '1d',
+    }));
+    app.get('/api/notebooklm/admin/ready', requirePwd, (_req, res) => {
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ ready: true });
+    });
+  }
+}
+// Keep the broad /api/notebooklm proxy after the administrative routes.
 registerNotebookRoutes(app, requirePwd);
 
 /* ══════════════════════════════════════════

@@ -17,6 +17,7 @@
   var notebookRefreshInFlight = false;
   var notebookOptionsFingerprint = '';
   var NOTEBOOK_REFRESH_MS = 20000;
+  var cloudAdminAssets;
 
   /* La API vive en la raíz incluso cuando el IDE se sirve bajo un prefijo. */
   function apiUrl(path) {
@@ -63,6 +64,29 @@
   function button(id, label, title, className) {
     return el('button', { id: id, type: 'button', className: 'notebooklm-action ' + (className || ''), title: title }, label);
   }
+  function loadCloudAdmin() {
+    if (window.NotebookLMCloudAdmin) return Promise.resolve(window.NotebookLMCloudAdmin);
+    if (cloudAdminAssets) return cloudAdminAssets;
+    cloudAdminAssets = new Promise(function (resolve, reject) {
+      if (!document.querySelector('link[data-notebooklm-cloud-admin]')) {
+        var stylesheet = document.createElement('link');
+        stylesheet.rel = 'stylesheet';
+        stylesheet.href = '/notebooklm-cloud-admin.css';
+        stylesheet.setAttribute('data-notebooklm-cloud-admin', '');
+        document.head.appendChild(stylesheet);
+      }
+      var script = document.createElement('script');
+      script.src = '/notebooklm-cloud-admin.js';
+      script.async = true;
+      script.onload = function () {
+        if (window.NotebookLMCloudAdmin) resolve(window.NotebookLMCloudAdmin);
+        else reject(new Error('El panel cloud no se pudo inicializar.'));
+      };
+      script.onerror = function () { reject(new Error('No se pudo cargar el panel cloud.')); };
+      document.head.appendChild(script);
+    });
+    return cloudAdminAssets;
+  }
   function setStatus(message, kind) {
     if (!statusBox) return;
     statusBox.className = 'notebooklm-status ' + (kind || '');
@@ -94,8 +118,9 @@
     var headActions = el('div', { className: 'notebooklm-head-actions' });
     var helpButton = el('button', { id: 'notebooklm-help-toggle', type: 'button', 'aria-expanded': 'false' }, '❔ Ayuda');
     var nodeButton = el('button', { id: 'notebooklm-node', type: 'button', title: 'Consultar el estado HTTPS del nodo Notebook LM' }, '◉ Nodo');
+    var cloudButton = el('button', { id: 'notebooklm-cloud-admin-open', type: 'button', title: 'Administrar la sesión privada de Google en cloud' }, '☁ Google cloud');
     var closeButton = el('button', { id: 'notebooklm-close', type: 'button', className: 'notebooklm-close', 'aria-label': 'Cerrar Notebook LM' }, '×');
-    headActions.append(helpButton, nodeButton, closeButton);
+    headActions.append(helpButton, nodeButton, cloudButton, closeButton);
     head.append(heading, headActions);
     statusBox = el('div', { className: 'notebooklm-status', role: 'status', 'aria-live': 'polite' }, 'Comprobando configuración…');
     var body = el('div', { className: 'notebooklm-body' });
@@ -196,6 +221,16 @@
       var isHidden = help.hidden; help.hidden = !isHidden; helpButton.setAttribute('aria-expanded', String(isHidden));
     });
     nodeButton.addEventListener('click', checkNode);
+    cloudButton.addEventListener('click', function () {
+      cloudButton.disabled = true;
+      loadCloudAdmin().then(function (cloudAdmin) {
+        cloudAdmin.open();
+      }).catch(function (error) {
+        setStatus(error.message, 'error');
+      }).finally(function () {
+        cloudButton.disabled = false;
+      });
+    });
     refreshButton.addEventListener('click', loadNotebooks);
     notebookSelect.addEventListener('change', selectNotebook);
     createForm.addEventListener('submit', function (event) { event.preventDefault(); createNotebook(createInput, createButton); });

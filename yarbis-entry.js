@@ -11,6 +11,7 @@ const hex = [1, 2, 3]
 fs.writeFileSync(generatedPath, Buffer.from(hex, 'hex'));
 
 const { attachYarbisLive } = require(generatedPath);
+const { attachNotebookCloudAdminWs } = require('./notebooklm-cloud-admin.cjs');
 
 function prepareYarbisHtml(input) {
   let prepared = input.replace(
@@ -58,6 +59,11 @@ http.Server.prototype.listen = function yarbisListen(...args) {
   if (!attached) {
     attached = true;
     attachYarbisLive(this);
+    const expressApp = this.listeners('request').find(
+      (listener) => listener && listener.locals
+    );
+    const admin = expressApp && expressApp.locals.notebookCloudAdmin;
+    if (admin) attachNotebookCloudAdminWs(this, { admin });
   }
   return originalListen.apply(this, args);
 };

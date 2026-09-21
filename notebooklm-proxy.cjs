@@ -4,6 +4,7 @@
 const { Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
 const { registerNotebookEndpointRoutes, createSupabaseStore, validateStored } = require('./notebooklm-endpoint.cjs');
+const { createNotebookRouter } = require('./notebooklm-router.cjs');
 const PREFIX = '/api/notebooklm';
 const ID = /^[a-zA-Z0-9_-]{1,100}$/;
 const ACTIONS = new Set(['source_url', 'source_pdf', 'podcast', 'report', 'voice', 'news_draft', 'news_publish', 'notebook_ask', 'notebook_research']);
@@ -22,9 +23,9 @@ function hubBase(env) {
 }
 
 function allowedPath(method, suffix) {
-  if (method === 'GET' && ['', '/status', '/nodes', '/notebooks', '/sources', '/jobs'].includes(suffix)) return true;
+  if (method === 'GET' && ['', '/status', '/nodes', '/notebooks', '/sources', '/jobs', '/routing'].includes(suffix)) return true;
   if (method === 'POST' && ['/notebooks', '/jobs'].includes(suffix)) return true;
-  if (method === 'PUT' && suffix === '/active') return true;
+  if (method === 'PUT' && ['/active', '/routing'].includes(suffix)) return true;
   const match = suffix.match(/^\/(jobs|files)\/([^/]+)$/);
   return method === 'GET' && !!match && ID.test(match[2]);
 }
@@ -32,7 +33,7 @@ function allowedPath(method, suffix) {
 function sanitizedBody(suffix, body = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Solicitud no válida.');
   const output = {};
-  const keys = suffix === '/notebooks' ? ['title'] : suffix === '/active' ? ['notebookId']
+  const keys = suffix === '/notebooks' ? ['title'] : suffix === '/active' ? ['notebookId'] : suffix === '/routing' ? ['route']
     : ['action', 'notebookId', 'url', 'filename', 'pdfBase64', 'question', 'topic', 'requestId', 'confirmed', 'draftId'];
   for (const key of keys) {
     if (body[key] === undefined) continue;
@@ -70,6 +71,19 @@ function registerNotebookRoutes(app, requirePwd, options = {}) {
   const env = options.env || process.env;
   const fetchImpl = options.fetchImpl || globalThis.fetch;
   const endpointStore = options.store || options.endpointStore || createSupabaseStore(env, options);
+  const resolvePc2Base = async () => {
+    let registeredEndpoint = null;
+    if (endpointStore && endpointStore.configured !== false) {
+      const record = await endpointStore.get();
+      if (record) registeredEndpoint = validateStored(record).endpoint;
+    }
+    const config = registeredEndpoint ? { url: registeredEndpoint } : hubBase(env);
+    return config.url || null;
+  };
+  const routerEnabled = Boolean(options.router || options.routerStore || env.NOTEBOOKLM_CLOUD_ENABLED === 'true');
+  const router = options.router || (routerEnabled ? createNotebookRouter({
+    ...options, env, fetchImpl, resolvePc2Base
+  }) : null);
   // This must be mounted before the password-protected proxy below. The
   // endpoint is authenticated with the SGN bridge token, not the IDE pwd.
   registerNotebookEndpointRoutes(app, { ...options, env, fetchImpl, store: endpointStore });
@@ -81,6 +95,43 @@ function registerNotebookRoutes(app, requirePwd, options = {}) {
     if (!token) {
       const config = hubBase(env);
       return res.status(503).json({ configured: false, authenticated: false, error: config.error, message: config.error });
+    }
+    let body;
+    try {
+      if (req.method !== 'GET') body = sanitizedBody(suffix, req.body);
+    } catch (error) {
+      return res.status(400).json({ error: error.message });
+    }
+    if (router) {
+      let routed;
+      try {
+        routed = await router.dispatch({ method: req.method, suffix, query: req.query || {}, body });
+      } catch {
+        return res.status(503).json({ error: 'No se pudo acceder al router Notebook LM.', code: 'ROUTER_UNAVAILABLE' });
+      }
+      if (routed.route) res.setHeader('X-NotebookLM-Route', routed.route);
+      if (routed.local) return res.status(routed.status).json(routed.data);
+      const upstream = routed.response;
+      if (upstream.status === 401 || upstream.status === 403) {
+        return res.status(502).json({ error: `La ruta ${routed.route} rechazó la conexión.`, route: routed.route });
+      }
+      if (suffix.startsWith('/files/') && upstream.ok) {
+        const type = upstream.headers.get('content-type') || 'application/octet-stream';
+        res.setHeader('Content-Type', ['audio/mpeg', 'audio/mp3', 'text/plain; charset=utf-8', 'text/plain', 'application/pdf'].includes(type) ? type : 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="notebooklm.${type.startsWith('audio/') ? 'mp3' : type.startsWith('text/') ? 'txt' : 'bin'}"`);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        return await pipeline(Readable.fromWeb(upstream.body), res);
+      }
+      const text = await upstream.text();
+      let data;
+      try { data = JSON.parse(text); } catch {
+        return res.status(502).json({ error: `La ruta ${routed.route} no respondió con la API Notebook LM.`, route: routed.route });
+      }
+      if (upstream.status >= 500) {
+        return res.status(502).json({ error: `Notebook LM no pudo completar la operación en ${routed.route}.`, route: routed.route });
+      }
+      if (!Array.isArray(data) && data && typeof data === 'object' && data.route === undefined) data.route = routed.route;
+      return res.status(upstream.status).json(data);
     }
     let registeredEndpoint = null;
     try {
@@ -95,12 +146,6 @@ function registerNotebookRoutes(app, requirePwd, options = {}) {
     }
     const config = registeredEndpoint ? { url: registeredEndpoint } : hubBase(env);
     if (config.error) return res.status(503).json({ configured: false, authenticated: false, error: config.error, message: config.error });
-    let body;
-    try {
-      if (req.method !== 'GET') body = sanitizedBody(suffix, req.body);
-    } catch (error) {
-      return res.status(400).json({ error: error.message });
-    }
     const url = new URL(`${config.url}${PREFIX}${suffix}`);
     if (suffix === '/sources' && req.query.notebookId) {
       if (typeof req.query.notebookId !== 'string' || !ID.test(req.query.notebookId)) {
