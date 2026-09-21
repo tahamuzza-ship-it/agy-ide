@@ -227,7 +227,47 @@ function createNotebookCloudAdmin(options = {}) {
     await Promise.allSettled(pending.map(session => upstreamPost('revoke', session, false)));
   }
 
-  return { config, sessions, create, end, grantDesktop, status, sessionFor, privateHeaders, revokeAll };
+  async function getReadiness() {
+    const unavailable = {
+      configured: true,
+      reachable: false,
+      sandboxReady: false,
+      notebooklm: 'UNKNOWN',
+      ready: false,
+    };
+    const configuredTimeout = Number(options.readinessTimeoutMs || 5000);
+    const timeoutMs = Number.isFinite(configuredTimeout)
+      ? Math.max(250, Math.min(10000, configuredTimeout))
+      : 5000;
+    try {
+      const response = await fetchImpl(`${config.cloudOrigin}/healthz`, {
+        method: 'GET',
+        redirect: 'error',
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!response.ok) return unavailable;
+      const data = await response.json().catch(() => null);
+      if (!data || typeof data !== 'object') return unavailable;
+      const notebooklm = ['READY', 'SESSION_REQUIRED'].includes(data.notebooklm)
+        ? data.notebooklm
+        : 'UNKNOWN';
+      const sandboxReady = data.sandboxReady === true;
+      return {
+        configured: true,
+        reachable: true,
+        sandboxReady,
+        notebooklm,
+        ready: sandboxReady,
+      };
+    } catch {
+      return unavailable;
+    }
+  }
+
+  return {
+    config, sessions, create, end, grantDesktop, status, sessionFor,
+    privateHeaders, revokeAll, getReadiness,
+  };
 }
 
 function registerNotebookCloudAdmin(app, requirePwd, options = {}) {

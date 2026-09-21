@@ -2,6 +2,7 @@
   'use strict';
 
   var root, csrf = '', password = '', rfb = null, timer = null, expiresAt = 0;
+  var confirmedRoute = 'auto', cloudLoginReady = false;
   var API = '/api/notebooklm/admin';
 
   function node(tag, attrs, text) {
@@ -45,21 +46,49 @@
     if (!seconds && csrf) revoke(false);
   }
   async function routeChanged(event) {
+    var select = event.target;
+    var requestedRoute = select.value;
+    select.disabled = true;
     try {
       var idePassword = idePasswordHeader();
       if (!idePassword) throw new Error('Inicia sesión en AGY antes de cambiar la ruta.');
       var response = await fetch('/api/notebooklm/routing', {
-        method: 'POST',
+        method: 'PUT',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': idePassword },
-        body: JSON.stringify({ route: event.target.value }),
+        body: JSON.stringify({ route: requestedRoute }),
       });
       var data = await response.json().catch(function () { return {}; });
       if (!response.ok) throw new Error(data.error || 'No se pudo cambiar la ruta.');
-      root.querySelector('[data-route-status]').textContent =
-        data.status || data.message || data.actualRoute || data.route || 'Ruta actualizada.';
+      if (!/^(auto|cloud|pc2)$/.test(data.route || '')) {
+        throw new Error('El servidor no confirmó la preferencia solicitada.');
+      }
+      confirmedRoute = data.route;
+      select.value = confirmedRoute;
+      root.querySelector('[data-route-status]').textContent = 'Preferencia guardada: ' + confirmedRoute + '.';
     } catch (error) {
+      select.value = confirmedRoute;
       root.querySelector('[data-route-status]').textContent = error.message;
+    } finally {
+      select.disabled = false;
+    }
+  }
+  function applyReadiness(data) {
+    cloudLoginReady = Boolean(data && data.configured && data.reachable && data.sandboxReady);
+    var form = root.querySelector('[data-login-form]');
+    form.querySelectorAll('input,button').forEach(function (control) {
+      control.disabled = !cloudLoginReady;
+    });
+    if (!data || !data.configured) {
+      status('El acceso cloud no está configurado en este servidor.', 'error');
+    } else if (!data.reachable) {
+      status('El servicio cloud no responde. La ruta PC2 sigue disponible.', 'error');
+    } else if (!data.sandboxReady) {
+      status('El sandbox privado de Google aún no está listo. La ruta PC2 sigue disponible.', 'error');
+    } else if (data.notebooklm === 'SESSION_REQUIRED') {
+      status('Sandbox listo. Hace falta iniciar la sesión de Google manualmente.', '');
+    } else {
+      status('Sandbox cloud listo.', 'ok');
     }
   }
   async function loadRoutingStatus() {
@@ -72,25 +101,33 @@
         headers: { 'x-agyide-pwd': idePassword },
       });
       var readyData = await ready.json().catch(function () { return {}; });
-      if (!ready.ok) throw new Error(readyData.error || 'Cloud no configurado.');
+      if (!ready.ok) throw new Error(readyData.error || 'No se pudo consultar el servicio cloud.');
+      applyReadiness(readyData);
+    } catch (error) {
+      applyReadiness({ configured: true, reachable: false, sandboxReady: false });
+    }
+    try {
       var response = await fetch('/api/notebooklm/routing', {
         credentials: 'same-origin',
         headers: { 'x-agyide-pwd': idePassword },
       });
       var data = await response.json().catch(function () { return {}; });
       if (!response.ok) throw new Error(data.error || 'No se pudo consultar la ruta.');
-      var actual = data.actualRoute || data.route || data.preference;
-      if (actual && /^(auto|cloud|pc2)$/.test(actual)) {
-        root.querySelector('.nlm-cloud-routing select').value = actual;
+      var preference = data.route;
+      if (preference && /^(auto|cloud|pc2)$/.test(preference)) {
+        confirmedRoute = preference;
+        root.querySelector('.nlm-cloud-routing select').value = confirmedRoute;
       }
-      box.textContent = data.status || data.message ||
-        (actual ? 'Ruta actual: ' + actual : (data.ready ? 'Ruta lista.' : 'Sesión requerida.'));
+      box.textContent = preference
+        ? 'Preferencia guardada: ' + preference + '.'
+        : 'El servidor no devolvió una preferencia válida.';
     } catch (error) {
       box.textContent = error.message;
     }
   }
   async function launch(event) {
     event.preventDefault();
+    if (!cloudLoginReady) return status('El sandbox cloud no está listo para iniciar sesión.', 'error');
     password = root.querySelector('[data-admin-password]').value;
     if (!password) return status('Escribe tu contraseña AGY actual.', 'error');
     if (!root.querySelector('[data-human-confirm]').checked) {
@@ -185,11 +222,11 @@
     card.appendChild(routing);
     var form = node('form', { 'data-login-form': '', className: 'nlm-cloud-form', onsubmit: launch });
     form.append(node('label', {}, 'Contraseña AGY actual'),
-      node('input', { type: 'password', autocomplete: 'current-password', 'data-admin-password': '', required: '' }),
+      node('input', { type: 'password', autocomplete: 'current-password', 'data-admin-password': '', required: '', disabled: '' }),
       node('label', { className: 'nlm-cloud-consent' }, ''),
-      node('button', { type: 'submit' }, 'Abrir ventana privada de Google'));
+      node('button', { type: 'submit', 'data-login-submit': '', disabled: '' }, 'Abrir ventana privada de Google'));
     var consent = form.querySelector('.nlm-cloud-consent');
-    consent.append(node('input', { type: 'checkbox', 'data-human-confirm': '', required: '' }),
+    consent.append(node('input', { type: 'checkbox', 'data-human-confirm': '', required: '', disabled: '' }),
       document.createTextNode(' Confirmo que iniciaré sesión personalmente y que el acceso dura como máximo 5 minutos.'));
     var desktop = node('div', { 'data-desktop-panel': '', hidden: '' });
     desktop.append(node('div', { 'data-vnc-screen': '', className: 'nlm-vnc-screen', 'aria-label': 'Escritorio remoto privado de Google' }),

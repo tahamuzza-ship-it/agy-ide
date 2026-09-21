@@ -1314,7 +1314,11 @@ registerPc3Console(app, requirePwd);
     app.locals.notebookCloudAdmin = null;
     app.locals.notebookCloudAdminReady = false;
     app.get('/api/notebooklm/admin/ready', requirePwd, (_req, res) => {
-      res.status(503).json({ ready: false, error: 'NotebookLM cloud no está configurado.' });
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({
+        configured: false, reachable: false, sandboxReady: false,
+        notebooklm: 'UNKNOWN', ready: false,
+      });
     });
   } else {
     // Partial or unsafe configuration deliberately aborts startup.
@@ -1328,9 +1332,9 @@ registerPc3Console(app, requirePwd);
       immutable: true,
       maxAge: '1d',
     }));
-    app.get('/api/notebooklm/admin/ready', requirePwd, (_req, res) => {
+    app.get('/api/notebooklm/admin/ready', requirePwd, async (_req, res) => {
       res.setHeader('Cache-Control', 'no-store');
-      res.json({ ready: true });
+      res.json(await notebookCloudAdmin.getReadiness());
     });
   }
 }

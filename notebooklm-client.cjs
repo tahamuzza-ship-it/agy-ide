@@ -1,12 +1,15 @@
 'use strict';
 const crypto = require('node:crypto');
 const ID = /^[A-Za-z0-9_-]{1,160}$/;
+const REQUEST_TIMEOUT_MS = 50000;
+const JOB_POLL_TIMEOUT_MS = 20 * 60 * 1000;
 function fold(value) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').trim();
 }
 function createNotebookClient(options = {}) {
   const env = options.env || process.env;
   const fetchImpl = options.fetchImpl || globalThis.fetch;
+  const timeoutSignal = options.timeoutSignal || ((milliseconds) => AbortSignal.timeout(milliseconds));
   const port = Number(options.port || env.PORT);
   const password = String(options.password || env.AGY_IDE_PASSWORD || '');
   async function request(method, path, body) {
@@ -15,7 +18,7 @@ function createNotebookClient(options = {}) {
       method,
       headers: { accept: 'application/json', 'content-type': 'application/json', 'x-agyide-pwd': encodeURIComponent(password) },
       ...(body ? { body: JSON.stringify(body) } : {}),
-      signal: AbortSignal.timeout(30000)
+      signal: timeoutSignal(REQUEST_TIMEOUT_MS)
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(String(data.error || data.message || 'Notebook LM no respondió correctamente.'));
@@ -56,7 +59,7 @@ function createNotebookClient(options = {}) {
 }
 function createJobPoller(client, onFinal, options = {}) {
   const intervalMs = options.intervalMs || 2000;
-  const timeoutMs = options.timeoutMs || 1200000;
+  const timeoutMs = options.timeoutMs || JOB_POLL_TIMEOUT_MS;
   const setTimer = options.setTimeout || setTimeout;
   const clearTimer = options.clearTimeout || clearTimeout;
   const jobs = new Map();
@@ -115,4 +118,7 @@ function publicFailure() {
 function deriveResearchRequestId(sessionNonce, callId) {
   return crypto.createHash('sha256').update(`${String(sessionNonce)}:${String(callId)}`).digest('hex');
 }
-module.exports = { createNotebookClient, createJobPoller, deriveResearchRequestId, fold, publicFailure };
+module.exports = {
+  REQUEST_TIMEOUT_MS, JOB_POLL_TIMEOUT_MS, createNotebookClient, createJobPoller,
+  deriveResearchRequestId, fold, publicFailure
+};
