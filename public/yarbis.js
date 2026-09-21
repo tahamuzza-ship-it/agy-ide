@@ -27,6 +27,7 @@
               '<button id="yarbis-disconnect" type="button" disabled>DESCONECTAR</button></div>' +
               '<div class="yarbis-sync"><button id="yarbis-sync" type="button">🔄 SINCRONIZAR CONTEXTO PC1</button>' +
               '<div id="yarbis-sync-status" role="status" aria-live="polite">Estado de contexto aún no consultado.</div></div>' +
+               '<div class="yarbis-capabilities"><div id="yarbis-capabilities-status" role="status" aria-live="polite">Capacidades Mark 51 aún no consultadas.</div></div>' +
               '<div class="yarbis-missions-bar"><button id="yarbis-missions-open" type="button" aria-haspopup="dialog">MISIONES CREADAS <span id="yarbis-missions-count">0</span></button></div>' +
               '<div id="yarbis-history" class="yarbis-history" aria-live="polite"></div>' +
               '<form id="yarbis-text-form" class="yarbis-text"><input id="yarbis-text-input" maxlength="4000" placeholder="Ejemplo seguro: PC1 abre el bloc de notas" autocomplete="off">' +
@@ -48,6 +49,7 @@
   var disconnectBtn = document.getElementById('yarbis-disconnect');
   var syncBtn = document.getElementById('yarbis-sync');
   var syncStatus = document.getElementById('yarbis-sync-status');
+  var capabilitiesStatus = document.getElementById('yarbis-capabilities-status');
   var textForm = document.getElementById('yarbis-text-form');
   var textInput = document.getElementById('yarbis-text-input');
   var textSend = textForm.querySelector('button');
@@ -57,7 +59,7 @@
   var missionsList = document.getElementById('yarbis-missions-list');
   var missionsCloseBtn = document.getElementById('yarbis-missions-close');
   if (!overlay || !reactor || !stateEl || !statusEl || !history || !connectBtn ||
-      !micBtn || !disconnectBtn || !syncBtn || !syncStatus || !textForm || !textInput || !missionsOpenBtn ||
+       !micBtn || !disconnectBtn || !syncBtn || !syncStatus || !capabilitiesStatus || !textForm || !textInput || !missionsOpenBtn ||
       !missionsCount || !missionsLayer || !missionsList || !missionsCloseBtn ||
       !document.getElementById('btn-yarbis')) return;
   var ws = null, stream = null, audioCtx = null, source = null, processor = null;
@@ -67,6 +69,7 @@
   var missionPollTimer = null, missionPollInFlight = false;
   var micGeneration = 0, connectionGeneration = 0;
   var activeConnection = null;
+  var activeCapabilities = { status: 'unavailable', ids: new Set() };
   var activePlaybackNodes = new Set(), speechActive = false, audioTurnOpen = false, lastSpeechAt = 0;
   var audioPreRoll = [], reconnectTimer = null, reconnectAttempts = 0, resumeMicAfterReconnect = false;
   var inputTurnSequence = 0, activeInputTurnId = 0, awaitingInputTurnId = 0;
@@ -99,6 +102,35 @@
     reactor.dataset.state = value;
     stateEl.textContent = value;
     if (message) statusEl.textContent = message;
+  }
+  function renderCapabilitiesStatus(message) {
+    var state = message && message.status === 'synchronized' ? 'synchronized' : 'unavailable';
+    capabilitiesStatus.dataset.state = state;
+    activeCapabilities = {
+      status: state,
+      ids: state === 'synchronized' && Array.isArray(message.activeIds)
+        ? new Set(message.activeIds.filter(function (id) { return typeof id === 'string'; }))
+        : new Set()
+    };
+    if (state !== 'synchronized') {
+      capabilitiesStatus.textContent = 'CAPACIDADES MARK 51 — NO DISPONIBLES' +
+        (message && message.message ? ': ' + message.message : '. No se activaron capacidades remotas.');
+      return;
+    }
+    var version = message.yarbisVersion || 'versión desconocida';
+    var schema = message.schemaVersion || 'esquema desconocido';
+    var declared = Number.isInteger(message.declaredCount) ? message.declaredCount : 0;
+    var count = Number.isInteger(message.count) ? message.count : 0;
+    capabilitiesStatus.textContent = 'CAPACIDADES MARK 51 — SINCRONIZADAS · ' +
+      version + ' · ' + schema + ' · DECLARADAS ' + declared + ' · ACTIVAS ' + count;
+  }
+  function capabilityActive(id) {
+    return activeCapabilities.status === 'synchronized' && activeCapabilities.ids.has(id);
+  }
+  function requireCapability(id, action, silent) {
+    if (capabilityActive(id)) return true;
+    if (!silent) add('system', 'Capacidad no disponible: ' + id + '. ' + (action || 'La operación no fue enviada.'));
+    return false;
   }
   function mergeTranscriptText(current, incoming) {
     var left = String(current || '').trim(), right = String(incoming || '').trim();
@@ -253,6 +285,7 @@
     missionPollTimer = setTimeout(function () { refreshTrackedMissions(true); }, delay || 15000);
   }
   async function refreshTrackedMissions(silent) {
+    if (!requireCapability('mission.status', 'No se consultará el estado de misiones.', silent)) return false;
     var active = trackedMissions.filter(function (item) { return !terminalMissionStatus(item.status); });
     if (!active.length || missionPollInFlight) {
       scheduleMissionPoll(15000);
@@ -426,6 +459,7 @@
     renderDrafts();
   }
   async function refreshDrafts(silent) {
+    if (!requireCapability('mission.draft', 'No se consultarán borradores.', silent)) return false;
     try {
       var response = await fetchWithTimeout('/api/ops/mailbox/voice/command', {
         method: 'POST',
@@ -757,7 +791,10 @@
         return;
       }
       var m; try { m = JSON.parse(event.data); } catch (_) { return; }
-      if (m.type === 'connecting') {
+      if (m.type === 'capabilities') {
+        renderCapabilitiesStatus(m);
+        if (m.status !== 'synchronized') add('system', 'El catálogo de capacidades Mark 51 no está disponible. No se activaron capacidades remotas.');
+      } else if (m.type === 'connecting') {
         setState('THINKING', 'Autenticado. Esperando a Gemini Live…');
       } else if (m.type === 'ready') {
         var recovered = reconnectAttempts > 0;
@@ -808,6 +845,9 @@
     };
   }
   async function mailboxCommand(text, intentOverride) {
+    if (!requireCapability('mission.draft', 'No se creará ningún borrador.')) {
+      throw new Error('La capacidad mission.draft no está activa.');
+    }
     var intent = intentOverride || mailboxIntentForUtterance(text);
     if (!intent || intent.type !== 'draft' || !intent.mission) {
       throw new Error('Aclara la misión que quieres proponer para el Buzón de PC1.');
@@ -907,6 +947,8 @@
     };
   }
   async function confirmMailbox(decision, proposalId, card) {
+    if (decision === 'confirm' && !requireCapability('mission.confirm', 'La misión no fue enviada.')) return;
+    if (decision === 'cancel' && !requireCapability('mission.draft', 'El borrador no fue modificado.')) return;
     if (!proposalId || (decision !== 'confirm' && decision !== 'cancel')) return;
     if (missionDecisionInFlight) return;
     missionDecisionInFlight = proposalId;

@@ -56,6 +56,14 @@ const YARBIS_VERSION_TOOL = {
   }]
 };
 
+const YARBIS_CAPABILITIES_TOOL = {
+  functionDeclarations: [{
+    name: 'yarbis_capabilities',
+    description: 'Consulta el estado del catálogo de capacidades de Mark 51 sincronizado para AGY-IDE.',
+    parameters: { type: 'OBJECT', properties: {} }
+  }]
+};
+
 const YARBIS_MEMORY_STATUS_TOOL = {
   functionDeclarations: [{
     name: 'yarbis_memory_status',
@@ -108,6 +116,99 @@ const NOTEBOOK_TOOLS = {
     { name: 'notebooklm_job_status', description: 'Consulta el estado verificable de un trabajo Notebook LM.', parameters: { type: 'OBJECT', properties: { jobId: { type: 'STRING' } }, required: ['jobId'] } }
   ]
 };
+
+const LOCAL_CAPABILITY_GROUPS = [
+  { id: 'capabilities.read', tools: null, names: [], ui: true },
+  { id: 'mailbox.read', tools: MAILBOX_TOOL, names: ['consultar_buzon_pc1'] },
+  { id: 'pc1.sync.read', tools: SYNC_STATUS_TOOL, names: ['consultar_estado_sincronizacion_pc1'] },
+  { id: 'release.read', tools: YARBIS_VERSION_TOOL, names: ['yarbis_version'] },
+  { id: 'memory.status', tools: YARBIS_MEMORY_STATUS_TOOL, names: ['yarbis_memory_status'] },
+  { id: 'memory.search', tools: YARBIS_MEMORY_SEARCH_TOOL, names: ['yarbis_memory_search'] },
+  { id: 'memory.get', tools: YARBIS_MEMORY_GET_TOOL, names: ['yarbis_memory_get'] },
+  { id: 'notebooklm.list', tools: { functionDeclarations: [NOTEBOOK_TOOLS.functionDeclarations[0]] }, names: ['notebooklm_list_notebooks'] },
+  { id: 'notebooklm.search', tools: { functionDeclarations: [NOTEBOOK_TOOLS.functionDeclarations[1]] }, names: ['notebooklm_search_notebooks'] },
+  { id: 'notebooklm.sources', tools: { functionDeclarations: [NOTEBOOK_TOOLS.functionDeclarations[2]] }, names: ['notebooklm_list_sources'] },
+  { id: 'notebooklm.ask', tools: { functionDeclarations: [NOTEBOOK_TOOLS.functionDeclarations[3]] }, names: ['notebooklm_ask'] },
+  { id: 'notebooklm.research', tools: { functionDeclarations: [NOTEBOOK_TOOLS.functionDeclarations[4]] }, names: ['notebooklm_research'] },
+  { id: 'notebooklm.job-status', tools: { functionDeclarations: [NOTEBOOK_TOOLS.functionDeclarations[5]] }, names: ['notebooklm_job_status'] },
+  { id: 'mission.draft', tools: null, names: [], ui: true },
+  { id: 'mission.confirm', tools: null, names: [], ui: true },
+  { id: 'mission.status', tools: null, names: [], ui: true }
+];
+const LOCAL_CAPABILITY_POLICIES = new Map([
+  ['capabilities.read', { mode: 'read', requiresConfirmation: false, evidenceRequired: false }],
+  ['release.read', { mode: 'read', requiresConfirmation: false, evidenceRequired: false }],
+  ['memory.status', { mode: 'read', requiresConfirmation: false, evidenceRequired: false }],
+  ['memory.search', { mode: 'read', requiresConfirmation: false, evidenceRequired: false }],
+  ['memory.get', { mode: 'read', requiresConfirmation: false, evidenceRequired: false }],
+  ['mailbox.read', { mode: 'read', requiresConfirmation: false, evidenceRequired: false }],
+  ['pc1.sync.read', { mode: 'read', requiresConfirmation: false, evidenceRequired: false }],
+  ['notebooklm.list', { mode: 'read', requiresConfirmation: false, evidenceRequired: false }],
+  ['notebooklm.search', { mode: 'read', requiresConfirmation: false, evidenceRequired: false }],
+  ['notebooklm.sources', { mode: 'read', requiresConfirmation: false, evidenceRequired: false }],
+  ['notebooklm.job-status', { mode: 'read', requiresConfirmation: false, evidenceRequired: false }],
+  ['mission.status', { mode: 'read', requiresConfirmation: false, evidenceRequired: false }],
+  ['notebooklm.ask', { mode: 'action', requiresConfirmation: false, evidenceRequired: true }],
+  ['notebooklm.research', { mode: 'action', requiresConfirmation: false, evidenceRequired: true }],
+  ['mission.draft', { mode: 'action', requiresConfirmation: false, evidenceRequired: false }],
+  ['mission.confirm', { mode: 'action', requiresConfirmation: true, evidenceRequired: true }]
+]);
+
+function capabilityStateText(state) {
+  if (!state || state.status !== 'synchronized') {
+    return 'CATÁLOGO DE CAPACIDADES: no disponible; no trates capacidades remotas desconocidas como activas.';
+  }
+  return `CATÁLOGO DE CAPACIDADES: sincronizado; versión ${state.yarbisVersion || 'desconocida'}, esquema ${state.schemaVersion || 'desconocido'}, ${state.count} capacidades activas.`;
+}
+
+function localToolsForCapabilities(state) {
+  const active = new Set(
+    state && state.status === 'synchronized'
+      ? state.capabilities
+        .filter((entry) => {
+          const policy = LOCAL_CAPABILITY_POLICIES.get(entry.id);
+          return entry.enabled && policy &&
+            entry.mode === policy.mode &&
+            entry.requiresConfirmation === policy.requiresConfirmation &&
+            entry.evidenceRequired === policy.evidenceRequired;
+        })
+        .map((entry) => entry.id)
+      : []
+  );
+  const groups = LOCAL_CAPABILITY_GROUPS.filter((group) => active.has(group.id));
+  const tools = groups.filter((group) => group.tools).map((group) => group.tools);
+  const names = new Set(groups.flatMap((group) => group.names));
+  return { tools, names, activeIds: groups.map((group) => group.id) };
+}
+
+async function queryCapabilities(sendJson) {
+  try {
+    const result = await yarbisReadClient.yarbis_capabilities();
+    if (!result || result.ok !== true || result.synchronized !== true) {
+      throw new Error((result && result.error) || 'El catálogo de capacidades no está disponible.');
+    }
+    const local = localToolsForCapabilities(result);
+    const state = {
+      status: 'synchronized',
+      schemaVersion: result.schemaVersion,
+      yarbisVersion: result.yarbisVersion,
+      policyVersion: result.policyVersion || null,
+      count: local.activeIds.length,
+      declaredCount: result.capabilities.filter((entry) => entry.enabled).length,
+      activeIds: local.activeIds.slice()
+    };
+    sendJson(null, { type: 'capabilities', ...state });
+    return { state, local };
+  } catch (error) {
+    const state = {
+      status: 'unavailable',
+      count: 0,
+      message: error instanceof Error ? error.message : 'El catálogo de capacidades no está disponible.'
+    };
+    sendJson(null, { type: 'capabilities', ...state });
+    return { state, local: { tools: [], names: new Set(), activeIds: [] } };
+  }
+}
 
 async function queryYarbisVersion() {
   try {
@@ -263,6 +364,12 @@ function createGeminiSession(client, sendJson) {
   let inputTurn = null;
   const pendingToolCalls = new Set();
   const completedToolCalls = new Map();
+  let capabilityState = {
+    status: 'unavailable',
+    count: 0,
+    message: 'El catálogo de capacidades aún no se ha consultado.'
+  };
+  let capabilityTools = { tools: [], names: new Set(), activeIds: [] };
   const notebookRequestNonce = crypto.randomBytes(24).toString('base64url');
   const notebookClient = createNotebookClient();
   const notebookPoller = createJobPoller(notebookClient, (jobId, result) => {
@@ -347,7 +454,10 @@ function createGeminiSession(client, sendJson) {
     socket = null;
   }
 
-  function connect() {
+  async function connect() {
+    const handshake = await queryCapabilities((_, event) => sendJson(client, event));
+    capabilityState = handshake.state;
+    capabilityTools = handshake.local;
     const key = String(
       readEnvironment(['GEMINI', 'LIVE', 'API', 'KEY']) ||
       readEnvironment(['GOOGLE', 'API', 'KEY']) ||
@@ -389,9 +499,9 @@ function createGeminiSession(client, sendJson) {
             responseModalities: ['AUDIO'],
             speechConfig: { languageCode: 'es-US' }
           },
-          systemInstruction: {
+           systemInstruction: {
             parts: [{
-              text: activeSystemPrompt()
+               text: `${activeSystemPrompt()}\n\n${capabilityStateText(capabilityState)}`
             }]
           },
           realtimeInputConfig: {
@@ -406,15 +516,7 @@ function createGeminiSession(client, sendJson) {
           },
           inputAudioTranscription: {},
           outputAudioTranscription: {},
-          tools: [
-            MAILBOX_TOOL,
-            SYNC_STATUS_TOOL,
-            YARBIS_VERSION_TOOL,
-            YARBIS_MEMORY_STATUS_TOOL,
-            YARBIS_MEMORY_SEARCH_TOOL,
-            YARBIS_MEMORY_GET_TOOL
-            , NOTEBOOK_TOOLS
-          ]
+           tools: [YARBIS_CAPABILITIES_TOOL, ...capabilityTools.tools]
         }
       }));
     });
@@ -447,7 +549,14 @@ function createGeminiSession(client, sendJson) {
         void (async () => {
           const requested = call && call.args && call.args.bandeja;
           const bandeja = requested === 'entrada' || requested === 'todas' ? requested : 'salida';
-          const result = call && call.name === 'consultar_buzon_pc1'
+          const permitted = call && (
+            call.name === 'yarbis_capabilities' || capabilityTools.names.has(call.name)
+          );
+          const result = !permitted
+            ? { ok: false, error: 'Herramienta no activa para AGY-IDE en el catálogo actual.', code: 'CAPABILITY_NOT_ACTIVE' }
+            : call && call.name === 'yarbis_capabilities'
+              ? capabilityState
+              : call && call.name === 'consultar_buzon_pc1'
             ? await queryMailboxTray(bandeja)
             : call && call.name === 'consultar_estado_sincronizacion_pc1'
               ? await queryMorningStatus()
@@ -714,4 +823,9 @@ function prepareYarbisIndex() {
   fs.writeFileSync(indexPath, html.slice(0, closingBody) + marker + html.slice(closingBody), 'utf8');
 }
 
-module.exports = { attachYarbisLive, prepareYarbisIndex };
+module.exports = {
+  attachYarbisLive,
+  prepareYarbisIndex,
+  localToolsForCapabilities,
+  capabilityStateText
+};

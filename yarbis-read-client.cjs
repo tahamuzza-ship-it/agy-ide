@@ -175,6 +175,99 @@ function releaseResult(payload, token) {
   return result;
 }
 
+const CAPABILITY_ID_PATTERN = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+){1,7}$/;
+const CAPABILITY_MODE = new Set(['read', 'action']);
+const CAPABILITY_TOP_LEVEL_KEYS = ['schemaVersion', 'policyVersion', 'client', 'yarbisVersion', 'capabilities'];
+const CAPABILITY_RECORD_KEYS = ['id', 'mode', 'enabled', 'requiresConfirmation', 'evidenceRequired'];
+const CAPABILITY_READ_IDS = new Set([
+  'capabilities.read',
+  'release.read',
+  'memory.status',
+  'memory.search',
+  'memory.get',
+  'mailbox.read',
+  'pc1.sync.read',
+  'notebooklm.list',
+  'notebooklm.search',
+  'notebooklm.sources',
+  'notebooklm.job-status',
+  'mission.status'
+]);
+const KNOWN_CAPABILITY_POLICIES = new Map([
+  ...[...CAPABILITY_READ_IDS].map((id) => [id, { mode: 'read', requiresConfirmation: false, evidenceRequired: false }]),
+  ['notebooklm.ask', { mode: 'action', requiresConfirmation: false, evidenceRequired: true }],
+  ['notebooklm.research', { mode: 'action', requiresConfirmation: false, evidenceRequired: true }],
+  ['mission.draft', { mode: 'action', requiresConfirmation: false, evidenceRequired: false }],
+  ['mission.confirm', { mode: 'action', requiresConfirmation: true, evidenceRequired: true }],
+]);
+
+function exactKeys(value, expected) {
+  return object(value) &&
+    Object.keys(value).length === expected.length &&
+    expected.every((key) => Object.prototype.hasOwnProperty.call(value, key));
+}
+
+function capabilitiesResult(payload, token) {
+  if (!exactKeys(payload, CAPABILITY_TOP_LEVEL_KEYS) ||
+      payload.schemaVersion !== '1' ||
+      payload.policyVersion !== '1' ||
+      payload.client !== CLIENT_ID ||
+      typeof payload.yarbisVersion !== 'string' ||
+      !payload.yarbisVersion.trim()) {
+    throw fail('YARBIS_READ_INVALID_RESPONSE', 'El catálogo de capacidades no es un objeto.');
+  }
+  const schemaVersion = payload.schemaVersion;
+  const yarbisVersion = safe(payload.yarbisVersion, token, 160);
+  const policyVersion = payload.policyVersion;
+  const entries = payload.capabilities;
+  if (!schemaVersion || !Array.isArray(entries) || entries.length > 100) {
+    throw fail('YARBIS_READ_INVALID_RESPONSE', 'El catálogo de capacidades tiene un formato inválido.');
+  }
+  const seen = new Set();
+  const capabilities = entries.map((entry) => {
+    if (!exactKeys(entry, CAPABILITY_RECORD_KEYS)) {
+      throw fail('YARBIS_READ_INVALID_RESPONSE', 'El catálogo contiene una capacidad inválida.');
+    }
+    const id = safe(entry.id, token, 100);
+    if (!id || !CAPABILITY_ID_PATTERN.test(id) || seen.has(id)) {
+      throw fail('YARBIS_READ_INVALID_RESPONSE', 'El catálogo contiene un identificador duplicado o inválido.');
+    }
+    const policy = KNOWN_CAPABILITY_POLICIES.get(id);
+    if (typeof entry.enabled !== 'boolean' || !CAPABILITY_MODE.has(entry.mode) ||
+        typeof entry.requiresConfirmation !== 'boolean' ||
+        typeof entry.evidenceRequired !== 'boolean' ||
+        (policy && (
+          entry.mode !== policy.mode ||
+          entry.requiresConfirmation !== policy.requiresConfirmation ||
+          entry.evidenceRequired !== policy.evidenceRequired
+        ))) {
+      throw fail('YARBIS_READ_INVALID_RESPONSE', `La capacidad ${id} tiene metadatos inválidos.`);
+    }
+    seen.add(id);
+    return {
+      id,
+      mode: entry.mode,
+      enabled: entry.enabled,
+      requiresConfirmation: entry.requiresConfirmation,
+      evidenceRequired: entry.evidenceRequired
+    };
+  });
+  if ([...KNOWN_CAPABILITY_POLICIES.keys()].some((id) => !seen.has(id))) {
+    throw fail('YARBIS_READ_INVALID_RESPONSE', 'El catálogo no declara todas las capacidades conocidas.');
+  }
+  return {
+    ok: true,
+    synchronized: true,
+    untrusted: true,
+    schemaVersion,
+    yarbisVersion,
+    policyVersion,
+    capabilities,
+    count: capabilities.filter((entry) => entry.enabled).length,
+    summary: `Catálogo de capacidades recibido: ${capabilities.length} declaraciones válidas.`
+  };
+}
+
 function statusResult(payload, token) {
   const item = object(payload) && (object(payload.status) || object(payload.data))
     ? payload.status || payload.data
@@ -341,6 +434,7 @@ function createYarbisReadClient(dependencies = {}) {
           Accept: 'application/json',
           Authorization: `Bearer ${cfg.token}`,
           'X-Yarbis-Node-Id': CLIENT_ID,
+          'X-Yarbis-Client-Id': CLIENT_ID,
         },
         redirect: 'error',
         cache: 'no-store',
@@ -377,6 +471,10 @@ function createYarbisReadClient(dependencies = {}) {
     async yarbis_version() {
       const cfg = config(env);
       return releaseResult(await request('/api/release'), cfg.token);
+    },
+    async yarbis_capabilities() {
+      const cfg = config(env);
+      return capabilitiesResult(await request('/api/agent-capabilities'), cfg.token);
     },
     async yarbis_memory_status() {
       const cfg = config(env);
@@ -456,6 +554,9 @@ function registerYarbisReadRoutes(app, requirePwd, client) {
 function yarbis_version() {
   return createYarbisReadClient().yarbis_version();
 }
+function yarbis_capabilities() {
+  return createYarbisReadClient().yarbis_capabilities();
+}
 function yarbis_memory_status() {
   return createYarbisReadClient().yarbis_memory_status();
 }
@@ -469,10 +570,12 @@ function yarbis_memory_get(id) {
 module.exports = {
   CLIENT_ID,
   YarbisReadError,
+  capabilitiesResult,
   createYarbisReadClient,
   publicError,
   registerYarbisReadRoutes,
   yarbis_version,
+  yarbis_capabilities,
   yarbis_memory_status,
   yarbis_memory_search,
   yarbis_memory_get,
