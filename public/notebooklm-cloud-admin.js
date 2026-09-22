@@ -2,7 +2,7 @@
   'use strict';
 
   var root, csrf = '', password = '', rfb = null, timer = null, expiresAt = 0;
-  var confirmedRoute = 'auto', cloudLoginReady = false;
+  var cloudLoginReady = false, state = 'SIN SESION', stateChange = null;
   var API = '/api/notebooklm/admin';
 
   function node(tag, attrs, text) {
@@ -15,10 +15,18 @@
     if (text !== undefined) item.textContent = text;
     return item;
   }
-  function status(text, kind) {
+  function setState(next, kind) {
+    state = next;
     var box = root.querySelector('[data-cloud-status]');
     box.className = 'nlm-cloud-status ' + (kind || '');
-    box.textContent = text;
+    box.textContent = state;
+    box.dataset.state = state;
+    if (typeof stateChange === 'function') stateChange(state);
+  }
+  function status(text, kind) {
+    setState(state, kind);
+    var detail = root.querySelector('[data-cloud-message]');
+    if (detail) detail.textContent = text || '';
   }
   function idePasswordHeader() {
     try {
@@ -45,34 +53,6 @@
       : 'Sin sesión administrativa';
     if (!seconds && csrf) revoke(false);
   }
-  async function routeChanged(event) {
-    var select = event.target;
-    var requestedRoute = select.value;
-    select.disabled = true;
-    try {
-      var idePassword = idePasswordHeader();
-      if (!idePassword) throw new Error('Inicia sesión en AGY antes de cambiar la ruta.');
-      var response = await fetch('/api/notebooklm/routing', {
-        method: 'PUT',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': idePassword },
-        body: JSON.stringify({ route: requestedRoute }),
-      });
-      var data = await response.json().catch(function () { return {}; });
-      if (!response.ok) throw new Error(data.error || 'No se pudo cambiar la ruta.');
-      if (!/^(auto|cloud|pc2)$/.test(data.route || '')) {
-        throw new Error('El servidor no confirmó la preferencia solicitada.');
-      }
-      confirmedRoute = data.route;
-      select.value = confirmedRoute;
-      root.querySelector('[data-route-status]').textContent = 'Preferencia guardada: ' + confirmedRoute + '.';
-    } catch (error) {
-      select.value = confirmedRoute;
-      root.querySelector('[data-route-status]').textContent = error.message;
-    } finally {
-      select.disabled = false;
-    }
-  }
   function applyReadiness(data) {
     cloudLoginReady = Boolean(data && data.configured && data.reachable && data.sandboxReady);
     var form = root.querySelector('[data-login-form]');
@@ -82,19 +62,18 @@
     if (!data || !data.configured) {
       status('El acceso cloud no está configurado en este servidor.', 'error');
     } else if (!data.reachable) {
-      status('El servicio cloud no responde. La ruta PC2 sigue disponible.', 'error');
+      status('El servicio cloud no responde.', 'error');
     } else if (!data.sandboxReady) {
-      status('El sandbox privado de Google aún no está listo. La ruta PC2 sigue disponible.', 'error');
+      status('El sandbox privado de Google aún no está listo.', 'error');
     } else if (data.notebooklm === 'SESSION_REQUIRED') {
       status('Sandbox listo. Hace falta iniciar la sesión de Google manualmente.', '');
     } else {
       status('Sandbox cloud listo.', 'ok');
     }
   }
-  async function loadRoutingStatus() {
-    var box = root.querySelector('[data-route-status]');
+  async function loadReadiness() {
     var idePassword = idePasswordHeader();
-    if (!idePassword) { box.textContent = 'Inicia sesión en AGY para consultar la ruta.'; return; }
+    if (!idePassword) { status('Inicia sesión en AGY para activar la sesión.', 'error'); return; }
     try {
       var ready = await fetch(API + '/ready', {
         credentials: 'same-origin',
@@ -107,22 +86,8 @@
       applyReadiness({ configured: true, reachable: false, sandboxReady: false });
     }
     try {
-      var response = await fetch('/api/notebooklm/routing', {
-        credentials: 'same-origin',
-        headers: { 'x-agyide-pwd': idePassword },
-      });
-      var data = await response.json().catch(function () { return {}; });
-      if (!response.ok) throw new Error(data.error || 'No se pudo consultar la ruta.');
-      var preference = data.route;
-      if (preference && /^(auto|cloud|pc2)$/.test(preference)) {
-        confirmedRoute = preference;
-        root.querySelector('.nlm-cloud-routing select').value = confirmedRoute;
-      }
-      box.textContent = preference
-        ? 'Preferencia guardada: ' + preference + '.'
-        : 'El servidor no devolvió una preferencia válida.';
     } catch (error) {
-      box.textContent = error.message;
+      status(error.message, 'error');
     }
   }
   async function launch(event) {
@@ -146,6 +111,7 @@
       root.querySelector('[data-login-form]').hidden = true;
       root.querySelector('[data-desktop-panel]').hidden = false;
       await connectDesktop();
+      setState('ESPERANDO LOGIN');
       timer = window.setInterval(countdown, 1000);
       countdown();
     } catch (error) {
@@ -167,11 +133,17 @@
     rfb.clipViewport = true;
     rfb.scaleViewport = true;
     rfb.viewOnly = false;
-    rfb.addEventListener('connect', function () {
-      status('Escritorio privado listo. Completa el acceso de Google manualmente.', 'ok');
-    });
-    rfb.addEventListener('disconnect', function (event) {
-      if (csrf && !event.detail.clean) status('El escritorio remoto se desconectó.', 'error');
+    return new Promise(function (resolve, reject) {
+      rfb.addEventListener('connect', function () {
+        status('Escritorio privado listo. Completa el acceso de Google manualmente.', 'ok');
+        resolve();
+      });
+      rfb.addEventListener('disconnect', function (event) {
+        if (!event.detail.clean) {
+          if (csrf) status('El escritorio remoto se desconectó.', 'error');
+          reject(new Error('El escritorio remoto se desconectó.'));
+        }
+      });
     });
   }
   async function revoke(closePanel) {
@@ -183,6 +155,7 @@
       try { await call('/revoke', { body: '{}' }); } catch (_) {}
     }
     csrf = ''; password = ''; expiresAt = 0;
+    setState('SIN SESION');
     if (root) {
       root.querySelector('[data-login-form]').hidden = false;
       root.querySelector('[data-desktop-panel]').hidden = true;
@@ -196,12 +169,14 @@
       var data = await call('/finish', { body: '{}' });
       csrf = '';
       await revoke(false);
-      status(data.hub_ready
-        ? 'Sesión de Google guardada en cloud. NotebookLM está listo.'
-        : 'El acceso terminó, pero la sesión cloud aún requiere atención.',
-      data.hub_ready ? 'ok' : 'error');
+      if (data.hub_ready) {
+        setState('CLOUD LISTO', 'ok');
+        status('Sesión de Google guardada en cloud. NotebookLM está listo.', 'ok');
+      } else {
+        setState('SIN SESION', 'error');
+        status('El acceso terminó, pero la sesión cloud aún requiere atención.', 'error');
+      }
     } catch (error) {
-      csrf = '';
       await revoke(false);
       status(error.message, 'error');
     }
@@ -212,14 +187,8 @@
     var close = node('button', { type: 'button', className: 'nlm-cloud-close', 'aria-label': 'Cerrar y revocar acceso', onclick: function () { revoke(true); } }, '×');
     card.append(close, node('p', { className: 'nlm-cloud-kicker' }, 'AGY · ACCESO ADMINISTRATIVO PRIVADO'),
       node('h2', {}, 'Conectar Google a NotebookLM cloud'),
-      node('p', { className: 'nlm-cloud-privacy' }, 'Tú controlas este escritorio. AGY no registra la pantalla, las teclas ni tus credenciales. La sesión de Google se guarda cifrada en el entorno cloud aislado; no se copia desde PC2.'));
-    var routing = node('div', { className: 'nlm-cloud-routing' });
-    var select = node('select', { 'aria-label': 'Ruta NotebookLM', onchange: routeChanged });
-    [['auto', 'Automática'], ['cloud', 'Cloud'], ['pc2', 'PC2']].forEach(function (entry) {
-      select.appendChild(node('option', { value: entry[0] }, entry[1]));
-    });
-    routing.append(node('label', {}, 'Ruta de trabajo '), select, node('span', { 'data-route-status': '', role: 'status' }, 'Selecciona auto, cloud o PC2.'));
-    card.appendChild(routing);
+      node('p', { className: 'nlm-cloud-privacy' }, 'Tú controlas este escritorio. AGY no registra la pantalla, las teclas ni tus credenciales. La sesión de Google se guarda cifrada en el entorno cloud aislado.'));
+    card.appendChild(node('div', { className: 'nlm-cloud-routing', role: 'status' }, 'RUTA FIJA: CLOUD'));
     var form = node('form', { 'data-login-form': '', className: 'nlm-cloud-form', onsubmit: launch });
     form.append(node('label', {}, 'Contraseña AGY actual'),
       node('input', { type: 'password', autocomplete: 'current-password', 'data-admin-password': '', required: '', disabled: '' }),
@@ -235,21 +204,38 @@
     var done = node('button', { type: 'button', onclick: finish }, '✓ Terminé · guardar sesión cloud');
     var cancel = node('button', { type: 'button', className: 'secondary', onclick: function () { revoke(false); } }, 'Cerrar y revocar');
     desktop.querySelector('.nlm-cloud-actions').append(done, cancel);
-    card.append(form, desktop, node('div', { 'data-cloud-status': '', className: 'nlm-cloud-status', role: 'status', 'aria-live': 'polite' }, 'Esperando autorización.'),
+    card.append(form, desktop, node('div', { 'data-cloud-status': '', 'data-state': 'SIN SESION', className: 'nlm-cloud-status', role: 'status', 'aria-live': 'polite' }, 'SIN SESION'),
+      node('div', { 'data-cloud-message': '', className: 'nlm-cloud-message', 'aria-live': 'polite' }, 'Esperando autorización.'),
       node('div', { 'data-cloud-ttl': '', className: 'nlm-cloud-ttl' }, 'Sin sesión administrativa'));
     root.appendChild(card);
     document.body.appendChild(root);
     window.addEventListener('pagehide', function () {
-      if (csrf) navigator.sendBeacon(API + '/revoke', new Blob(['{}'], { type: 'application/json' }));
+      if (csrf) {
+        var currentCsrf = csrf;
+        csrf = '';
+        setState('SIN SESION');
+        fetch(API + '/revoke', {
+          method: 'POST',
+          credentials: 'same-origin',
+          keepalive: true,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-AGY-Admin-CSRF': currentCsrf,
+          },
+          body: '{}',
+        }).catch(function () {});
+      }
     });
   }
-  function open() {
+  function open(options) {
     if (!root) build();
+    stateChange = options && options.onStateChange;
+    if (typeof stateChange === 'function') stateChange(state);
     root.hidden = false;
-    loadRoutingStatus();
+    loadReadiness();
     root.querySelector('[data-admin-password]').focus();
   }
-  window.NotebookLMCloudAdmin = { open: open, close: function () { return revoke(true); } };
+  window.NotebookLMCloudAdmin = { open: open, close: function () { return revoke(true); }, getState: function () { return state; } };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
   else build();
 }());

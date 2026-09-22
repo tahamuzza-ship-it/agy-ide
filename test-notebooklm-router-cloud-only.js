@@ -57,6 +57,11 @@ async function main() {
   assert.deepEqual(persistedDocument.jobs, legacyDocument.jobs);
   assert.deepEqual(persistedDocument.resources, legacyDocument.resources);
   const failingMigration = createNotebookRouter({
+    env: {
+      NOTEBOOKLM_CLOUD_ENABLED: 'true',
+      NOTEBOOKLM_CLOUD_URL: 'https://cloud.example.test',
+      SGN_SECRET_TOKEN: 'test',
+    },
     repository: createRouterRepository({
       configured: true,
       async get() { return structuredClone(legacyDocument); },
@@ -120,17 +125,27 @@ async function main() {
   assert.equal(autoRejected.data.code, 'ROUTE_INVALID');
 
   const legacy = createNotebookRouter({
-    env: { NOTEBOOKLM_CLOUD_ENABLED: 'false' },
+    env: { NOTEBOOKLM_CLOUD_ENABLED: 'false', HUB_ENDPOINT_URL: 'https://legacy.example.test', SGN_SECRET_TOKEN: 'legacy-token' },
     repository: repository('pc2'),
+    resolvePc2Base: async () => { throw new Error('legacy resolver must not be called'); },
     fetchImpl: async () => { throw new Error('must not contact any fallback'); }
   });
   const routing = await legacy.dispatch({ method: 'GET', suffix: '/routing', query: {}, body: null });
-  assert.equal(routing.status, 200);
-  assert.equal(routing.data.route, 'cloud');
+  assert.equal(routing.status, 503);
+  assert.equal(routing.data.code, 'CLOUD_CONFIGURATION_REQUIRED');
+
+  const missingCloud = createNotebookRouter({
+    env: { NOTEBOOKLM_CLOUD_ENABLED: 'true', SGN_SECRET_TOKEN: 'legacy-token' },
+    repository: repository('pc2'),
+    fetchImpl: async () => { throw new Error('missing cloud must not contact a fallback'); }
+  });
+  const missing = await missingCloud.dispatch({ method: 'GET', suffix: '/notebooks', query: {}, body: null });
+  assert.equal(missing.status, 503);
+  assert.equal(missing.data.code, 'CLOUD_CONFIGURATION_REQUIRED');
 
   let pcCalls = 0;
   const pcJob = createNotebookRouter({
-    env: { NOTEBOOKLM_CLOUD_ENABLED: 'true', NOTEBOOKLM_CLOUD_URL: 'https://cloud.example.test' },
+    env: { NOTEBOOKLM_CLOUD_ENABLED: 'true', NOTEBOOKLM_CLOUD_URL: 'https://cloud.example.test', SGN_SECRET_TOKEN: 'test' },
     repository: {
       ...repository(),
       async reserve() { return { existing: true, job: { executor: 'pc2', state: 'accepted' } }; },
@@ -154,7 +169,7 @@ async function main() {
 
   let authCalls = 0;
   const authRouter = createNotebookRouter({
-    env: { NOTEBOOKLM_CLOUD_ENABLED: 'true', NOTEBOOKLM_CLOUD_URL: 'https://cloud.example.test' },
+    env: { NOTEBOOKLM_CLOUD_ENABLED: 'true', NOTEBOOKLM_CLOUD_URL: 'https://cloud.example.test', SGN_SECRET_TOKEN: 'test' },
     repository: repository(),
     fetchImpl: async () => {
       authCalls += 1;
@@ -168,7 +183,7 @@ async function main() {
 
   let serverCalls = 0;
   const serverRouter = createNotebookRouter({
-    env: { NOTEBOOKLM_CLOUD_ENABLED: 'true', NOTEBOOKLM_CLOUD_URL: 'https://cloud.example.test' },
+    env: { NOTEBOOKLM_CLOUD_ENABLED: 'true', NOTEBOOKLM_CLOUD_URL: 'https://cloud.example.test', SGN_SECRET_TOKEN: 'test' },
     repository: repository(),
     fetchImpl: async () => { serverCalls += 1; return upstreamResponse(503, { error: 'busy' }); }
   });
@@ -177,7 +192,7 @@ async function main() {
   assert.equal(serverCalls, 1, '5xx must not trigger a fallback fetch');
 
   const conflictRouter = createNotebookRouter({
-    env: { NOTEBOOKLM_CLOUD_ENABLED: 'true', NOTEBOOKLM_CLOUD_URL: 'https://cloud.example.test' },
+    env: { NOTEBOOKLM_CLOUD_ENABLED: 'true', NOTEBOOKLM_CLOUD_URL: 'https://cloud.example.test', SGN_SECRET_TOKEN: 'test' },
     repository: {
       ...repository(),
       async reserve() {
@@ -196,7 +211,7 @@ async function main() {
 
   let ackTransitions = 0;
   const ackRouter = createNotebookRouter({
-    env: { NOTEBOOKLM_CLOUD_ENABLED: 'true', NOTEBOOKLM_CLOUD_URL: 'https://cloud.example.test' },
+    env: { NOTEBOOKLM_CLOUD_ENABLED: 'true', NOTEBOOKLM_CLOUD_URL: 'https://cloud.example.test', SGN_SECRET_TOKEN: 'test' },
     repository: {
       ...repository(),
       async reserve({ executor }) {

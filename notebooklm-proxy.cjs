@@ -3,7 +3,7 @@
 // The browser talks only to AGY. Google sessions and the SGN key stay on servers.
 const { Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
-const { registerNotebookEndpointRoutes, createSupabaseStore, validateStored } = require('./notebooklm-endpoint.cjs');
+const { registerNotebookEndpointRoutes, createSupabaseStore } = require('./notebooklm-endpoint.cjs');
 const { createNotebookRouter } = require('./notebooklm-router.cjs');
 const PREFIX = '/api/notebooklm';
 const ID = /^[a-zA-Z0-9_-]{1,100}$/;
@@ -25,7 +25,7 @@ function hubBase(env) {
 function allowedPath(method, suffix) {
   if (method === 'GET' && ['', '/status', '/nodes', '/notebooks', '/sources', '/jobs', '/routing'].includes(suffix)) return true;
   if (method === 'POST' && ['/notebooks', '/jobs'].includes(suffix)) return true;
-  if (method === 'PUT' && ['/active', '/routing'].includes(suffix)) return true;
+  if (method === 'PUT' && suffix === '/active') return true;
   const match = suffix.match(/^\/(jobs|files)\/([^/]+)$/);
   return method === 'GET' && !!match && ID.test(match[2]);
 }
@@ -71,19 +71,10 @@ function registerNotebookRoutes(app, requirePwd, options = {}) {
   const env = options.env || process.env;
   const fetchImpl = options.fetchImpl || globalThis.fetch;
   const endpointStore = options.store || options.endpointStore || createSupabaseStore(env, options);
-  const resolvePc2Base = async () => {
-    let registeredEndpoint = null;
-    if (endpointStore && endpointStore.configured !== false) {
-      const record = await endpointStore.get();
-      if (record) registeredEndpoint = validateStored(record).endpoint;
-    }
-    const config = registeredEndpoint ? { url: registeredEndpoint } : hubBase(env);
-    return config.url || null;
-  };
-  const routerEnabled = Boolean(options.router || options.routerStore || env.NOTEBOOKLM_CLOUD_ENABLED === 'true');
-  const router = options.router || (routerEnabled ? createNotebookRouter({
-    ...options, env, fetchImpl, resolvePc2Base
-  }) : null);
+  // NotebookLM operations are always cloud-only. A missing/disabled cloud
+  // configuration must produce an explicit router error, never a legacy
+  // registered-endpoint or Hub transport.
+  const router = options.router || createNotebookRouter({ ...options, env, fetchImpl });
   // This must be mounted before the password-protected proxy below. The
   // endpoint is authenticated with the SGN bridge token, not the IDE pwd.
   registerNotebookEndpointRoutes(app, { ...options, env, fetchImpl, store: endpointStore });
@@ -93,8 +84,11 @@ function registerNotebookRoutes(app, requirePwd, options = {}) {
     if (!allowedPath(req.method, suffix)) return res.status(404).json({ error: 'Operación Notebook LM no disponible.' });
     const token = env.CONEXION_NOTEBOOK_PUENTE || env.SGN_SECRET_TOKEN;
     if (!token) {
-      const config = hubBase(env);
-      return res.status(503).json({ configured: false, authenticated: false, error: config.error, message: config.error });
+      const error = 'NotebookLM Cloud no está configurado: falta el token de conexión cloud.';
+      return res.status(503).json({
+        configured: false, cloud: false, authenticated: false, code: 'CLOUD_CONFIGURATION_REQUIRED',
+        error, message: error,
+      });
     }
     let body;
     try {
@@ -132,68 +126,6 @@ function registerNotebookRoutes(app, requirePwd, options = {}) {
       }
       if (!Array.isArray(data) && data && typeof data === 'object' && data.route === undefined) data.route = routed.route;
       return res.status(upstream.status).json(data);
-    }
-    let registeredEndpoint = null;
-    try {
-      if (endpointStore && endpointStore.configured !== false) {
-        const record = await endpointStore.get();
-        if (record) registeredEndpoint = validateStored(record).endpoint;
-      }
-    } catch {
-      // Once Supabase is configured, a read error is not permission to fall
-      // back to a stale HUB_ENDPOINT_URL.
-      return res.status(503).json({ configured: false, authenticated: false, error: 'No se pudo leer el endpoint Notebook LM registrado.' });
-    }
-    const config = registeredEndpoint ? { url: registeredEndpoint } : hubBase(env);
-    if (config.error) return res.status(503).json({ configured: false, authenticated: false, error: config.error, message: config.error });
-    const url = new URL(`${config.url}${PREFIX}${suffix}`);
-    if (suffix === '/sources' && req.query.notebookId) {
-      if (typeof req.query.notebookId !== 'string' || !ID.test(req.query.notebookId)) {
-        return res.status(400).json({ error: 'Cuaderno no válido.' });
-      }
-      url.searchParams.set('notebookId', req.query.notebookId);
-    }
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), suffix.startsWith('/files/') ? 120000 : 45000);
-    res.once('close', () => controller.abort());
-    try {
-      const upstream = await fetchImpl(url, {
-        method: req.method,
-        headers: {
-          Accept: suffix.startsWith('/files/') ? '*/*' : 'application/json',
-          'Content-Type': 'application/json',
-          'X-SGN-Token': token,
-          'X-SGN-Actor': 'ide',
-        },
-        ...(body ? { body: JSON.stringify(body) } : {}),
-        redirect: 'error',
-        signal: controller.signal,
-      });
-      if (upstream.status === 401 || upstream.status === 403) {
-        return res.status(502).json({ error: 'El Hub rechazó la conexión. Revisa que CONEXION_NOTEBOOK_PUENTE coincida en AGY y en el bot Python.' });
-      }
-      if (suffix.startsWith('/files/') && upstream.ok) {
-        const type = upstream.headers.get('content-type') || 'application/octet-stream';
-        res.setHeader('Content-Type', ['audio/mpeg', 'audio/mp3', 'text/plain; charset=utf-8', 'text/plain', 'application/pdf'].includes(type) ? type : 'application/octet-stream');
-        // Never reflect upstream filenames or executable content inline.
-        res.setHeader('Content-Disposition', `attachment; filename="notebooklm.${type.startsWith('audio/') ? 'mp3' : type.startsWith('text/') ? 'txt' : 'bin'}"`);
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-        return await pipeline(Readable.fromWeb(upstream.body), res);
-      }
-      const text = await upstream.text();
-      let data;
-      try { data = JSON.parse(text); } catch {
-        return res.status(502).json({ error: 'El túnel no respondió con la API Notebook LM. Comprueba su destino y que el bot Python esté encendido.' });
-      }
-      // No raw traceback or infrastructure error body is exposed to the browser.
-      if (upstream.status >= 500) {
-        return res.status(502).json({ error: 'Notebook LM no pudo completar la operación. Revisa la sesión de Google y el servicio Python.' });
-      }
-      return res.status(upstream.status).json(data);
-    } catch {
-      if (!res.headersSent) res.status(502).json({ error: 'No se pudo contactar con el Hub HTTPS. Comprueba el túnel y el servicio Python. No se ha reenviado la operación.' });
-    } finally {
-      clearTimeout(timeout);
     }
   });
 }

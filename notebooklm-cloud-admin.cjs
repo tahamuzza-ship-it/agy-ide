@@ -88,12 +88,27 @@ function createNotebookCloudAdmin(options = {}) {
   const random = options.randomBytes || crypto.randomBytes;
   const sessions = new Map();
 
+  function closeSessionSockets(session, code, reason) {
+    const pending = session.pendingSocket;
+    session.pendingSocket = null;
+    session.pendingGeneration = 0;
+    session.socketPending = false;
+    if (pending && pending.readyState < 2) {
+      try { pending.close(code, reason); } catch {}
+    }
+    if (session.socket) {
+      const browser = session.socket;
+      session.socket = null;
+      try { browser.close(code, reason); } catch {}
+    }
+  }
+
   function prune() {
     const timestamp = now();
     for (const [token, session] of sessions) {
       if (timestamp >= session.expiresAt || timestamp - session.authenticatedAt > 300000) {
         sessions.delete(token);
-        if (session.socket) session.socket.close(1008, 'Session expired');
+        closeSessionSockets(session, 1008, 'Session expired');
       }
     }
   }
@@ -165,6 +180,10 @@ function createNotebookCloudAdmin(options = {}) {
       upstreamCsrf: '',
       desktopGrant: false,
       socket: null,
+      socketPending: false,
+      pendingSocket: null,
+      pendingGeneration: 0,
+      socketGeneration: 0,
     };
     try {
       const { response, data } = await upstreamPost('session', session, true);
@@ -191,7 +210,7 @@ function createNotebookCloudAdmin(options = {}) {
     if (!session) return jsonError(res, 403, 'Sesión administrativa no válida.');
     sessions.delete(session.token);
     session.desktopGrant = false;
-    if (session.socket) session.socket.close(1000, 'Session closed');
+    closeSessionSockets(session, 1000, 'Session closed');
     try {
       const { response, data } = await upstreamPost(finish ? 'finish' : 'revoke', session, false);
       setSessionCookie(res, '', 0);
@@ -208,6 +227,9 @@ function createNotebookCloudAdmin(options = {}) {
     if (!sameOrigin(req, config)) return jsonError(res, 403, 'Origen no válido.');
     const session = csrfSession(req);
     if (!session) return jsonError(res, 403, 'Sesión administrativa no válida.');
+    if (session.desktopGrant || session.socketPending || session.socket) {
+      return jsonError(res, 409, 'Ya existe una conexión de escritorio activa o pendiente.');
+    }
     session.desktopGrant = true;
     res.setHeader('Cache-Control', 'no-store');
     return res.json({ ready: true });
@@ -224,6 +246,7 @@ function createNotebookCloudAdmin(options = {}) {
   async function revokeAll() {
     const pending = [...sessions.values()];
     sessions.clear();
+    pending.forEach(session => closeSessionSockets(session, 1000, 'Session closed'));
     await Promise.allSettled(pending.map(session => upstreamPost('revoke', session, false)));
   }
 
@@ -301,52 +324,108 @@ function attachNotebookCloudAdminWs(server, options = {}) {
       return;
     }
     const session = admin.sessionFor(req);
-    if (!session || !session.desktopGrant || session.socket) {
+    if (!session || !session.desktopGrant || session.socket || session.socketPending) {
       socket.destroy();
       return;
     }
+    const token = cookieValue(req.headers.cookie, COOKIE);
     session.desktopGrant = false;
+    // Reserve ownership before opening the upstream socket. The upgrade
+    // event can run concurrently for the same cookie.
+    session.socketPending = true;
+    const generation = (session.socketGeneration || 0) + 1;
+    session.socketGeneration = generation;
     const upstreamUrl = `${admin.config.cloudOrigin.replace(/^https:/, 'wss:')}/admin/desktop`;
-    const upstream = new WebSocket(upstreamUrl, ['binary'], {
-      headers: {
-        ...admin.privateHeaders(session, admin.config.browserOrigin, false),
-        Cookie: session.upstreamCookie,
-        'X-CSRF-Token': session.upstreamCsrf,
-      },
-      maxPayload: 1024 * 1024,
-      perMessageDeflate: false,
-      handshakeTimeout: 10000,
-      followRedirects: false,
-    });
+    let upstream;
+    try {
+      upstream = new WebSocket(upstreamUrl, ['binary'], {
+        headers: {
+          ...admin.privateHeaders(session, admin.config.browserOrigin, false),
+          Cookie: session.upstreamCookie,
+          'X-CSRF-Token': session.upstreamCsrf,
+        },
+        maxPayload: 1024 * 1024,
+        perMessageDeflate: false,
+        handshakeTimeout: 10000,
+        followRedirects: false,
+      });
+    } catch {
+      if (session.pendingGeneration === generation) {
+        session.pendingGeneration = 0;
+        session.pendingSocket = null;
+        session.socketPending = false;
+      }
+      socket.destroy();
+      return;
+    }
+    session.pendingSocket = upstream;
+    session.pendingGeneration = generation;
     let accepted = false;
+    const releasePending = () => {
+      if (!accepted && session.pendingGeneration === generation &&
+          session.pendingSocket === upstream) {
+        session.pendingGeneration = 0;
+        session.pendingSocket = null;
+        session.socketPending = false;
+      }
+    };
     const fail = () => {
+      releasePending();
       if (!accepted) socket.destroy();
       if (upstream.readyState < WebSocket.CLOSING) upstream.close(1011);
     };
     upstream.once('open', () => {
-      wss.handleUpgrade(req, socket, head, browser => {
-        accepted = true;
-        session.socket = browser;
-        browser.on('message', (data, binary) => {
-          if (!binary || upstream.readyState !== WebSocket.OPEN) return browser.close(1003);
-          upstream.send(data, { binary: true });
+      const current = admin.sessions.get(token);
+      const valid = current === session &&
+        session.pendingSocket === upstream &&
+        session.pendingGeneration === generation &&
+        session.socketPending &&
+        admin.sessionFor({ headers: { cookie: `${COOKIE}=${token}` } }) === session;
+      if (!valid) {
+        releasePending();
+        if (upstream.readyState < WebSocket.CLOSING) upstream.close(1008, 'Session invalidated');
+        socket.destroy();
+        return;
+      }
+      try {
+        wss.handleUpgrade(req, socket, head, browser => {
+          if (admin.sessions.get(token) !== session ||
+              session.pendingSocket !== upstream ||
+              session.pendingGeneration !== generation ||
+              !session.socketPending) {
+            browser.close(1008, 'Session invalidated');
+            releasePending();
+            return;
+          }
+          accepted = true;
+          session.pendingSocket = null;
+          session.pendingGeneration = 0;
+          session.socketPending = false;
+          session.socket = browser;
+          browser.on('message', (data, binary) => {
+            if (!binary || upstream.readyState !== WebSocket.OPEN) return browser.close(1003);
+            upstream.send(data, { binary: true });
+          });
+          upstream.on('message', (data, binary) => {
+            if (!binary || browser.readyState !== WebSocket.OPEN) return browser.close(1003);
+            browser.send(data, { binary: true });
+          });
+          browser.once('close', () => {
+            if (session.socket === browser) session.socket = null;
+            if (upstream.readyState < WebSocket.CLOSING) upstream.close(1000);
+          });
+          upstream.once('close', (code) => {
+            if (browser.readyState < WebSocket.CLOSING) browser.close(code === 1000 ? 1000 : 1011);
+          });
+          upstream.once('error', () => browser.close(1011));
         });
-        upstream.on('message', (data, binary) => {
-          if (!binary || browser.readyState !== WebSocket.OPEN) return browser.close(1003);
-          browser.send(data, { binary: true });
-        });
-        browser.once('close', () => {
-          if (session.socket === browser) session.socket = null;
-          if (upstream.readyState < WebSocket.CLOSING) upstream.close(1000);
-        });
-        upstream.once('close', (code) => {
-          if (browser.readyState < WebSocket.CLOSING) browser.close(code === 1000 ? 1000 : 1011);
-        });
-        upstream.once('error', () => browser.close(1011));
-      });
+      } catch {
+        fail();
+      }
     });
     upstream.once('error', fail);
     upstream.once('unexpected-response', fail);
+    upstream.once('close', releasePending);
   };
   server.on('upgrade', onUpgrade);
   return { close: () => { server.off('upgrade', onUpgrade); wss.close(); }, wss };

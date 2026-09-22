@@ -326,6 +326,11 @@ function createNotebookRouter(options = {}) {
     const remainingReadBudget = (maximum) => Math.max(1, Math.min(maximum,
       (readDeadline || (Date.now() + maximum)) - Date.now()));
     const { method, suffix, query, body } = input;
+    if (!cloudEnabled || !cloudBase || !token) {
+      return responseError(503,
+        'NotebookLM Cloud no está configurado o no está habilitado.',
+        'cloud', 'CLOUD_CONFIGURATION_REQUIRED');
+    }
     if (suffix === '/routing') {
       if (method === 'GET') {
         try { await repository.getRoute(); } catch {

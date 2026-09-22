@@ -18,6 +18,7 @@
   var notebookOptionsFingerprint = '';
   var NOTEBOOK_REFRESH_MS = 20000;
   var cloudAdminAssets;
+  var cloudSessionState = 'SIN SESION';
 
   /* La API vive en la raíz incluso cuando el IDE se sirve bajo un prefijo. */
   function apiUrl(path) {
@@ -118,9 +119,11 @@
     var headActions = el('div', { className: 'notebooklm-head-actions' });
     var helpButton = el('button', { id: 'notebooklm-help-toggle', type: 'button', 'aria-expanded': 'false' }, '❔ Ayuda');
     var nodeButton = el('button', { id: 'notebooklm-node', type: 'button', title: 'Consultar el estado HTTPS del nodo Notebook LM' }, '◉ Nodo');
-    var cloudButton = el('button', { id: 'notebooklm-cloud-admin-open', type: 'button', title: 'Administrar la sesión privada de Google en cloud' }, '☁ Google cloud');
+    var cloudButton = el('button', { id: 'notebooklm-cloud-admin-open', type: 'button', title: 'Activar la sesión privada de Google en cloud' }, 'ACTIVAR SESION CLOUD');
     var closeButton = el('button', { id: 'notebooklm-close', type: 'button', className: 'notebooklm-close', 'aria-label': 'Cerrar Notebook LM' }, '×');
-    headActions.append(helpButton, nodeButton, cloudButton, closeButton);
+    var cloudStateBox = el('span', { id: 'notebooklm-cloud-state', className: 'notebooklm-cloud-state', role: 'status', 'aria-live': 'polite' }, cloudSessionState);
+    cloudStateBox.dataset.state = cloudSessionState;
+    headActions.append(helpButton, nodeButton, cloudButton, cloudStateBox, closeButton);
     head.append(heading, headActions);
     statusBox = el('div', { className: 'notebooklm-status', role: 'status', 'aria-live': 'polite' }, 'Comprobando configuración…');
     var body = el('div', { className: 'notebooklm-body' });
@@ -224,7 +227,11 @@
     cloudButton.addEventListener('click', function () {
       cloudButton.disabled = true;
       loadCloudAdmin().then(function (cloudAdmin) {
-        cloudAdmin.open();
+        cloudAdmin.open({ onStateChange: function (state) {
+          cloudSessionState = state;
+          cloudStateBox.textContent = state;
+          cloudStateBox.dataset.state = state;
+        }});
       }).catch(function (error) {
         setStatus(error.message, 'error');
       }).finally(function () {
