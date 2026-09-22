@@ -29,8 +29,8 @@ function knownCapabilities() {
     { id: 'notebooklm.research', mode: 'action', enabled: true, requiresConfirmation: false, evidenceRequired: true },
     { id: 'mission.draft', mode: 'action', enabled: true, requiresConfirmation: false, evidenceRequired: false },
     { id: 'mission.confirm', mode: 'action', enabled: true, requiresConfirmation: true, evidenceRequired: true },
-    { id: 'google.drive.upload', mode: 'action', enabled: true, requiresConfirmation: false, evidenceRequired: false },
-    { id: 'google.drive.query', mode: 'action', enabled: true, requiresConfirmation: false, evidenceRequired: false },
+    { id: 'google.drive.upload', mode: 'action', enabled: true, requiresConfirmation: true, evidenceRequired: true },
+    { id: 'google.drive.query', mode: 'action', enabled: true, requiresConfirmation: true, evidenceRequired: true },
   ];
 }
 
@@ -191,8 +191,8 @@ function testExactCrossContractManifest() {
       { id: 'notebooklm.research', mode: 'action', enabled: true, requiresConfirmation: false, evidenceRequired: true },
       { id: 'mission.draft', mode: 'action', enabled: true, requiresConfirmation: false, evidenceRequired: false },
       { id: 'mission.confirm', mode: 'action', enabled: true, requiresConfirmation: true, evidenceRequired: true },
-      { id: 'google.drive.upload', mode: 'action', enabled: true, requiresConfirmation: false, evidenceRequired: false },
-      { id: 'google.drive.query', mode: 'action', enabled: true, requiresConfirmation: false, evidenceRequired: false },
+      { id: 'google.drive.upload', mode: 'action', enabled: true, requiresConfirmation: true, evidenceRequired: true },
+      { id: 'google.drive.query', mode: 'action', enabled: true, requiresConfirmation: true, evidenceRequired: true },
     ],
   };
   const result = capabilitiesResult(manifest, 'token');

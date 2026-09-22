@@ -199,8 +199,8 @@ const KNOWN_CAPABILITY_POLICIES = new Map([
   ['notebooklm.research', { mode: 'action', requiresConfirmation: false, evidenceRequired: true }],
   ['mission.draft', { mode: 'action', requiresConfirmation: false, evidenceRequired: false }],
   ['mission.confirm', { mode: 'action', requiresConfirmation: true, evidenceRequired: true }],
-  ['google.drive.upload', { mode: 'action', requiresConfirmation: false, evidenceRequired: false }],
-  ['google.drive.query', { mode: 'action', requiresConfirmation: false, evidenceRequired: false }],
+  ['google.drive.upload', { mode: 'action', requiresConfirmation: true, evidenceRequired: true }],
+  ['google.drive.query', { mode: 'action', requiresConfirmation: true, evidenceRequired: true }],
 ]);
 
 function exactKeys(value, expected) {

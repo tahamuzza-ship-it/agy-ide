@@ -4044,6 +4044,28 @@ app.post('/api/ops/mailbox/voice/confirm', async (req, res) => {
   proposal.status = 'sending';
 
   try {
+    const driveMission = /^ANTIGRAVITY_GOOGLE_DRIVE:\s*([\s\S]+)$/.exec(proposal.mission);
+    if (driveMission) {
+      const driveInstruction = '[PC1] MODO FOREGROUND ANTIGRAVITY. Usa exclusivamente la skill autorizada de Google Drive para esta solicitud: ' + driveMission[1].trim() + ' No crees archivos locales ni uses rutas internas de PC1. Devuelve evidencia verificable de Drive con nombre, identificador y enlace o resultados encontrados.';
+      if (driveInstruction.length > 5000) throw new Error('DRIVE_INSTRUCTION_TOO_LONG');
+      const driveOutcome = await _mailboxDispatch(driveInstruction);
+      if (driveOutcome.status !== 'done' || !driveOutcome.result) {
+        proposal.status = 'uncertain';
+        proposal.expiresAt = Date.now() + MAILBOX_VOICE_PROPOSAL_TTL_MS;
+        return res.status(driveOutcome.status === 'timeout' ? 504 : 502).json({
+          error: 'Antigravity no devolvio evidencia concluyente de Google Drive. La solicitud no se reenviara automaticamente.',
+          code: 'DRIVE_RESULT_UNCERTAIN'
+        });
+      }
+      _mailboxVoiceProposals.delete(proposalId);
+      return res.json({
+        kind: 'antigravity-completed',
+        status: 'COMPLETADA',
+        draftCount: _mailboxVoiceDrafts(voiceSession).length,
+        evidence: String(driveOutcome.result).slice(0, 12000),
+        message: 'Antigravity completo la mision de Google Drive y devolvio evidencia verificable.'
+      });
+    }
     const markdown = _mailboxCreateMissionMarkdown(proposal.mission);
     const instruction = _mailboxBuildEncodedCreateCommand(markdown);
     const outcome = await _mailboxDispatch(instruction);

@@ -26,6 +26,13 @@ async function main() {
   assert.strictEqual(driveUpload.type,'draft');
   assert.match(driveUpload.mission,/^ANTIGRAVITY_GOOGLE_DRIVE:/);
   assert.match(driveUpload.mission,/evidencia verificable/);
+  const serverSource=fs.readFileSync('./server.js','utf8');
+  assert.match(serverSource,/MODO FOREGROUND ANTIGRAVITY/);
+  assert.match(serverSource,/No crees archivos locales ni uses rutas internas de PC1/);
+  const driveBranch=serverSource.slice(serverSource.indexOf("const driveMission ="),serverSource.indexOf("const markdown =",serverSource.indexOf("const driveMission =")));
+  assert.ok(driveBranch.includes('_mailboxDispatch(driveInstruction)'));
+  assert.ok(!driveBranch.includes('_mailboxCreateMissionMarkdown'));
+  assert.ok(!driveBranch.includes('_mailboxBuildEncodedCreateCommand'));
   const calls=[];
   const client=createNotebookClient({port:3000,password:'test',timeoutSignal:()=>undefined,fetchImpl:async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>({notebooks:[{id:'nb_1',title:'Cuaderno Uno'},{id:'bad id',title:'Descartar'}]})};}});
   const listed=await client.listNotebooks();
