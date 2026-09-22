@@ -3,6 +3,9 @@ const crypto = require('node:crypto');
 const ID = /^[A-Za-z0-9_-]{1,160}$/;
 const REQUEST_TIMEOUT_MS = 50000;
 const JOB_POLL_TIMEOUT_MS = 20 * 60 * 1000;
+function requestId() {
+  return `nlm_${crypto.randomUUID().replaceAll('-', '')}`;
+}
 function fold(value) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es').trim();
 }
@@ -43,11 +46,23 @@ function createNotebookClient(options = {}) {
     if (!ID.test(String(notebookId || ''))) throw new Error('Cuaderno no válido.');
     return request('GET', `/sources?notebookId=${encodeURIComponent(notebookId)}`);
   }
-  async function ask(notebookId, question) {
+  async function ask(notebookId, question, stableRequestId) {
     if (!ID.test(String(notebookId || ''))) throw new Error('Cuaderno no válido.');
     const clean = String(question || '').trim();
     if (!clean) throw new Error('Falta la pregunta para Notebook LM.');
-    return request('POST', '/jobs', { action: 'notebook_ask', notebookId, question: clean });
+    const id = stableRequestId === undefined ? requestId() : String(stableRequestId);
+    if (!ID.test(id)) throw new Error('Identificador de solicitud no válido.');
+    try {
+      const result = await request('POST', '/jobs', {
+        action: 'notebook_ask', notebookId, question: clean, requestId: id
+      });
+      if (result && typeof result === 'object' && !result.requestId) result.requestId = id;
+      return result;
+    } catch (error) {
+      // Keep the caller-visible id so a retry can submit the same logical ask.
+      if (error && typeof error === 'object') error.requestId = id;
+      throw error;
+    }
   }
   async function research(topic, requestId, notebookId) {
     const clean = String(topic || '').trim();
@@ -129,5 +144,6 @@ function deriveResearchRequestId(sessionNonce, callId) {
 }
 module.exports = {
   REQUEST_TIMEOUT_MS, JOB_POLL_TIMEOUT_MS, createNotebookClient, createJobPoller,
+  requestId,
   deriveResearchRequestId, fold, publicFailure
 };

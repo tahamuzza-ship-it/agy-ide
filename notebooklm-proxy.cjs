@@ -3,7 +3,7 @@
 // The browser talks only to AGY. Google sessions and the SGN key stay on servers.
 const { Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
-const { registerNotebookEndpointRoutes, createSupabaseStore } = require('./notebooklm-endpoint.cjs');
+const { registerNotebookEndpointRoutes, createSupabaseStore, validateStored } = require('./notebooklm-endpoint.cjs');
 const { createNotebookRouter } = require('./notebooklm-router.cjs');
 const PREFIX = '/api/notebooklm';
 const ID = /^[a-zA-Z0-9_-]{1,100}$/;
@@ -52,6 +52,9 @@ function sanitizedBody(suffix, body = {}) {
   if (suffix === '/jobs' && !ACTIONS.has(output.action)) throw new Error('Acción no válida.');
   if (output.action === 'notebook_ask') {
     if (!output.notebookId || !String(output.question || '').trim()) throw new Error('Cuaderno y pregunta son obligatorios.');
+    if (!output.requestId || !ID.test(String(output.requestId))) {
+      throw new Error('notebook_ask requiere un requestId válido y estable.');
+    }
   }
   if (output.action === 'notebook_research') {
     if (!String(output.topic || '').trim()) throw new Error('El tema de investigación es obligatorio.');
@@ -71,10 +74,18 @@ function registerNotebookRoutes(app, requirePwd, options = {}) {
   const env = options.env || process.env;
   const fetchImpl = options.fetchImpl || globalThis.fetch;
   const endpointStore = options.store || options.endpointStore || createSupabaseStore(env, options);
-  // NotebookLM operations are always cloud-only. A missing/disabled cloud
-  // configuration must produce an explicit router error, never a legacy
-  // registered-endpoint or Hub transport.
-  const router = options.router || createNotebookRouter({ ...options, env, fetchImpl });
+  const resolvePc2Base = async () => {
+    let registeredEndpoint = null;
+    if (endpointStore && endpointStore.configured !== false) {
+      const record = await endpointStore.get();
+      if (record) registeredEndpoint = validateStored(record).endpoint;
+    }
+    const config = registeredEndpoint ? { url: registeredEndpoint } : hubBase(env);
+    return config.url || null;
+  };
+  const router = options.router || createNotebookRouter({
+    ...options, env, fetchImpl, resolvePc2Base
+  });
   // This must be mounted before the password-protected proxy below. The
   // endpoint is authenticated with the SGN bridge token, not the IDE pwd.
   registerNotebookEndpointRoutes(app, { ...options, env, fetchImpl, store: endpointStore });
@@ -82,9 +93,9 @@ function registerNotebookRoutes(app, requirePwd, options = {}) {
     res.setHeader('Cache-Control', 'no-store');
     const suffix = req.path.replace(/\/$/, '') || '/status';
     if (!allowedPath(req.method, suffix)) return res.status(404).json({ error: 'Operación Notebook LM no disponible.' });
-    const token = env.CONEXION_NOTEBOOK_PUENTE || env.SGN_SECRET_TOKEN;
+    const token = env.CONEXION_NOTEBOOK_PUENTE || env.SGN_SECRET_TOKEN || env.NOTEBOOKLM_PC1_TOKEN;
     if (!token) {
-      const error = 'NotebookLM Cloud no está configurado: falta el token de conexión cloud.';
+      const error = 'NotebookLM no está configurado: falta un token de conexión.';
       return res.status(503).json({
         configured: false, cloud: false, authenticated: false, code: 'CLOUD_CONFIGURATION_REQUIRED',
         error, message: error,

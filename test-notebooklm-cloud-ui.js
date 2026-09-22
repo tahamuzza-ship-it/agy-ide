@@ -29,8 +29,8 @@ for (const forbidden of [/Automática/, /\bPC2\b/, /\bpc2\b/, /\bauto\b/, /\bfal
 assert.match(index, /notebooklm-cloud-admin\.css/);
 assert.match(index, /notebooklm-cloud-admin\.js/);
 assert.match(proxy, /suffix === '\/routing'/);
-assert.equal(proxy.includes('resolvePc2Base'), false);
-assert.equal(proxy.includes('registeredEndpoint'), false);
+assert.match(proxy, /resolvePc2Base/);
+assert.match(proxy, /registeredEndpoint/);
 assert.equal(allowedPath('PUT', '/routing'), false);
 
 console.log('test-notebooklm-cloud-ui: ok');

@@ -19,6 +19,10 @@
   var NOTEBOOK_REFRESH_MS = 20000;
   var cloudAdminAssets;
   var cloudSessionState = 'SIN SESION';
+  function newRequestId() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return 'nlm_' + window.crypto.randomUUID().replace(/-/g, '');
+    return 'nlm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2);
+  }
 
   /* La API vive en la raíz incluso cuando el IDE se sirve bajo un prefijo. */
   function apiUrl(path) {
@@ -464,6 +468,7 @@
   }
   async function startJob(payload, actionButton, context) {
     payload.notebookId = payload.notebookId || selectedNotebook();
+    if (!payload.requestId) payload.requestId = newRequestId();
     var data = await request('/jobs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     if (!data.id) throw new Error('El servicio no devolvió un identificador de trabajo.');
     jobActions[data.id] = payload.action;
