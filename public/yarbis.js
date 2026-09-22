@@ -160,8 +160,8 @@
       var missing = Array.isArray(body.missing_evidence) && body.missing_evidence.length
         ? body.missing_evidence.join('; ')
         : 'PC1 todavía no aportó evidencia explícita vigente';
-      detail = 'SINCRONIZADO — contexto descargado, validado e inyectado. PC1: NO VERIFICADO — ' +
-        missing + '. Esto no significa que la sincronización haya fallado.';
+      detail = 'CONTEXTO RAILWAY: SINCRONIZADO — descargado, validado e inyectado. EVIDENCIA PC1: PENDIENTE — ' +
+        missing + '. El contexto Railway sigue válido.';
     }
     var continuity = body && body.continuity_state ? body.continuity_state : null;
     var hash = continuity && typeof continuity.sha256 === 'string' ? continuity.sha256.replace(/^sha256:/, '') : '';
@@ -468,7 +468,7 @@
       }, 10000);
       var body = await response.json().catch(function(){ return {}; });
       if (!response.ok || !Array.isArray(body.items)) throw new Error(body.error || 'No se pudieron cargar los borradores.');
-      drafts = body.items;
+      drafts = body.items.map(function (item) { return { proposalId: item.proposalId, mission: cleanDraftObjective(item.mission), status: item.status, createdAt: item.createdAt, expiresAt: item.expiresAt }; });
       renderDrafts();
       return true;
     } catch (error) {
@@ -553,6 +553,10 @@
     var object = /\b(?:informe|archivo|programa|navegador|camara|bloc|terminal|carpeta|documento|reporte|estado|flota|disco|ram|video|audio|pantalla|url|web|aplicacion|app|foto)\b/.test(normalized);
     return action && object;
   }
+  function cleanDraftObjective(value) {
+    return String(value || '').trim().replace(/^(?:(?:de\s+)?prueba\s+)?(?:que\s+)?(?:diga|dice)\s*[:,-]?\s*/i, '')
+      .split(/\.\s*no\s+la\s+(?:confirmes?|env[ií]es?|ejecutes?)\b/i)[0].replace(/[.?!¡,;:]+$/, '').trim();
+  }
   function explicitYarbisMissionRequest(text) {
     var raw = String(text || '').trim();
     var normalized = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -570,7 +574,7 @@
     for (var i = 0; i < patterns.length; i++) {
       var match = raw.match(patterns[i]);
       if (match && match[1] && match[1].trim().length >= 4) {
-        var mission = match[1].trim().replace(/^pc\s*1\s+(?:que\s+)?/i, '').replace(/[.?!¡,;:]+$/, '').trim();
+        var mission = cleanDraftObjective(match[1].trim().replace(/^pc\s*1\s+(?:que\s+)?/i, ''));
         return { mission: mission };
       }
     }
@@ -865,7 +869,19 @@
     }
     return body;
   }
+  async function readCanonicalMailboxStatus() {
+    if (!requireCapability('mailbox.read', 'No se consultará el Buzón.')) return null;
+    var response = await fetchWithTimeout('/api/yarbis/mailbox/status', { method: 'GET', headers: { 'x-agyide-pwd': encodeURIComponent(pwd()) } }, 15000);
+    var body = await response.json().catch(function () { return {}; });
+    if (!response.ok || body.ok !== true) throw new Error(body.error || 'Railway no pudo consultar el Buzón canónico.');
+    add('system', body.summary || 'Buzón canónico de Railway consultado en modo de solo lectura.');
+    setState(stream ? 'LISTENING' : 'IDLE', 'Consulta Railway completada.');
+    return body;
+  }
   async function handleMailboxIntent(text, intent) {
+    if (intent.type === 'mailbox-status') { await readCanonicalMailboxStatus(); return; }
+    if (intent.type === 'keep-draft') { await refreshDrafts(true); add('system', drafts.length ? 'El borrador anterior sigue guardado y pendiente de decisión. No fue enviado ni ejecutado.' : 'No hay un borrador pendiente que conservar.'); setState(stream ? 'LISTENING' : 'IDLE', 'Borrador sin cambios.'); return; }
+    if (intent.type === 'draft-status') { await refreshDrafts(true); add('system', drafts.length ? 'Verificación local: el borrador anterior sigue en estado BORRADOR. No fue enviado ni ejecutado.' : 'No hay borradores pendientes. Consulta el Buzón Railway para verificar misiones ya registradas.'); setState(stream ? 'LISTENING' : 'IDLE', 'Estado del borrador verificado.'); return; }
     if (intent.type === 'draft' && intent.mission) {
       var proposal = await mailboxCommand(text, intent);
       pendingMissionObjectiveUntil = 0;
@@ -888,18 +904,7 @@
       await confirmMailbox('cancel', drafts[0].proposalId);
       return;
     }
-    if (intent.type === 'list' || intent.type === 'list-agy-to-replit') {
-      var response = await fetchWithTimeout('/api/ops/mailbox/voice/command', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': encodeURIComponent(pwd()), 'x-agy-voice-session': voiceSession() },
-        body: JSON.stringify({ action: intent.type, utterance: intent.utterance || text })
-      }, 30000);
-      var body = await response.json().catch(function(){ return {}; });
-      if (!response.ok) throw new Error(body.error || 'No se pudo consultar el Buzón.');
-      add('system', body.message || 'Consulta del Buzón completada.');
-      setState(stream ? 'LISTENING' : 'IDLE', 'Consulta del Buzón completada.');
-      return;
-    }
+    if (intent.type === 'list' || intent.type === 'list-agy-to-replit') { await readCanonicalMailboxStatus(); return; }
     add('system', intent.type === 'draft-help'
       ? 'Indica el objetivo concreto de la misión para PC1.'
       : 'Aclara si quieres consultar la Entrada de PC1 o la Salida de PC1.');

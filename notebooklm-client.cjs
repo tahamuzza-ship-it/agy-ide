@@ -24,12 +24,20 @@ function createNotebookClient(options = {}) {
     if (!response.ok) throw new Error(String(data.error || data.message || 'Notebook LM no respondió correctamente.'));
     return data;
   }
-  async function listNotebooks() { return request('GET', '/notebooks'); }
+  async function listNotebooks() {
+    const data = await request('GET', '/notebooks');
+    const source = Array.isArray(data) ? data : Array.isArray(data.notebooks) ? data.notebooks : [];
+    const notebooks = source.map((item) => ({
+      id: String(item && (item.id || item.notebookId) || ''),
+      title: String(item && (item.title || item.name) || '').trim()
+    })).filter((item) => ID.test(item.id) && item.title);
+    return { ok: true, count: notebooks.length, notebooks };
+  }
   async function searchNotebooks(query) {
     const data = await listNotebooks();
-    const notebooks = Array.isArray(data) ? data : Array.isArray(data.notebooks) ? data.notebooks : [];
     const needle = fold(query);
-    return { notebooks: notebooks.filter((item) => fold(item && (item.title || item.name)).includes(needle)) };
+    const notebooks = data.notebooks.filter((item) => fold(item.title).includes(needle));
+    return { ok: true, count: notebooks.length, notebooks };
   }
   async function listSources(notebookId) {
     if (!ID.test(String(notebookId || ''))) throw new Error('Cuaderno no válido.');
@@ -41,10 +49,11 @@ function createNotebookClient(options = {}) {
     if (!clean) throw new Error('Falta la pregunta para Notebook LM.');
     return request('POST', '/jobs', { action: 'notebook_ask', notebookId, question: clean });
   }
-  async function research(topic, requestId) {
+  async function research(topic, requestId, notebookId) {
     const clean = String(topic || '').trim();
     if (!clean) throw new Error('Falta el tema que se debe investigar.');
-    const body = { action: 'notebook_research', topic: clean };
+    if (!ID.test(String(notebookId || ''))) throw new Error('Cuaderno no válido.');
+    const body = { action: 'notebook_research', topic: clean, notebookId: String(notebookId) };
     if (requestId !== undefined) {
       if (!ID.test(String(requestId))) throw new Error('Identificador de solicitud no válido.');
       body.requestId = String(requestId);

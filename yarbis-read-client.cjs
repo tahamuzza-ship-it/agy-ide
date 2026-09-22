@@ -300,6 +300,21 @@ function statusResult(payload, token) {
   return result;
 }
 
+function mailboxResult(payload, token) {
+  const clean = sanitizeStructured(payload, token);
+  const tray = (name) => {
+    const source = object(clean) && object(clean[name]) ? clean[name] : {};
+    const pending = Array.isArray(source.pending) ? source.pending : [];
+    const inProgress = Array.isArray(source.inProgress) ? source.inProgress : [];
+    const completed = Array.isArray(source.completed) ? source.completed : [];
+    return { pending, inProgress, completed, counts: { pending: pending.length, inProgress: inProgress.length, completed: completed.length } };
+  };
+  const entrada = tray('entrada');
+  const salida = tray('salida');
+  return { ok: true, untrusted: true, source: 'Railway Yarbis Control Plane', entrada, salida,
+    summary: ['Buzón canónico de Railway consultado en modo de solo lectura.', `Entrada: ${entrada.counts.pending} pendientes, ${entrada.counts.inProgress} en proceso y ${entrada.counts.completed} cerradas.`, `Salida: ${salida.counts.pending} pendientes, ${salida.counts.inProgress} en proceso y ${salida.counts.completed} cerradas.`].join(' ') };
+}
+
 function searchResult(payload, token, query, limit) {
   const entries = memoryList(payload).slice(0, limit).map((value, index) => citation(value, index, token));
   const citations = entries.map((entry) => entry.citation);
@@ -480,6 +495,10 @@ function createYarbisReadClient(dependencies = {}) {
       const cfg = config(env);
       return statusResult(await request('/api/worker/memory/status'), cfg.token);
     },
+    async yarbis_mailbox_status() {
+      const cfg = config(env);
+      return mailboxResult(await request('/api/worker/mailbox/status'), cfg.token);
+    },
     async yarbis_memory_search(query, limit) {
       const cfg = config(env);
       const q = queryValue(query, cfg.token);
@@ -542,6 +561,7 @@ function registerYarbisReadRoutes(app, requirePwd, client) {
   }
   protectedGet('/api/yarbis/version', () => readClient.yarbis_version());
   protectedGet('/api/yarbis/memory/status', () => readClient.yarbis_memory_status());
+  protectedGet('/api/yarbis/mailbox/status', () => readClient.yarbis_mailbox_status());
   protectedGet('/api/yarbis/memory/search', (req) => readClient.yarbis_memory_search(
     typeof req.query?.q === 'string' ? req.query.q : '',
     req.query?.limit === undefined ? undefined : req.query.limit,
@@ -560,6 +580,9 @@ function yarbis_capabilities() {
 function yarbis_memory_status() {
   return createYarbisReadClient().yarbis_memory_status();
 }
+function yarbis_mailbox_status() {
+  return createYarbisReadClient().yarbis_mailbox_status();
+}
 function yarbis_memory_search(query, limit) {
   return createYarbisReadClient().yarbis_memory_search(query, limit);
 }
@@ -571,12 +594,14 @@ module.exports = {
   CLIENT_ID,
   YarbisReadError,
   capabilitiesResult,
+  mailboxResult,
   createYarbisReadClient,
   publicError,
   registerYarbisReadRoutes,
   yarbis_version,
   yarbis_capabilities,
   yarbis_memory_status,
+  yarbis_mailbox_status,
   yarbis_memory_search,
   yarbis_memory_get,
 };

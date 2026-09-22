@@ -3250,6 +3250,10 @@ function _mailboxSemanticIntent(text) {
   if (!normalized) return null;
   var utterance = raw;
 
+  if (/\b(?:verifica|consulta|revisa|comprueba)\b.*\bborrador(?:\s+anterior)?\b.*\b(?:enviado|ejecutado|estado)\b/.test(normalized)) return { type: 'draft-status', utterance: utterance };
+  if (/\b(?:dejalo|dejarlo|mantenlo|mantenerlo)\s+(?:preparado|guardado)(?:\s+para\s+despues)?\b/.test(normalized)) return { type: 'keep-draft', utterance: utterance };
+  if (/\b(?:consulta|consultar|revisa|revisar|verifica|verificar|comprueba|comprobar|estado)\b.*\b(?:buzon|misiones?)\b/.test(normalized) || /\bestado\s+(?:actual\s+)?(?:del\s+)?(?:buzon|de\s+las\s+misiones?)\b/.test(normalized)) return { type: 'mailbox-status', utterance: utterance };
+
   if (/^(?:confirmo|confirmar|confirmado|si confirma|si adelante|adelante|procede)$/i.test(normalized)) {
     return { type: 'confirm-only', utterance: utterance };
   }
@@ -3268,7 +3272,7 @@ function _mailboxSemanticIntent(text) {
   for (var directedIndex = 0; directedIndex < directedMissionPatterns.length; directedIndex++) {
     var directedMission = raw.match(directedMissionPatterns[directedIndex]);
     if (!directedMission || !directedMission[1]) continue;
-    var directedObjective = directedMission[1].trim().replace(/[.?!¡,;:]+$/, '').trim();
+    var directedObjective = _mailboxCleanDraftObjective(directedMission[1]);
     var directedConfirmInline = /(?:^|\s)(?:confirmo|confirmar)\s*$/i.test(directedObjective);
     if (directedConfirmInline) directedObjective = directedObjective.replace(/(?:^|\s)(?:confirmo|confirmar)\s*$/i, '').trim();
     return directedObjective.length >= 4
@@ -3321,7 +3325,7 @@ function _mailboxSemanticIntent(text) {
   if (createWords && missionWords) {
     var objective = raw.match(/(?:con\s+(?:el\s+)?objetivo|objetivo)\s*[:\-]?\s*(.+)$/i)
       || raw.match(/(?:misi[oó]n|tarea|encargo)\s*(?:es|que|para|de)?\s*[:\-]?\s*(.+)$/i);
-    var mission = objective && objective[1] ? objective[1].trim() : '';
+    var mission = objective && objective[1] ? _mailboxCleanDraftObjective(objective[1]) : '';
     var confirmInline = /(?:^|\s)(?:confirmo|confirmar)\s*$/i.test(mission);
     if (confirmInline) mission = mission.replace(/(?:^|\s)(?:confirmo|confirmar)\s*$/i, '').trim();
     return mission.length >= 4
@@ -3525,6 +3529,11 @@ async function _mailboxLegacyChatFallback(instruction) {
       result: `Detecté la consulta de ${mailboxName}, pero no pude leerlo ahora mismo.`
     };
   }
+}
+
+function _mailboxCleanDraftObjective(value) {
+  return String(value || '').trim().replace(/^(?:(?:de\s+)?prueba\s+)?(?:que\s+)?(?:diga|dice)\s*[:,-]?\s*/i, '')
+    .split(/\.\s*no\s+la\s+(?:confirmes?|env[ií]es?|ejecutes?)\b/i)[0].replace(/[.?!¡,;:]+$/, '').trim();
 }
 
 function _mailboxNormalizeVoiceMission(value) {
