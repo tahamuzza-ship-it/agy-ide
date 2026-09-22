@@ -31,6 +31,7 @@ assert.match(index, /notebooklm-cloud-admin\.js/);
 assert.match(proxy, /suffix === '\/routing'/);
 assert.match(proxy, /resolvePc2Base/);
 assert.match(proxy, /registeredEndpoint/);
-assert.equal(allowedPath('PUT', '/routing'), false);
+assert.equal(allowedPath('PUT', '/routing'), true);
+assert.equal(allowedPath('POST', '/routing'), false);
 
 console.log('test-notebooklm-cloud-ui: ok');

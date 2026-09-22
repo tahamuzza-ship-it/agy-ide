@@ -25,7 +25,7 @@ function hubBase(env) {
 function allowedPath(method, suffix) {
   if (method === 'GET' && ['', '/status', '/nodes', '/notebooks', '/sources', '/jobs', '/routing'].includes(suffix)) return true;
   if (method === 'POST' && ['/notebooks', '/jobs'].includes(suffix)) return true;
-  if (method === 'PUT' && suffix === '/active') return true;
+  if (method === 'PUT' && ['/active', '/routing'].includes(suffix)) return true;
   const match = suffix.match(/^\/(jobs|files)\/([^/]+)$/);
   return method === 'GET' && !!match && ID.test(match[2]);
 }
