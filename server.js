@@ -3243,6 +3243,11 @@ function _mailboxForcedMission(instruction) {
 // MAILBOX_SEMANTIC_CLASSIFIER_V1
 // Embeddings locales y deterministas: cada frase se proyecta a conceptos
 // semánticos y se compara por coseno con ejemplos canónicos.
+function _mailboxDriveMissionObjective(value) {
+  const clean = String(value || '').trim().replace(/^(?:yarbis|agy|agi)\s*[,,:-]?\s*/i, '').replace(/[.?!¡]+$/, '').trim();
+  return 'ANTIGRAVITY_GOOGLE_DRIVE: ' + clean + '. Devuelve evidencia verificable de Google Drive con nombre, identificador y enlace o resultados encontrados.';
+}
+
 function _mailboxSemanticIntent(text) {
   var raw = String(text || '').trim();
   var normalized = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -3250,6 +3255,9 @@ function _mailboxSemanticIntent(text) {
   if (!normalized) return null;
   var utterance = raw;
 
+  if (/\b(?:antigravity|antigravedad)\b/.test(normalized) && /\b(?:google\s+drive|drive)\b/.test(normalized) && /\b(?:sube|subir|carga|cargar|guarda|guardar|crea|crear|consulta|consultar|busca|buscar|lee|leer|lista|listar)\b/.test(normalized)) {
+    return { type: 'draft', mission: _mailboxDriveMissionObjective(raw), confirmInline: false, utterance };
+  }
   if (/\b(?:verifica|consulta|revisa|comprueba)\b.*\bborrador(?:\s+anterior)?\b.*\b(?:enviado|ejecutado|estado)\b/.test(normalized)) return { type: 'draft-status', utterance: utterance };
   if (/\b(?:dejalo|dejarlo|mantenlo|mantenerlo)\s+(?:preparado|guardado)(?:\s+para\s+despues)?\b/.test(normalized)) return { type: 'keep-draft', utterance: utterance };
   if (/\b(?:consulta|consultar|revisa|revisar|verifica|verificar|comprueba|comprobar|estado)\b.*\b(?:buzon|misiones?)\b/.test(normalized) || /\bestado\s+(?:actual\s+)?(?:del\s+)?(?:buzon|de\s+las\s+misiones?)\b/.test(normalized)) return { type: 'mailbox-status', utterance: utterance };

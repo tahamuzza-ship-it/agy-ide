@@ -26,9 +26,9 @@ function createNotebookClient(options = {}) {
   }
   async function listNotebooks() {
     const data = await request('GET', '/notebooks');
-    const source = Array.isArray(data) ? data : Array.isArray(data.notebooks) ? data.notebooks : [];
+    const source = Array.isArray(data) ? data : Array.isArray(data.notebooks) ? data.notebooks : Array.isArray(data.items) ? data.items : [];
     const notebooks = source.map((item) => ({
-      id: String(item && (item.id || item.notebookId) || ''),
+      id: String(item && (item.id || item.notebookId || item.notebook_id || item.uuid) || ''),
       title: String(item && (item.title || item.name) || '').trim()
     })).filter((item) => ID.test(item.id) && item.title);
     return { ok: true, count: notebooks.length, notebooks };

@@ -828,6 +828,18 @@
       .trim();
     }
 
+    function _cleanDraftObjective(value) {
+    return String(value || '').trim()
+      .replace(/^(?:(?:de\s+)?prueba\s+)?(?:que\s+)?(?:diga|dice)\s*[:,-]?\s*/i, '')
+      .split(/\.\s*no\s+la\s+(?:confirmes?|env[ií]es?|ejecutes?)\b/i)[0]
+      .replace(/[.?!¡,;:]+$/, '').trim();
+    }
+
+    function _driveMissionObjective(value) {
+    var clean = String(value || '').trim().replace(/^(?:yarbis|agy|agi)\s*[,,:-]?\s*/i, '').replace(/[.?!¡]+$/, '').trim();
+    return 'ANTIGRAVITY_GOOGLE_DRIVE: ' + clean + '. Devuelve evidencia verificable de Google Drive con nombre, identificador y enlace o resultados encontrados.';
+    }
+
     // MAILBOX_SEMANTIC_CLASSIFIER_V1
     // Embeddings locales y deterministas: cada frase se proyecta a conceptos
     // semánticos y se compara por coseno con ejemplos canónicos. No sale del
@@ -838,6 +850,13 @@
     normalized = normalized.replace(/\b(?:buson|buzom)\b/g, 'buzon').replace(/\b(?:micion|misio)\b/g, 'mision').replace(/\b(?:pe ce|pese)\s*uno\b/g, 'pc 1');
     if (!normalized) return null;
     var utterance = raw;
+
+    if (/\b(?:antigravity|antigravedad)\b/.test(normalized) && /\b(?:google\s+drive|drive)\b/.test(normalized) && /\b(?:sube|subir|carga|cargar|guarda|guardar|crea|crear|consulta|consultar|busca|buscar|lee|leer|lista|listar)\b/.test(normalized)) {
+      return { type: 'draft', mission: _driveMissionObjective(raw), confirmInline: false, utterance: utterance, capability: /\b(?:sube|subir|carga|cargar|guarda|guardar|crea|crear)\b/.test(normalized) ? 'google.drive.upload' : 'google.drive.query' };
+    }
+    if (/\b(?:verifica|consulta|revisa|comprueba)\b.*\bborrador(?:\s+anterior)?\b.*\b(?:enviado|ejecutado|estado)\b/.test(normalized)) return { type: 'draft-status', utterance: utterance };
+    if (/\b(?:dejalo|dejarlo|mantenlo|mantenerlo)\s+(?:preparado|guardado)(?:\s+para\s+despues)?\b/.test(normalized)) return { type: 'keep-draft', utterance: utterance };
+    if (/\b(?:consulta|consultar|revisa|revisar|verifica|verificar|comprueba|comprobar|estado)\b.*\b(?:buzon|misiones?)\b/.test(normalized) || /\bestado\s+(?:actual\s+)?(?:del\s+)?(?:buzon|de\s+las\s+misiones?)\b/.test(normalized)) return { type: 'mailbox-status', utterance: utterance };
 
     if (/^(?:confirmo|confirmar|confirmado|si confirma|si adelante|adelante|procede)$/i.test(normalized)) {
       return { type: 'confirm-only', utterance: utterance };
@@ -857,7 +876,7 @@
     for (var directedIndex = 0; directedIndex < directedMissionPatterns.length; directedIndex++) {
       var directedMission = raw.match(directedMissionPatterns[directedIndex]);
       if (!directedMission || !directedMission[1]) continue;
-      var directedObjective = directedMission[1].trim().replace(/[.?!¡,;:]+$/, '').trim();
+      var directedObjective = _cleanDraftObjective(directedMission[1]);
       var directedConfirmInline = /(?:^|\s)(?:confirmo|confirmar)\s*$/i.test(directedObjective);
       if (directedConfirmInline) directedObjective = directedObjective.replace(/(?:^|\s)(?:confirmo|confirmar)\s*$/i, '').trim();
       return directedObjective.length >= 4
@@ -910,7 +929,7 @@
     if (createWords && missionWords) {
       var objective = raw.match(/(?:con\s+(?:el\s+)?objetivo|objetivo)\s*[:\-]?\s*(.+)$/i)
         || raw.match(/(?:misi[oó]n|tarea|encargo)\s*(?:es|que|para|de)?\s*[:\-]?\s*(.+)$/i);
-      var mission = objective && objective[1] ? objective[1].trim() : '';
+      var mission = objective && objective[1] ? _cleanDraftObjective(objective[1]) : '';
       var confirmInline = /(?:^|\s)(?:confirmo|confirmar)\s*$/i.test(mission);
       if (confirmInline) mission = mission.replace(/(?:^|\s)(?:confirmo|confirmar)\s*$/i, '').trim();
       return mission.length >= 4
@@ -945,13 +964,13 @@
     var raw = String(text || '').trim();
     var normalized = _normalizeVoiceOrder(text);
     function immediateMissionIntent(mission) {
-      var value = String(mission || '').trim();
+      var value = _cleanDraftObjective(mission);
       var confirmInline = /(?:^|\s)(?:confirmo|confirmar)\s*$/.test(value);
       if (confirmInline) value = value.replace(/(?:^|\s)(?:confirmo|confirmar)\s*$/, '').trim();
       return value.length >= 4 ? { type: 'draft', mission: value, confirmInline: confirmInline, utterance: raw } : null;
     }
     function draftIntent(mission) {
-      var value = String(mission || '').trim();
+      var value = _cleanDraftObjective(mission);
       var confirmInline = /(?:^|\s)(?:confirmo|confirmar)\s*$/.test(value);
       if (confirmInline) value = value.replace(/(?:^|\s)(?:confirmo|confirmar)\s*$/, '').trim();
       return value.length >= 4 ? { type: 'draft', mission: value, confirmInline: confirmInline } : null;
@@ -1026,6 +1045,13 @@
     return data;
     }
 
+    async function _mailboxCanonicalStatus() {
+    var response = await fetch('/api/yarbis/mailbox/status', { method: 'GET', headers: { 'x-agyide-pwd': _getPwd() } });
+    var data = await response.json().catch(function() { return {}; });
+    if (!response.ok || data.ok !== true) throw new Error(data.error || ('HTTP ' + response.status));
+    return { kind: 'mailbox-read', message: data.summary || 'Buzón canónico de Railway consultado en modo de solo lectura.', data: data };
+    }
+
     async function _runMailboxVoiceIntent(intent) {
     if (intent.type === 'clarify') {
       return {
@@ -1033,11 +1059,13 @@
         message: '¿Quieres consultar la Entrada de PC1 (misiones para AGY) o la Salida de PC1 (encargos que AGY dejó para Replit)?'
       };
     }
+    if (intent.type === 'keep-draft') return { kind: 'draft-kept', message: 'El borrador anterior sigue preparado para después. No fue confirmado, enviado ni ejecutado.' };
+    if (intent.type === 'draft-status') {
+      var draftState = await _mailboxVoiceRequest('/api/ops/mailbox/voice/command', { action: 'drafts' });
+      return { kind: 'draft-status', message: draftState && draftState.count > 0 ? 'Estado real: el borrador anterior sigue guardado como BORRADOR. No fue enviado ni ejecutado.' : 'No existe un borrador pendiente en esta sesión.', items: draftState.items || [] };
+    }
     if (intent.type === 'confirm-only' || intent.type === 'cancel-only') {
-      return {
-        kind: 'help',
-        message: 'No hay un borrador de misión esperando esa decisión. Primero dime la misión completa.'
-      };
+      return { kind: 'help', message: 'No hay un borrador de misión esperando esa decisión. Primero dime la misión completa.' };
     }
     if (intent.type === 'draft-help') {
       return {
@@ -1045,18 +1073,7 @@
         message: 'Habla con naturalidad. Ejemplo: “AGY, dile a PC1 que revise el disco”.'
       };
     }
-    if (intent.type === 'list') {
-      return _mailboxVoiceRequest('/api/ops/mailbox/voice/command', {
-        action: 'list',
-        utterance: intent.utterance
-      });
-    }
-    if (intent.type === 'list-agy-to-replit') {
-      return _mailboxVoiceRequest('/api/ops/mailbox/voice/command', {
-        action: 'list-agy-to-replit',
-        utterance: intent.utterance
-      });
-    }
+    if (intent.type === 'mailbox-status' || intent.type === 'list' || intent.type === 'list-agy-to-replit') return _mailboxCanonicalStatus();
     if (intent.type === 'draft') {
       var proposal = await _mailboxVoiceRequest('/api/ops/mailbox/voice/command', {
         action: 'draft',

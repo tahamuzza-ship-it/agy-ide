@@ -29,6 +29,8 @@ function knownCapabilities() {
     { id: 'notebooklm.research', mode: 'action', enabled: true, requiresConfirmation: false, evidenceRequired: true },
     { id: 'mission.draft', mode: 'action', enabled: true, requiresConfirmation: false, evidenceRequired: false },
     { id: 'mission.confirm', mode: 'action', enabled: true, requiresConfirmation: true, evidenceRequired: true },
+    { id: 'google.drive.upload', mode: 'action', enabled: true, requiresConfirmation: false, evidenceRequired: false },
+    { id: 'google.drive.query', mode: 'action', enabled: true, requiresConfirmation: false, evidenceRequired: false },
   ];
 }
 
@@ -177,7 +179,7 @@ function testExactCrossContractManifest() {
     'mailbox.read', 'pc1.sync.read', 'notebooklm.list', 'notebooklm.search',
     'notebooklm.sources', 'notebooklm.job-status', 'mission.status',
   ];
-  const actionIds = ['notebooklm.ask', 'notebooklm.research', 'mission.draft', 'mission.confirm'];
+  const actionIds = ['notebooklm.ask', 'notebooklm.research', 'mission.draft', 'mission.confirm', 'google.drive.upload', 'google.drive.query'];
   const manifest = {
     schemaVersion: '1',
     policyVersion: '1',
@@ -189,10 +191,12 @@ function testExactCrossContractManifest() {
       { id: 'notebooklm.research', mode: 'action', enabled: true, requiresConfirmation: false, evidenceRequired: true },
       { id: 'mission.draft', mode: 'action', enabled: true, requiresConfirmation: false, evidenceRequired: false },
       { id: 'mission.confirm', mode: 'action', enabled: true, requiresConfirmation: true, evidenceRequired: true },
+      { id: 'google.drive.upload', mode: 'action', enabled: true, requiresConfirmation: false, evidenceRequired: false },
+      { id: 'google.drive.query', mode: 'action', enabled: true, requiresConfirmation: false, evidenceRequired: false },
     ],
   };
   const result = capabilitiesResult(manifest, 'token');
-  assert.strictEqual(result.capabilities.length, 16);
+  assert.strictEqual(result.capabilities.length, 18);
   assert.deepStrictEqual(result.capabilities.map((entry) => entry.id), [...readIds, ...actionIds]);
 }
 
@@ -202,7 +206,7 @@ function testValidatedResultActivatesAllKnownCapabilities() {
   const active = localToolsForCapabilities(validated);
   assert.strictEqual(validated.synchronized, true);
   assert.deepStrictEqual([...active.activeIds].sort(), validated.capabilities.map((entry) => entry.id).sort());
-  assert.strictEqual(active.activeIds.length, 16);
+  assert.strictEqual(active.activeIds.length, 18);
   const changed = {
     ...validated,
     capabilities: validated.capabilities.map((entry) => entry.id === 'mission.confirm'
@@ -211,7 +215,7 @@ function testValidatedResultActivatesAllKnownCapabilities() {
   };
   const safelyGated = localToolsForCapabilities(changed);
   assert.ok(!safelyGated.activeIds.includes('mission.confirm'));
-  assert.strictEqual(safelyGated.activeIds.length, 15);
+  assert.strictEqual(safelyGated.activeIds.length, 17);
 }
 
 function testMissionUiGates() {
