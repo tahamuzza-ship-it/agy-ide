@@ -13,6 +13,9 @@ const crypto = require('node:crypto');
 const ENDPOINT_PATH = '/api/notebooklm/endpoint';
 const REGISTRY_ID = 'agyide_notebooklm_endpoint';
 const REGISTRY_PROJECT = 'agy-ide-notebooklm-endpoint';
+const PC1_ENDPOINT_PATH = '/api/notebooklm/pc1-endpoint';
+const PC1_REGISTRY_ID = 'agyide_notebooklm_pc1_endpoint';
+const PC1_REGISTRY_PROJECT = 'agy-ide-notebooklm-pc1-endpoint';
 const FALLBACK_SUPABASE_URL = 'https://lxlcivzuevowckbcxczc.supabase.co';
 const TRANSPORT_VERSION = 1;
 // Cloudflare/NotebookLM can take more than fifteen seconds to wake up.
@@ -22,6 +25,14 @@ const ENDPOINT_RE = /^https:\/\/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.trycloudflare\.
 
 function authToken(env = process.env) {
   return String(env.CONEXION_NOTEBOOK_PUENTE || env.SGN_SECRET_TOKEN || '');
+}
+
+function pc1RegistryToken(env = process.env) {
+  return String(env.NOTEBOOKLM_PC1_REGISTRY_TOKEN || '');
+}
+
+function pc1HealthToken(env = process.env) {
+  return String(env.NOTEBOOKLM_PC1_TOKEN || '');
 }
 
 function sameToken(actual, expected) {
@@ -114,11 +125,14 @@ function rowValue(row) {
   };
 }
 
-function rowFor(record) {
+function rowFor(record, registry = {}) {
+  const id = registry.id || REGISTRY_ID;
+  const project = registry.project || REGISTRY_PROJECT;
+  const title = registry.title || 'NotebookLM endpoint registry';
   return {
-    id: REGISTRY_ID,
-    project: REGISTRY_PROJECT,
-    title: 'NotebookLM endpoint registry',
+    id,
+    project,
+    title,
     messages: {
       endpoint: record.endpoint,
       generation: record.generation,
@@ -149,6 +163,11 @@ function boundedFetch() {
 }
 
 function createSupabaseStore(env = process.env, options = {}) {
+  const registry = options.registry || {
+    id: REGISTRY_ID,
+    project: REGISTRY_PROJECT,
+    title: 'NotebookLM endpoint registry'
+  };
   const url = String(env.SUPABASE_URL_2 || FALLBACK_SUPABASE_URL).replace(/\/+$/, '');
   const key = String(env.SUPABASE_KEY_2 || env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_ANON_KEY || '');
   const configured = Boolean(key && url);
@@ -171,7 +190,7 @@ function createSupabaseStore(env = process.env, options = {}) {
       }
       const result = await client.from('cibercode_chats')
         .select('id,project,messages,updated_at')
-        .eq('id', REGISTRY_ID).eq('project', REGISTRY_PROJECT).maybeSingle();
+        .eq('id', registry.id).eq('project', registry.project).maybeSingle();
       if (result.error) throw result.error;
       if (!result.data) return null;
       const parsed = rowValue(result.data);
@@ -189,7 +208,7 @@ function createSupabaseStore(env = process.env, options = {}) {
           global: { fetch: boundedFetch() }
         });
       }
-      const result = await client.from('cibercode_chats').insert(rowFor(record));
+      const result = await client.from('cibercode_chats').insert(rowFor(record, registry));
       if (result.error) throw result.error;
     },
     async compareAndSet(previous, record) {
@@ -205,12 +224,12 @@ function createSupabaseStore(env = process.env, options = {}) {
         });
       }
       const update = {
-        title: 'NotebookLM endpoint registry',
-        messages: rowFor(record).messages,
+        title: registry.title,
+        messages: rowFor(record, registry).messages,
         updated_at: record.updatedAt
       };
       const result = await client.from('cibercode_chats').update(update)
-        .eq('id', REGISTRY_ID).eq('project', REGISTRY_PROJECT)
+        .eq('id', registry.id).eq('project', registry.project)
         .eq('updated_at', previous.updatedAt)
         .filter('messages->>generation', 'eq', String(previous.generation))
         .select('id');
@@ -218,6 +237,17 @@ function createSupabaseStore(env = process.env, options = {}) {
       return Array.isArray(result.data) && result.data.length === 1;
     }
   };
+}
+
+function createPc1SupabaseStore(env = process.env, options = {}) {
+  return createSupabaseStore(env, {
+    ...options,
+    registry: {
+      id: PC1_REGISTRY_ID,
+      project: PC1_REGISTRY_PROJECT,
+      title: 'NotebookLM PC1 endpoint registry'
+    }
+  });
 }
 
 function isConflict(error) {
@@ -244,7 +274,7 @@ async function verifyCandidate(endpoint, token, fetchImpl) {
     });
     if (!response || !response.ok) throw new Error('health');
     const data = await response.json();
-    if (!data || data.configured !== true) throw new Error('health');
+    if (!data || data.configured !== true || data.authenticated !== true) throw new Error('health');
   } finally {
     clearTimeout(timer);
   }
@@ -290,16 +320,19 @@ async function commitCandidate(store, candidate, token, fetchImpl) {
   return { conflict: 'race' };
 }
 
-function registerNotebookEndpointRoutes(app, options = {}) {
+function registerNotebookEndpointRoute(app, options = {}) {
   const env = options.env || process.env;
   const fetchImpl = options.fetchImpl || globalThis.fetch;
   const store = options.store || options.endpointStore || createSupabaseStore(env, options);
+  const path = options.path || ENDPOINT_PATH;
+  const expectedToken = options.expectedToken || authToken;
+  const healthToken = options.healthToken || expectedToken;
   const handler = async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     if (req.path && req.path !== '/') {
       return res.status(404).json({ ok: false, error: 'Ruta no disponible.' });
     }
-    const expected = authToken(env);
+    const expected = expectedToken(env);
     if (!sameToken(req.headers && req.headers['x-sgn-token'], expected)) {
       return res.status(401).json({ ok: false, error: 'No autorizado.' });
     }
@@ -318,7 +351,7 @@ function registerNotebookEndpointRoutes(app, options = {}) {
       } catch (error) {
         return res.status(400).json({ ok: false, error: error.message });
       }
-      const result = await commitCandidate(store, candidate, expected, fetchImpl);
+      const result = await commitCandidate(store, candidate, healthToken(env), fetchImpl);
       if (result.conflict) {
         return res.status(409).json({
           ok: false,
@@ -336,21 +369,53 @@ function registerNotebookEndpointRoutes(app, options = {}) {
     }
   };
   // Registered first: this route deliberately bypasses the IDE password.
-  app.use(ENDPOINT_PATH, handler);
+  app.use(path, handler);
   return handler;
+}
+
+function registerNotebookEndpointRoutes(app, options = {}) {
+  return registerNotebookEndpointRoute(app, {
+    ...options,
+    path: ENDPOINT_PATH,
+    store: options.store || options.endpointStore || createSupabaseStore(options.env || process.env, options),
+    expectedToken: authToken,
+    healthToken: authToken
+  });
+}
+
+function registerPc1NotebookEndpointRoutes(app, options = {}) {
+  const env = options.env || process.env;
+  return registerNotebookEndpointRoute(app, {
+    ...options,
+    path: PC1_ENDPOINT_PATH,
+    store: options.store || options.pc1EndpointStore || createPc1SupabaseStore(env, options),
+    expectedToken: pc1RegistryToken,
+    healthToken: pc1HealthToken
+  });
 }
 
 module.exports = {
   ENDPOINT_PATH,
   REGISTRY_ID,
   REGISTRY_PROJECT,
+  PC1_ENDPOINT_PATH,
+  PC1_REGISTRY_ID,
+  PC1_REGISTRY_PROJECT,
   TRANSPORT_VERSION,
   authToken,
+  pc1RegistryToken,
+  pc1HealthToken,
   endpointOrigin,
   validatePayload,
   validateStored,
+  sameToken,
+  verifyCandidate,
+  commitCandidate,
   createSupabaseStore,
+  createPc1SupabaseStore,
+  registerNotebookEndpointRoute,
   registerNotebookEndpointRoutes,
+  registerPc1NotebookEndpointRoutes,
   rowValue,
   rowFor,
   publicRecord

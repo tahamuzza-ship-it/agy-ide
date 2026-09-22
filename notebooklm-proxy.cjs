@@ -3,7 +3,13 @@
 // The browser talks only to AGY. Google sessions and the SGN key stay on servers.
 const { Readable } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
-const { registerNotebookEndpointRoutes, createSupabaseStore, validateStored } = require('./notebooklm-endpoint.cjs');
+const {
+  registerNotebookEndpointRoutes,
+  registerPc1NotebookEndpointRoutes,
+  createSupabaseStore,
+  createPc1SupabaseStore,
+  validateStored
+} = require('./notebooklm-endpoint.cjs');
 const { createNotebookRouter } = require('./notebooklm-router.cjs');
 const PREFIX = '/api/notebooklm';
 const ID = /^[a-zA-Z0-9_-]{1,100}$/;
@@ -19,6 +25,18 @@ function hubBase(env) {
     return { url: url.href.replace(/\/+$/, '') };
   } catch {
     return { error: 'HUB_ENDPOINT_URL debe ser la dirección HTTPS del túnel, sin credenciales ni parámetros.' };
+  }
+}
+
+function validPc1Fallback(value) {
+  if (!value) return null;
+  try {
+    const url = new URL(String(value));
+    if (url.protocol !== 'https:' || url.username || url.password
+        || url.search || url.hash || url.pathname !== '/') throw new Error();
+    return url.href.replace(/\/+$/, '');
+  } catch {
+    return null;
   }
 }
 
@@ -74,6 +92,7 @@ function registerNotebookRoutes(app, requirePwd, options = {}) {
   const env = options.env || process.env;
   const fetchImpl = options.fetchImpl || globalThis.fetch;
   const endpointStore = options.store || options.endpointStore || createSupabaseStore(env, options);
+  const pc1EndpointStore = options.pc1Store || options.pc1EndpointStore || createPc1SupabaseStore(env, options);
   const resolvePc2Base = async () => {
     let registeredEndpoint = null;
     if (endpointStore && endpointStore.configured !== false) {
@@ -83,12 +102,27 @@ function registerNotebookRoutes(app, requirePwd, options = {}) {
     const config = registeredEndpoint ? { url: registeredEndpoint } : hubBase(env);
     return config.url || null;
   };
+  const resolvePc1Base = async () => {
+    if (pc1EndpointStore && pc1EndpointStore.configured !== false) {
+      try {
+        const record = await pc1EndpointStore.get();
+        if (record) return validateStored(record).endpoint;
+      } catch {
+        // An invalid or unavailable PC1 registry must not block its explicit
+        // static fallback, nor affect the PC2 registry.
+      }
+    }
+    return validPc1Fallback(env.NOTEBOOKLM_PC1_URL);
+  };
   const router = options.router || createNotebookRouter({
-    ...options, env, fetchImpl, resolvePc2Base
+    ...options, env, fetchImpl, resolvePc2Base, resolvePc1Base
   });
   // This must be mounted before the password-protected proxy below. The
   // endpoint is authenticated with the SGN bridge token, not the IDE pwd.
   registerNotebookEndpointRoutes(app, { ...options, env, fetchImpl, store: endpointStore });
+  registerPc1NotebookEndpointRoutes(app, {
+    ...options, env, fetchImpl, store: pc1EndpointStore
+  });
   app.use(PREFIX, requirePwd, async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     const suffix = req.path.replace(/\/$/, '') || '/status';
@@ -141,4 +175,4 @@ function registerNotebookRoutes(app, requirePwd, options = {}) {
   });
 }
 
-module.exports = { registerNotebookRoutes, hubBase, allowedPath, sanitizedBody };
+module.exports = { registerNotebookRoutes, hubBase, validPc1Fallback, allowedPath, sanitizedBody };

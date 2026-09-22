@@ -8,6 +8,10 @@ const VERSION = 1;
 const MAX_JOBS = 1000;
 const ACTOR = 'notebooklm-router-admin-v1';
 const ROUTES = new Set(['auto', 'pc1', 'cloud', 'pc2']);
+const ROUTE_BUDGETS = Object.freeze({
+  ready: Object.freeze({ pc2: 7000, pc1: 7000, cloud: 10000 }),
+  read: Object.freeze({ pc2: 7000, pc1: 7000, cloud: 10000 })
+});
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{1,160}$/;
 const ROUTER_ID_RE = /^nlmr_[a-f0-9]{32}$/;
 
@@ -241,9 +245,24 @@ function createNotebookRouter(options = {}) {
   const actor = String(env.NOTEBOOKLM_ROUTER_ADMIN_PRINCIPAL || ACTOR);
   if (!/^[A-Za-z0-9._:-]{1,200}$/.test(actor)) throw new Error('NOTEBOOKLM_ROUTER_ADMIN_PRINCIPAL is invalid');
   const repository = options.repository || createRouterRepository(store, actor);
+  const resolvePc1Base = options.resolvePc1Base;
+  const routeBudgets = {
+    ready: { ...ROUTE_BUDGETS.ready, ...(options.routeBudgets && options.routeBudgets.ready) },
+    read: { ...ROUTE_BUDGETS.read, ...(options.routeBudgets && options.routeBudgets.read) }
+  };
+  function budgetFor(kind, route) {
+    const value = Number(routeBudgets[kind] && routeBudgets[kind][route]);
+    return Number.isFinite(value) && value > 0 ? value : ROUTE_BUDGETS[kind][route];
+  }
   async function baseFor(route) {
     if (route === 'cloud') return cloudEnabled && cloudBase ? cloudBase : null;
-    if (route === 'pc1') return pc1Base;
+    if (route === 'pc1') {
+      if (typeof resolvePc1Base === 'function') {
+        const dynamic = await resolvePc1Base();
+        return dynamic || pc1Base;
+      }
+      return pc1Base;
+    }
     return typeof options.resolvePc2Base === 'function' ? options.resolvePc2Base() : null;
   }
   function tokenFor(route) {
@@ -263,7 +282,7 @@ function createNotebookRouter(options = {}) {
       if (!base) throw Object.assign(new Error('ROUTE_UNAVAILABLE'), { route });
       const url = new URL(`${base}/api/notebooklm${suffix}`);
       if (suffix === '/sources' && query && query.notebookId) url.searchParams.set('notebookId', query.notebookId);
-      return await fetchImpl(url, {
+      const request = fetchImpl(url, {
         method,
         headers: {
           Accept: suffix.startsWith('/files/') ? '*/*' : 'application/json',
@@ -277,26 +296,41 @@ function createNotebookRouter(options = {}) {
         redirect: 'error',
         signal: controller.signal
       });
+      let requestTimer;
+      const timeout = new Promise((_, reject) => {
+        requestTimer = setTimeout(() => reject(Object.assign(new Error('ROUTE_TIMEOUT'), { route })), timeoutMs);
+      });
+      try {
+        return await Promise.race([request, timeout]);
+      } finally {
+        clearTimeout(requestTimer);
+      }
     } finally { clearTimeout(timer); }
   }
-  async function routeReady(route, timeoutMs = 7000) {
+  async function routeReady(route, timeoutMs = budgetFor('ready', route)) {
     if (!tokenFor(route)) return false;
     try {
       const response = await call(route, 'GET', '/status', null, null, timeoutMs);
-      if (!response.ok) return false;
+      if (!response.ok) {
+        if (await shouldFallbackRead(response)) return false;
+        return { stop: true, response, route };
+      }
       const { data } = await jsonResponse(response);
-      return Boolean(data && data.configured === true && data.authenticated === true);
+      return data && data.configured === true && data.authenticated === true
+        ? true : false;
     } catch { return false; }
   }
   const priority = ['pc2', 'pc1', 'cloud'];
-  async function selectRoute(preference, method, suffix, body, readinessTimeout) {
+  async function selectRoute(preference) {
     if (preference !== 'auto') return preference;
     for (const route of priority) {
-      if (await routeReady(route, readinessTimeout)) return route;
+      const readiness = await routeReady(route, budgetFor('ready', route));
+      if (readiness === true) return route;
+      if (readiness && readiness.stop) return readiness;
     }
     return null;
   }
-  async function cloudReady(timeoutMs = 7000) {
+  async function cloudReady(timeoutMs = budgetFor('ready', 'cloud')) {
     return routeReady('cloud', timeoutMs);
   }
   async function rewriteJobResult(data, job) {
@@ -324,9 +358,6 @@ function createNotebookRouter(options = {}) {
     return output;
   }
   async function dispatch(input) {
-    let readDeadline = null;
-    const remainingReadBudget = (maximum) => Math.max(1, Math.min(maximum,
-      (readDeadline || (Date.now() + maximum)) - Date.now()));
     const { method, suffix, query, body } = input;
     if (method === 'POST' && suffix === '/jobs' && body && body.action === 'notebook_ask'
         && !validRequestId(body.requestId)) {
@@ -349,12 +380,6 @@ function createNotebookRouter(options = {}) {
     try { preference = await repository.getRoute(); } catch {
       return responseError(503, 'No se pudo leer la configuración durable del router.', null, 'ROUTER_STORE_UNAVAILABLE');
     }
-    // Preserve the historical 45 second PC2 read allowance. This router budget
-    // starts after durable route resolution; callers with shorter deadlines may
-    // still abort their own request before a safe fallback finishes.
-    readDeadline = Date.now() + 45000;
-    const autoCloudDeadline = Date.now() + 10000;
-    const remainingCloudBudget = () => Math.max(1, autoCloudDeadline - Date.now());
     const match = suffix.match(/^\/(jobs|files)\/([^/]+)$/);
     if (match) {
       const id = match[2];
@@ -411,7 +436,7 @@ function createNotebookRouter(options = {}) {
       for (const candidate of priority) {
         try {
           const candidateResponse = await call(candidate, method, suffix, query, body,
-            remainingReadBudget(candidate === 'cloud' ? 10000 : 45000));
+            budgetFor('read', candidate));
           if (!(await shouldFallbackRead(candidateResponse))) {
             return { response: candidateResponse, route: candidate };
           }
@@ -419,8 +444,9 @@ function createNotebookRouter(options = {}) {
       }
       return responseError(502, 'Ninguna ruta NotebookLM disponible.', 'cloud', 'ROUTES_UNAVAILABLE');
     }
-    const route = await selectRoute(preference, method, suffix, body,
-      preference === 'auto' ? remainingCloudBudget() : remainingReadBudget(45000));
+    const selected = await selectRoute(preference);
+    if (selected && selected.stop) return { response: selected.response, route: selected.route };
+    const route = selected;
     if (!route) return responseError(503, 'Ninguna ruta NotebookLM disponible.', null, 'ROUTES_UNAVAILABLE');
     if (route === 'cloud' && !cloudSupports(method, suffix, body)) {
       return responseError(409, 'Esta operación todavía no está habilitada en cloud.', 'cloud', 'CLOUD_OPERATION_UNSUPPORTED');
@@ -430,7 +456,7 @@ function createNotebookRouter(options = {}) {
       try {
         const autoSafeTimeout = preference === 'auto' && method === 'GET'
           && ['/status', '/notebooks', '/sources'].includes(suffix)
-          ? remainingReadBudget(45000) : 45000;
+          ? budgetFor('read', route) : 45000;
         const response = await call(route, method, suffix, query, body,
           suffix.startsWith('/files/') ? 120000 : autoSafeTimeout);
         return { response, route };
@@ -500,7 +526,7 @@ function createNotebookRouter(options = {}) {
 }
 
 module.exports = {
-  ACTOR, MAX_JOBS, ROUTER_ID, ROUTER_PROJECT, ROUTER_ID_RE, ROUTES,
+  ACTOR, MAX_JOBS, ROUTER_ID, ROUTER_PROJECT, ROUTER_ID_RE, ROUTES, ROUTE_BUDGETS,
   canonical, payloadHash, parseDocument, rowFor, createSupabaseRouterStore,
   createRouterRepository, createNotebookRouter, cloudSupports, shouldFallbackRead
 };

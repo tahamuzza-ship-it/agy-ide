@@ -52,7 +52,8 @@ function makeRepository(route = 'pc2') {
   };
 }
 
-function router(repository, fetchImpl, resolvePc2Base = async () => 'https://pc2.example.test', extraEnv = {}) {
+function router(repository, fetchImpl, resolvePc2Base = async () => 'https://pc2.example.test',
+  extraEnv = {}, resolvePc1Base, extraOptions = {}) {
   return createNotebookRouter({
     env: {
       NOTEBOOKLM_CLOUD_ENABLED: 'true',
@@ -64,7 +65,9 @@ function router(repository, fetchImpl, resolvePc2Base = async () => 'https://pc2
     },
     repository,
     fetchImpl,
-    resolvePc2Base
+    resolvePc2Base,
+    resolvePc1Base,
+    ...extraOptions
   });
 }
 
@@ -111,6 +114,64 @@ async function main() {
     'https://cloud.example.test/api/notebooklm/notebooks'
   ]);
 
+  const hangingReadCalls = [];
+  const hangingReadStarted = Date.now();
+  const hangingReadRouter = router(makeRepository('auto'), async (url, options) => {
+    const target = String(url);
+    hangingReadCalls.push(target);
+    if (target.startsWith('https://pc2.example.test')) {
+      return new Promise((_, reject) => {
+        options.signal.addEventListener('abort', () => reject(new Error('pc2 aborted')), { once: true });
+      });
+    }
+    if (target.startsWith('https://pc1.example.test')) return response(503, { error: 'offline' });
+    return response(200, { notebooks: ['cloud-after-timeouts'] });
+  }, async () => 'https://pc2.example.test', {}, undefined, {
+    routeBudgets: {
+      read: { pc2: 30, pc1: 30, cloud: 30 },
+      ready: { pc2: 30, pc1: 30, cloud: 30 }
+    }
+  });
+  const hangingRead = await hangingReadRouter.dispatch({
+    method: 'GET', suffix: '/notebooks', query: {}, body: null
+  });
+  assert.equal(hangingRead.route, 'cloud');
+  assert.ok(hangingReadCalls.some((url) => url.includes('pc1.example.test')),
+    'PC1 must receive its own budget after PC2 aborts');
+  assert.ok(Date.now() - hangingReadStarted < 1000, 'per-route read budgets must remain bounded');
+
+  const hangingReadyCalls = [];
+  const hangingReadyRouter = router(makeRepository('auto'), async (url, options) => {
+    const target = String(url);
+    hangingReadyCalls.push(target);
+    if (target.startsWith('https://pc2.example.test')) {
+      return new Promise((_, reject) => {
+        options.signal.addEventListener('abort', () => reject(new Error('pc2 aborted')), { once: true });
+      });
+    }
+    if (target.startsWith('https://pc1.example.test') && options.method === 'GET') {
+      return response(200, { configured: true, authenticated: true });
+    }
+    if (target.startsWith('https://pc1.example.test')) return response(202, { id: 'pc1-after-timeout' });
+    throw new Error('cloud must not be needed');
+  }, async () => 'https://pc2.example.test', {}, undefined, {
+    routeBudgets: {
+      read: { pc2: 30, pc1: 30, cloud: 30 },
+      ready: { pc2: 30, pc1: 30, cloud: 30 }
+    }
+  });
+  const hangingReady = await hangingReadyRouter.dispatch({
+    method: 'POST', suffix: '/jobs', query: {},
+    body: { action: 'notebook_ask', notebookId: 'nb', question: 'q', requestId: 'pc2-hang-1' }
+  });
+  assert.equal(hangingReady.status, 202);
+  assert.equal(hangingReady.route, 'pc1');
+  assert.deepEqual(hangingReadyCalls, [
+    'https://pc2.example.test/api/notebooklm/status',
+    'https://pc1.example.test/api/notebooklm/status',
+    'https://pc1.example.test/api/notebooklm/jobs'
+  ]);
+
   const ordinaryErrorCalls = [];
   const ordinaryErrorRouter = router(makeRepository('auto'), async (url) => {
     ordinaryErrorCalls.push(String(url));
@@ -122,6 +183,22 @@ async function main() {
   assert.equal(ordinaryError.response.status, 404);
   assert.equal(ordinaryError.route, 'pc2');
   assert.deepEqual(ordinaryErrorCalls, ['https://pc2.example.test/api/notebooklm/notebooks']);
+
+  const ordinaryPostCalls = [];
+  const ordinaryPostRouter = router(makeRepository('auto'), async (url) => {
+    ordinaryPostCalls.push(String(url));
+    if (String(url).startsWith('https://pc2.example.test')) {
+      return response(404, { error: 'unsupported' });
+    }
+    throw new Error('ordinary 4xx must stop failover');
+  });
+  const ordinaryPost = await ordinaryPostRouter.dispatch({
+    method: 'POST', suffix: '/jobs', query: {},
+    body: { action: 'notebook_ask', notebookId: 'nb', question: 'q', requestId: 'ordinary-4xx-1' }
+  });
+  assert.equal(ordinaryPost.response.status, 404);
+  assert.equal(ordinaryPost.route, 'pc2');
+  assert.deepEqual(ordinaryPostCalls, ['https://pc2.example.test/api/notebooklm/status']);
 
   let explicitPc2Url = '';
   const pc2Router = router(makeRepository('pc2'), async (url) => {
@@ -195,6 +272,46 @@ async function main() {
   const invalid = await invalidPc1.dispatch({ method: 'GET', suffix: '/notebooks', query: {}, body: null });
   assert.equal(invalid.status, 502);
   assert.equal(invalid.data.code, 'ROUTE_UNAVAILABLE');
+
+  const dynamicCalls = [];
+  const dynamicPc1 = router(makeRepository('auto'), async (url) => {
+    dynamicCalls.push(String(url));
+    if (String(url).startsWith('https://pc2.example.test')) return response(503, { error: 'offline' });
+    return response(200, { notebooks: ['dynamic'] });
+  }, async () => 'https://pc2.example.test', {
+    NOTEBOOKLM_PC1_URL: 'https://pc1-static.example.test',
+    NOTEBOOKLM_PC1_TOKEN: 'pc1-test'
+  }, async () => 'https://pc1-dynamic.trycloudflare.com');
+  const dynamicRead = await dynamicPc1.dispatch({ method: 'GET', suffix: '/notebooks', query: {}, body: null });
+  assert.equal(dynamicRead.route, 'pc1');
+  assert.match(dynamicCalls[1], /^https:\/\/pc1-dynamic\.trycloudflare\.com\//);
+  assert.equal(dynamicCalls.some((url) => url.includes('pc1-static')), false,
+    'valid dynamic PC1 registry must win over static fallback');
+
+  const staticCalls = [];
+  const staticPc1 = router(makeRepository('auto'), async (url) => {
+    staticCalls.push(String(url));
+    if (String(url).startsWith('https://pc2.example.test')) return response(503, { error: 'offline' });
+    return response(200, { notebooks: ['static'] });
+  }, async () => 'https://pc2.example.test', {
+    NOTEBOOKLM_PC1_URL: 'https://pc1-static.example.test',
+    NOTEBOOKLM_PC1_TOKEN: 'pc1-test'
+  }, async () => null);
+  const staticRead = await staticPc1.dispatch({ method: 'GET', suffix: '/notebooks', query: {}, body: null });
+  assert.equal(staticRead.route, 'pc1');
+  assert.match(staticCalls[1], /^https:\/\/pc1-static\.example\.test\//);
+
+  const noPc1Config = router(makeRepository('auto'), async (url) => {
+    assert.equal(String(url).startsWith('https://pc2.example.test'), false);
+    return response(200, { notebooks: ['cloud'] });
+  }, async () => { throw new Error('pc2 unavailable'); }, {
+    NOTEBOOKLM_PC1_URL: '',
+    NOTEBOOKLM_PC1_TOKEN: ''
+  });
+  const noPc1ConfigRead = await noPc1Config.dispatch({
+    method: 'GET', suffix: '/notebooks', query: {}, body: null
+  });
+  assert.equal(noPc1ConfigRead.route, 'cloud');
 
   const noPc1Calls = [];
   const noPc1Router = router(makeRepository('auto'), async (url, options) => {

@@ -44,6 +44,11 @@ obligatorias:
 * `NOTEBOOKLM_REGISTRY_URL` (solo en el `hub-env.json` privado de PC2,
   opcional): URL HTTPS del registro AGY. Si se omite usa
   `https://agy-ide-production.up.railway.app/api/notebooklm/endpoint`.
+* PC1 usa un registro independiente en
+  `/api/notebooklm/pc1-endpoint`: `NOTEBOOKLM_PC1_REGISTRY_TOKEN` autentica
+  únicamente la publicación del túnel y `NOTEBOOKLM_PC1_TOKEN` autentica las
+  llamadas AGY al Hub. `NOTEBOOKLM_PC1_URL` solo es un respaldo estático
+  explícito si no hay un registro PC1 válido; nunca se comparte con PC2.
 
 `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHANNEL_ID` no son necesarios en modo API.
 Para permitir noticias desde ese modo, configura opcionalmente
@@ -217,7 +222,8 @@ privado con permisos 0600. El estado público se guarda en
 `~/notebooklm-hub/runtime-status.json`.
 
 El supervisor espera la resolución DNS, inicia la API y verifica
-`GET /api/notebooklm/status` con `configured:true` primero en loopback y luego
+`GET /api/notebooklm/status` con `configured:true` y `authenticated:true`
+primero en loopback y luego
 por HTTPS. Solo después publica el origen en el registro durable de AGY:
 
 ```text
@@ -241,6 +247,12 @@ Code Arquitect cada vez que PC2 reinicia. El origen HTTPS sigue siendo igual en
 los tres entornos; los adaptadores añaden `/api/notebooklm` al llamar a la API.
 El registro es solo de transporte: no transfiere cookies, cuentas Google,
 contraseñas ni secretos por la cola de comandos.
+
+PC1 conserva el mismo contrato de salud y CAS, pero con otra fila, proyecto y
+token. AGY resuelve automáticamente en este orden exacto: PC2, PC1 y cloud.
+El registro PC1 solo acepta orígenes HTTPS estrictos de `trycloudflare.com`,
+verifica `/api/notebooklm/status` antes de guardar y nunca modifica la fila de
+PC2.
 
 Ejemplo conceptual en la máquina que ejecuta Python:
 
