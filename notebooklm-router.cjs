@@ -7,7 +7,11 @@ const ROUTER_PROJECT = 'agy-ide-notebooklm-router';
 const VERSION = 1;
 const MAX_JOBS = 1000;
 const ACTOR = 'notebooklm-router-admin-v1';
-const ROUTES = new Set(['auto', 'cloud', 'pc2']);
+// NotebookLM operations are intentionally cloud-only.  PC1/PC2 and
+// Antigravity are separate mission executors and must never become an
+// implicit transport fallback for this API.
+const ROUTES = new Set(['cloud']);
+const LEGACY_ROUTES = new Set(['auto', 'pc2']);
 const ROUTER_ID_RE = /^nlmr_[a-f0-9]{32}$/;
 
 function now() { return new Date().toISOString(); }
@@ -28,7 +32,7 @@ function payloadHash(operation, body) {
   return crypto.createHash('sha256').update(canonical({ operation, body })).digest('hex');
 }
 function emptyDocument() {
-  return { version: VERSION, route: 'pc2', jobs: [], resources: [], updatedAt: now() };
+  return { version: VERSION, route: 'cloud', jobs: [], resources: [], updatedAt: now() };
 }
 function parseDocument(row) {
   if (!row) return null;
@@ -36,7 +40,9 @@ function parseDocument(row) {
   if (typeof value === 'string') {
     try { value = JSON.parse(value); } catch { throw new Error('ROUTER_STORE_INVALID'); }
   }
-  if (!value || value.version !== VERSION || !ROUTES.has(value.route) || !Array.isArray(value.jobs)) {
+  if (!value || value.version !== VERSION
+    || (!ROUTES.has(value.route) && !LEGACY_ROUTES.has(value.route))
+    || !Array.isArray(value.jobs)) {
     throw new Error('ROUTER_STORE_INVALID');
   }
   return {
@@ -119,7 +125,16 @@ function createRouterRepository(store, actor = ACTOR) {
       if (!store || store.configured === false) throw new Error('ROUTER_STORE_NOT_CONFIGURED');
       return (await store.get()) || emptyDocument();
     },
-    getRoute() { return this.getDocument().then((doc) => doc.route); },
+    async getRoute() {
+      const document = await this.getDocument();
+      if (document.route === 'cloud') return 'cloud';
+      // Migrate only the route field.  Jobs/resources are deliberately copied
+      // untouched so this CAS cannot erase durable history.
+      return transact((draft) => {
+        draft.route = 'cloud';
+        return { value: 'cloud' };
+      });
+    },
     setRoute(route) {
       if (!ROUTES.has(route)) throw new Error('ROUTE_INVALID');
       return transact((doc) => { doc.route = route; return { value: route }; });
@@ -195,6 +210,19 @@ function validBase(value) {
 function responseError(status, error, route, code) {
   return { local: true, status, data: { error, route, ...(code ? { code } : {}) }, route };
 }
+async function cloudAuthError(response) {
+  if (!response || response.status !== 401) return null;
+  let code = 'CLOUD_AUTH_REQUIRED';
+  if (typeof response.clone === 'function') {
+    try {
+      const data = await response.clone().json();
+      const upstream = String(data && (data.code || data.error) || '').toUpperCase();
+      if (upstream === 'SESSION_REQUIRED') code = 'CLOUD_SESSION_REQUIRED';
+      else if (upstream === 'SESSION_EXPIRED' || upstream === 'AUTH_SESSION_EXPIRED') code = 'CLOUD_SESSION_EXPIRED';
+    } catch {}
+  }
+  return responseError(401, 'NotebookLM Cloud requiere una sesión de Google válida.', 'cloud', code);
+}
 async function jsonResponse(response) {
   const text = await response.text();
   try { return { data: JSON.parse(text), text }; } catch { return { data: null, text }; }
@@ -209,18 +237,9 @@ function operationFor(suffix, body) {
 function cloudSupports(method, suffix, body) {
   if (method === 'GET') return ['/status', '/notebooks', '/sources', '/nodes', '/jobs'].includes(suffix);
   if (method === 'POST' && suffix === '/notebooks') return true;
-  return method === 'POST' && suffix === '/jobs' && body && body.action === 'notebook_ask';
+  return method === 'POST' && suffix === '/jobs' && body
+    && ['notebook_ask', 'notebook_research'].includes(body.action);
 }
-async function shouldFallbackRead(response) {
-  if ([502, 503, 504].includes(response.status)) return true;
-  if (response.status !== 401 || typeof response.clone !== 'function') return false;
-  try {
-    const data = await response.clone().json();
-    const code = String(data && (data.code || data.error) || '').toUpperCase();
-    return ['SESSION_REQUIRED', 'SESSION_EXPIRED', 'AUTH_SESSION_EXPIRED'].includes(code);
-  } catch { return false; }
-}
-
 function createNotebookRouter(options = {}) {
   const env = options.env || process.env;
   const fetchImpl = options.fetchImpl || globalThis.fetch;
@@ -233,7 +252,7 @@ function createNotebookRouter(options = {}) {
   const repository = options.repository || createRouterRepository(store, actor);
   async function baseFor(route) {
     if (route === 'cloud') return cloudEnabled && cloudBase ? cloudBase : null;
-    return options.resolvePc2Base();
+    return null;
   }
   async function call(route, method, suffix, query, body, timeoutMs) {
     const controller = new AbortController();
@@ -273,9 +292,10 @@ function createNotebookRouter(options = {}) {
     } catch { return false; }
   }
   async function selectRoute(preference, method, suffix, body, readinessTimeout) {
-    if (preference !== 'auto') return preference;
-    if (!cloudSupports(method, suffix, body)) return 'pc2';
-    return await cloudReady(readinessTimeout) ? 'cloud' : 'pc2';
+    // Keep the durable preference for observability, but never let it select
+    // a non-cloud executor.  Availability is reported by dispatch, not by
+    // silently switching to another node.
+    return 'cloud';
   }
   async function rewriteJobResult(data, job) {
     const output = { ...data, id: job.id, jobId: job.id, route: job.executor };
@@ -308,34 +328,30 @@ function createNotebookRouter(options = {}) {
     const { method, suffix, query, body } = input;
     if (suffix === '/routing') {
       if (method === 'GET') {
-        const route = await repository.getRoute();
-        return { local: true, status: 200, data: { route, principal: actor }, route };
+        try { await repository.getRoute(); } catch {
+          return responseError(503, 'No se pudo migrar la configuración durable del router.', null, 'ROUTER_MIGRATION_FAILED');
+        }
+        return { local: true, status: 200, data: { route: 'cloud', principal: actor }, route: 'cloud' };
       }
       if (method === 'PUT') {
         const route = body && body.route;
-        if (!ROUTES.has(route)) return responseError(400, 'route debe ser auto, cloud o pc2.', null, 'ROUTE_INVALID');
-        await repository.setRoute(route);
+        if (!ROUTES.has(route)) return responseError(400, 'route debe ser únicamente cloud.', null, 'ROUTE_INVALID');
+        try { await repository.setRoute(route); } catch {
+          return responseError(503, 'No se pudo persistir la configuración cloud del router.', null, 'ROUTER_MIGRATION_FAILED');
+        }
         return { local: true, status: 200, data: { route, principal: actor }, route };
       }
     }
     let preference;
     try { preference = await repository.getRoute(); } catch {
-      return responseError(503, 'No se pudo leer la configuración durable del router.', null, 'ROUTER_STORE_UNAVAILABLE');
+      return responseError(503, 'No se pudo migrar la configuración durable del router.', null, 'ROUTER_MIGRATION_FAILED');
     }
-    // Preserve the historical 45 second PC2 read allowance. This router budget
-    // starts after durable route resolution; callers with shorter deadlines may
-    // still abort their own request before a safe fallback finishes.
     readDeadline = Date.now() + 45000;
-    const autoCloudDeadline = Date.now() + 10000;
-    const remainingCloudBudget = () => Math.max(1, autoCloudDeadline - Date.now());
     const match = suffix.match(/^\/(jobs|files)\/([^/]+)$/);
     if (match) {
       const id = match[2];
       if (!ROUTER_ID_RE.test(id)) {
-        try {
-          const response = await call('pc2', method, suffix, query, body, 45000);
-          return { response, route: 'pc2' };
-        } catch { return responseError(502, 'No se pudo contactar con PC2.', 'pc2', 'PC2_UNAVAILABLE'); }
+        return responseError(404, 'Identificador de router inválido.', 'cloud', 'ROUTER_ID_INVALID');
       }
       let job;
       let resource;
@@ -347,22 +363,31 @@ function createNotebookRouter(options = {}) {
       }
       if (resource) {
         if (resource.kind !== 'file') return responseError(404, 'Archivo de router desconocido.', null, 'ROUTER_FILE_NOT_FOUND');
+        if (resource.executor !== 'cloud') {
+          return responseError(409, 'El recurso pertenece a una ruta no permitida para NotebookLM cloud.', 'cloud', 'CLOUD_ONLY_ROUTE_REQUIRED');
+        }
         try {
-          const response = await call(resource.executor, method,
+          const response = await call('cloud', method,
             `/files/${encodeURIComponent(resource.upstreamId)}`, query, body, 120000);
-          return { response, route: resource.executor };
+          const authError = await cloudAuthError(response);
+          if (authError) return authError;
+          return { response, route: 'cloud' };
         } catch {
-          return responseError(502, `No se pudo contactar con la ruta ${resource.executor}.`,
-            resource.executor, 'PINNED_ROUTE_UNAVAILABLE');
+          return responseError(502, 'No se pudo contactar con NotebookLM Cloud.', 'cloud', 'CLOUD_UNAVAILABLE');
         }
       }
       if (!job) return responseError(404, 'Trabajo de router desconocido.', null, 'ROUTER_JOB_NOT_FOUND');
+      if (job.executor !== 'cloud') {
+        return responseError(409, 'El trabajo pertenece a una ruta no permitida para NotebookLM cloud.', 'cloud', 'CLOUD_ONLY_ROUTE_REQUIRED');
+      }
       if (job.state !== 'accepted') {
         return responseError(409, 'La aceptación del trabajo no está confirmada; no se reenviará.', job.executor, job.state === 'acceptance_unknown' ? 'ACCEPTANCE_UNKNOWN' : 'JOB_NOT_ACCEPTED');
       }
       try {
         const upstreamSuffix = `/${match[1]}/${encodeURIComponent(job.hubJobId)}`;
-        const response = await call(job.executor, method, upstreamSuffix, query, body, match[1] === 'files' ? 120000 : 45000);
+        const response = await call('cloud', method, upstreamSuffix, query, body, match[1] === 'files' ? 120000 : 45000);
+        const authError = await cloudAuthError(response);
+        if (authError) return authError;
         if (match[1] === 'jobs') {
           const parsed = await jsonResponse(response);
           if (!parsed.data || typeof parsed.data !== 'object') {
@@ -373,46 +398,25 @@ function createNotebookRouter(options = {}) {
             return responseError(503, 'No se pudo guardar la pertenencia de los resultados.',
               job.executor, 'RESOURCE_MAPPING_FAILED');
           }
-          return { local: true, status: response.status, data, route: job.executor };
+          return { local: true, status: response.status, data, route: 'cloud' };
         }
-        return { response, route: job.executor, routerJobId: job.id };
-      } catch { return responseError(502, `No se pudo contactar con la ruta ${job.executor}.`, job.executor, 'PINNED_ROUTE_UNAVAILABLE'); }
+        return { response, route: 'cloud', routerJobId: job.id };
+      } catch { return responseError(502, 'No se pudo contactar con NotebookLM Cloud.', 'cloud', 'CLOUD_UNAVAILABLE'); }
     }
-    const route = await selectRoute(preference, method, suffix, body,
-      preference === 'auto' ? remainingCloudBudget() : remainingReadBudget(45000));
+    const route = 'cloud';
     if (route === 'cloud' && !cloudSupports(method, suffix, body)) {
       return responseError(409, 'Esta operación todavía no está habilitada en cloud.', 'cloud', 'CLOUD_OPERATION_UNSUPPORTED');
     }
     const isJobMutation = method === 'POST' && suffix === '/jobs';
     if (!isJobMutation) {
-      const safeAutoRead = preference === 'auto' && route === 'cloud' && method === 'GET'
-        && ['/status', '/notebooks', '/sources'].includes(suffix);
-      if (safeAutoRead) {
-        try {
-          const cloudResponse = await call('cloud', method, suffix, query, body, remainingCloudBudget());
-          if (!(await shouldFallbackRead(cloudResponse))) {
-            return { response: cloudResponse, route: 'cloud' };
-          }
-        } catch {
-          // A transport failure before a read result is safe to retry on PC2.
-        }
-        try {
-          const pc2Response = await call('pc2', method, suffix, query, body, remainingReadBudget(45000));
-          return { response: pc2Response, route: 'pc2' };
-        } catch {
-          return responseError(502, 'Cloud no respondió y tampoco se pudo contactar con PC2.',
-            'pc2', 'READ_FALLBACK_UNAVAILABLE');
-        }
-      }
       try {
-        const autoSafeTimeout = preference === 'auto' && method === 'GET'
-          && ['/status', '/notebooks', '/sources'].includes(suffix)
-          ? remainingReadBudget(45000) : 45000;
         const response = await call(route, method, suffix, query, body,
-          suffix.startsWith('/files/') ? 120000 : autoSafeTimeout);
+          suffix.startsWith('/files/') ? 120000 : 45000);
+        const authError = await cloudAuthError(response);
+        if (authError) return authError;
         return { response, route };
       } catch {
-        return responseError(502, `No se pudo contactar con la ruta ${route}.`, route, 'ROUTE_UNAVAILABLE');
+        return responseError(502, 'No se pudo contactar con NotebookLM Cloud.', 'cloud', 'CLOUD_UNAVAILABLE');
       }
     }
     let upstreamBody = body;
@@ -434,8 +438,12 @@ function createNotebookRouter(options = {}) {
     } catch {
       return responseError(503, 'No se pudo reservar el trabajo de forma durable; no fue enviado.', route, 'RESERVATION_FAILED');
     }
-    if (reservation.conflict) return responseError(409, 'requestId ya pertenece a otra solicitud.', reservation.job.executor, 'IDEMPOTENCY_CONFLICT');
+    if (reservation.conflict) return responseError(409, 'requestId ya pertenece a otra solicitud.', 'cloud', 'IDEMPOTENCY_CONFLICT');
     const job = reservation.job;
+    if (job.executor !== 'cloud') {
+      return responseError(409, 'La solicitud previa pertenece a una ruta no permitida y no se reintentará.',
+        'cloud', 'CLOUD_ONLY_ROUTE_REQUIRED');
+    }
     if (reservation.existing) {
       if (job.state === 'accepted') return {
         local: true, status: 200,
@@ -453,6 +461,11 @@ function createNotebookRouter(options = {}) {
     try { response = await call(route, method, suffix, query, upstreamBody, 45000); } catch {
       await repository.transition(job.id, ['sending'], 'acceptance_unknown', { uncertaintyCode: 'transport' }).catch(() => {});
       return responseError(502, 'La aceptación del trabajo es desconocida; no se reenviará.', route, 'ACCEPTANCE_UNKNOWN');
+    }
+    const authError = await cloudAuthError(response);
+    if (authError) {
+      await repository.transition(job.id, ['sending'], 'rejected', { uncertaintyCode: authError.data.code }).catch(() => {});
+      return authError;
     }
     const parsed = await jsonResponse(response);
     const hubJobId = parsed.data && (parsed.data.id || parsed.data.jobId || (parsed.data.job && parsed.data.job.id));
@@ -479,5 +492,5 @@ function createNotebookRouter(options = {}) {
 module.exports = {
   ACTOR, MAX_JOBS, ROUTER_ID, ROUTER_PROJECT, ROUTER_ID_RE, ROUTES,
   canonical, payloadHash, parseDocument, rowFor, createSupabaseRouterStore,
-  createRouterRepository, createNotebookRouter, cloudSupports, shouldFallbackRead
+  createRouterRepository, createNotebookRouter, cloudSupports
 };
