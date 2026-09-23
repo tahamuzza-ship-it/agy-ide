@@ -1,7 +1,8 @@
 'use strict';
 const crypto = require('node:crypto');
 const ID = /^[A-Za-z0-9_-]{1,160}$/;
-const REQUEST_TIMEOUT_MS = 50000;
+// Auto routing can wait for PC2, PC1, cloud and the eventual job acceptance.
+const REQUEST_TIMEOUT_MS = 120000;
 const JOB_POLL_TIMEOUT_MS = 20 * 60 * 1000;
 function requestId() {
   return `nlm_${crypto.randomUUID().replaceAll('-', '')}`;

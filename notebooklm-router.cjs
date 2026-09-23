@@ -9,8 +9,8 @@ const MAX_JOBS = 1000;
 const ACTOR = 'notebooklm-router-admin-v1';
 const ROUTES = new Set(['auto', 'pc1', 'cloud', 'pc2']);
 const ROUTE_BUDGETS = Object.freeze({
-  ready: Object.freeze({ pc2: 7000, pc1: 7000, cloud: 10000 }),
-  read: Object.freeze({ pc2: 7000, pc1: 7000, cloud: 10000 })
+  ready: Object.freeze({ pc2: 7000, pc1: 45000, cloud: 10000 }),
+  read: Object.freeze({ pc2: 7000, pc1: 45000, cloud: 10000 })
 });
 const REQUEST_ID_RE = /^[A-Za-z0-9_-]{1,160}$/;
 const ROUTER_ID_RE = /^nlmr_[a-f0-9]{32}$/;
@@ -433,16 +433,29 @@ function createNotebookRouter(options = {}) {
     const safeAutoRead = preference === 'auto' && method === 'GET'
       && ['/status', '/notebooks', '/sources'].includes(suffix);
     if (safeAutoRead) {
+      const attempts = [];
       for (const candidate of priority) {
+        if (!tokenFor(candidate)) {
+          attempts.push({ route: candidate, reason: 'not_configured' });
+          continue;
+        }
         try {
           const candidateResponse = await call(candidate, method, suffix, query, body,
             budgetFor('read', candidate));
           if (!(await shouldFallbackRead(candidateResponse))) {
             return { response: candidateResponse, route: candidate };
           }
-        } catch {}
+          attempts.push({ route: candidate, reason: `http_${candidateResponse.status}` });
+        } catch (error) {
+          attempts.push({
+            route: candidate,
+            reason: error && error.message === 'ROUTE_TIMEOUT' ? 'timeout' : 'unreachable'
+          });
+        }
       }
-      return responseError(502, 'Ninguna ruta NotebookLM disponible.', 'cloud', 'ROUTES_UNAVAILABLE');
+      const failure = responseError(502, 'Ninguna ruta NotebookLM disponible.', 'cloud', 'ROUTES_UNAVAILABLE');
+      failure.data.attempts = attempts;
+      return failure;
     }
     const selected = await selectRoute(preference);
     if (selected && selected.stop) return { response: selected.response, route: selected.route };

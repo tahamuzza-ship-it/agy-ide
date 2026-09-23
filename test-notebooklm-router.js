@@ -3,10 +3,11 @@
 const assert = require('node:assert/strict');
 const {
   ROUTES,
+  ROUTE_BUDGETS,
   createNotebookRouter,
   createRouterRepository
 } = require('./notebooklm-router.cjs');
-const { createNotebookClient } = require('./notebooklm-client.cjs');
+const { createNotebookClient, REQUEST_TIMEOUT_MS } = require('./notebooklm-client.cjs');
 
 function response(status, data) {
   return new Response(JSON.stringify(data), {
@@ -73,6 +74,10 @@ function router(repository, fetchImpl, resolvePc2Base = async () => 'https://pc2
 
 async function main() {
   assert.deepEqual([...ROUTES].sort(), ['auto', 'cloud', 'pc1', 'pc2']);
+  assert.equal(ROUTE_BUDGETS.read.pc1, 45000);
+  assert.equal(ROUTE_BUDGETS.ready.pc1, 45000);
+  assert.ok(REQUEST_TIMEOUT_MS > Object.values(ROUTE_BUDGETS.ready).reduce((a, b) => a + b, 0) + 45000,
+    'the client must outlive all readiness checks and the job acceptance timeout');
   const defaultRepository = createRouterRepository({
     configured: true,
     async get() { return null; },
@@ -240,6 +245,23 @@ async function main() {
     'https://pc1.example.test/api/notebooklm/status',
     'https://pc1.example.test/api/notebooklm/jobs'
   ]);
+
+  const unavailableRouter = router(makeRepository('auto'), async (url) => {
+    if (String(url).startsWith('https://pc2.example.test')) return response(503, { error: 'offline' });
+    if (String(url).startsWith('https://pc1.example.test')) throw new Error('private-upstream-detail');
+    return response(502, { error: 'cloud offline' });
+  });
+  const unavailableRead = await unavailableRouter.dispatch({
+    method: 'GET', suffix: '/notebooks', query: {}, body: null
+  });
+  assert.equal(unavailableRead.status, 502);
+  assert.equal(unavailableRead.data.code, 'ROUTES_UNAVAILABLE');
+  assert.deepEqual(unavailableRead.data.attempts, [
+    { route: 'pc2', reason: 'http_503' },
+    { route: 'pc1', reason: 'unreachable' },
+    { route: 'cloud', reason: 'http_502' }
+  ]);
+  assert.equal(JSON.stringify(unavailableRead).includes('private-upstream-detail'), false);
 
   let mutationCalls = 0;
   const mutationRouter = router(makeRepository('auto'), async (url, options) => {
