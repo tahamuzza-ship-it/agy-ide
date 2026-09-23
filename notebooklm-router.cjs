@@ -517,11 +517,16 @@ function createNotebookRouter(options = {}) {
       return responseError(502, 'La aceptación del trabajo es desconocida; no se reenviará.', route, 'ACCEPTANCE_UNKNOWN');
     }
     const parsed = await jsonResponse(response);
-    const hubJobId = parsed.data && (parsed.data.id || parsed.data.jobId || (parsed.data.job && parsed.data.job.id));
+    const hubJobId = parsed.data && (parsed.data.id || parsed.data.jobId
+      || (parsed.data.job && parsed.data.job.id)
+      || (route === 'pc1' && parsed.data.request_id === key && parsed.data.request_id));
     if (!response.ok || !hubJobId) {
-      const state = response.status >= 500 ? 'acceptance_unknown' : 'rejected';
+      // A successful HTTP acceptance with an unrecognized receipt is not a
+      // rejection: the upstream may already be executing the question.
+      const state = response.status >= 500 || response.ok && !hubJobId
+        ? 'acceptance_unknown' : 'rejected';
       await repository.transition(job.id, ['sending'], state, { uncertaintyCode: state === 'acceptance_unknown' ? `http_${response.status}` : null }).catch(() => {});
-      return responseError(response.status >= 500 ? 502 : response.status, state === 'acceptance_unknown'
+      return responseError(state === 'acceptance_unknown' ? 502 : response.status, state === 'acceptance_unknown'
         ? 'La aceptación del trabajo es desconocida; no se reenviará.'
         : 'El ejecutor rechazó el trabajo.', route, state === 'acceptance_unknown' ? 'ACCEPTANCE_UNKNOWN' : 'UPSTREAM_REJECTED');
     }

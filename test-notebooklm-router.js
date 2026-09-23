@@ -228,10 +228,15 @@ async function main() {
     const target = String(url);
     priorityCalls.push(target);
     if (target.startsWith('https://pc2.example.test')) return response(503, { error: 'offline' });
+    if (target.endsWith('/jobs/priority-1')) {
+      return response(200, { request_id: 'priority-1', status: 'completed', result: { text: 'ok' } });
+    }
     if (target.startsWith('https://pc1.example.test') && options.method === 'GET') {
       return response(200, { configured: true, authenticated: true });
     }
-    if (target.startsWith('https://pc1.example.test')) return response(202, { id: 'pc1-job' });
+    if (target.startsWith('https://pc1.example.test')) {
+      return response(202, { request_id: 'priority-1', status: 'queued' });
+    }
     return response(503, { error: 'cloud should not be reached' });
   });
   const priorityJob = await priorityRouter.dispatch({
@@ -245,6 +250,31 @@ async function main() {
     'https://pc1.example.test/api/notebooklm/status',
     'https://pc1.example.test/api/notebooklm/jobs'
   ]);
+  const priorityResult = await priorityRouter.dispatch({
+    method: 'GET', suffix: `/jobs/${priorityJob.data.id}`, query: {}, body: null
+  });
+  assert.equal(priorityResult.status, 200);
+  assert.equal(priorityResult.data.id, priorityJob.data.id);
+  assert.equal(priorityResult.data.route, 'pc1');
+  assert.equal(priorityResult.data.status, 'completed');
+
+  let missingReceiptPosts = 0;
+  const missingReceiptRouter = router(makeRepository('pc1'), async (_url, options) => {
+    if (options.method === 'GET') return response(200, { configured: true, authenticated: true });
+    missingReceiptPosts++;
+    return response(202, { status: 'queued' });
+  });
+  const missingReceiptInput = {
+    method: 'POST', suffix: '/jobs', query: {},
+    body: { action: 'notebook_ask', notebookId: 'nb', question: 'q', requestId: 'missing-receipt-1' }
+  };
+  const missingReceipt = await missingReceiptRouter.dispatch(missingReceiptInput);
+  assert.equal(missingReceipt.status, 502);
+  assert.equal(missingReceipt.data.code, 'ACCEPTANCE_UNKNOWN');
+  const missingReceiptRetry = await missingReceiptRouter.dispatch(missingReceiptInput);
+  assert.equal(missingReceiptRetry.status, 409);
+  assert.equal(missingReceiptRetry.data.code, 'ACCEPTANCE_UNKNOWN');
+  assert.equal(missingReceiptPosts, 1, 'an unrecognized 202 receipt must never cause a second POST');
 
   const unavailableRouter = router(makeRepository('auto'), async (url) => {
     if (String(url).startsWith('https://pc2.example.test')) return response(503, { error: 'offline' });
