@@ -643,6 +643,7 @@ const TG_BACKUP_CHAT_ID   = '1678588283';
 const TG_WEBHOOK_SECRET   = process.env.TELEGRAM_WEBHOOK_SECRET; // optional but recommended
 
 app.use(express.json({ limit: '8mb' }));
+require('./operator-invitation.cjs').registerInvitationRoutes(app);
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, filePath) {
     if (filePath.endsWith('.html')) {
