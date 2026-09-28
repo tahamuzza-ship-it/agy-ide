@@ -12,22 +12,27 @@ const { invitationPage } = require(path.join(ROOT, 'operator-invitation-page.cjs
 const express = require('express');
 const ORIGIN = 'https://agy-ide-production.up.railway.app';
 const URL2 = 'https://lxlcivzuevowckbcxczc.supabase.co';
-// Synthetic tokens, never credentials. Fingerprint substitution exists ONLY in this VM.
-function fixtureKey(role = 'anon', ref = 'lxlcivzuevowckbcxczc') {
-  return 'eyJhbGciOiJIUzI1NiJ9.' +
-    Buffer.from(JSON.stringify({ role, ref })).toString('base64url') + '.test_only_signature';
-}
-const PUBLIC_KEY = fixtureKey();
+// Opaque synthetic strings, never credentials. Pins substituted ONLY inside this VM.
+const PUBLIC_KEY = 'sb_publishable_fixture_only_no_real_key_A001';
 const ENV = { AGY_OPERATOR_INVITATIONS_ENABLED: 'true', AGY_OPERATOR_ORIGIN: ORIGIN,
-  SUPABASE_URL_2: URL2, SUPABASE_ANON_KEY_2: PUBLIC_KEY };
-function isolatedReceiver({ pin = false, sdk } = {}) {
+  SUPABASE_URL_2: URL2, SUPABASE_PUBLISHABLE_KEY_2: PUBLIC_KEY };
+function trapLegacy(env) {
+  for (const name of ['SUPABASE_ANON_KEY_2', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SERVICE_ROLE_KEY_2',
+    'SUPABASE_SECRET_KEY_2']) {
+    Object.defineProperty(env, name, {
+      get() { throw Error('Invitation must not read other key: ' + name); },
+    });
+  }
+  return env;
+}
+function isolatedReceiver({ pin = false, pinnedKey = PUBLIC_KEY, sdk } = {}) {
   const filename = path.join(ROOT, 'operator-invitation.cjs');
   let source = readFileSync(filename, 'utf8');
   if (pin) {
-    const marker = 'const VERIFIED_ANON_KEY_SHA256 = null;';
+    const marker = 'const VERIFIED_PUBLISHABLE_KEY_2_SHA256 = null;';
     assert.ok(source.includes(marker));
-    source = source.replace(marker, 'const VERIFIED_ANON_KEY_SHA256 = ' +
-      JSON.stringify(createHash('sha256').update(PUBLIC_KEY).digest('hex')) + ';');
+    source = source.replace(marker, 'const VERIFIED_PUBLISHABLE_KEY_2_SHA256 = ' +
+      JSON.stringify(createHash('sha256').update(pinnedKey).digest('hex')) + ';');
   }
   const counters = { sdkLoads: 0, network: 0 };
   const localRequire = createRequire(filename);
@@ -78,23 +83,22 @@ test('disabled independently of operator auth and explicit credentials; never ca
   assert.equal(calls, 0);
   for (const bad of [undefined, 'https://other.supabase.co', URL2 + '/auth/v1', URL2 + '?x=1']) {
     assert.equal(createInvitationReceiver({ env: { AGY_OPERATOR_INVITATIONS_ENABLED: 'true',
-      AGY_OPERATOR_ORIGIN: ORIGIN, SUPABASE_URL_2: bad,
-      SUPABASE_SERVICE_ROLE_KEY: 'test-only-not-real' } }).ready(), false);
+      AGY_OPERATOR_ORIGIN: ORIGIN, SUPABASE_URL_2: bad } }).ready(), false);
   }
   assert.equal(createInvitationReceiver({ env: { AGY_OPERATOR_INVITATIONS_ENABLED: 'true',
     AGY_OPERATOR_ORIGIN: ORIGIN, SUPABASE_URL_2: URL2 } }).ready(), false);
 });
 
-test('missing, privileged, unattested or other-project configuration blocks before SDK/network', async () => {
+test('missing, wrong type, same-type other-project string, unattested or wrong origin blocks before SDK/network', async () => {
   const invalid = [
-    { SUPABASE_ANON_KEY_2: undefined },
-    { SUPABASE_ANON_KEY_2: '' },
-    { SUPABASE_ANON_KEY_2: fixtureKey('service_role') },
-    { SUPABASE_ANON_KEY_2: fixtureKey('anon', 'other-project') },
-    { SUPABASE_ANON_KEY_2: PUBLIC_KEY + 'changed' },
-    { SUPABASE_ANON_KEY_2: 'sb_secret_test_only' },
-    { SUPABASE_ANON_KEY_2: 'sb_publishable_unattested_test_only' },
-    { SUPABASE_ANON_KEY_2: 'invalid' },
+    { SUPABASE_PUBLISHABLE_KEY_2: undefined },
+    { SUPABASE_PUBLISHABLE_KEY_2: '' },
+    { SUPABASE_PUBLISHABLE_KEY_2: 'sb_secret_fixture_only_no_real_key_B002' },
+    { SUPABASE_PUBLISHABLE_KEY_2: PUBLIC_KEY + '_simulated_other_project' },
+    { SUPABASE_PUBLISHABLE_KEY_2: 'sb_publishable_unattested_test_only' },
+    { SUPABASE_PUBLISHABLE_KEY_2: 'eyJ.fixture.jwt' },
+    { SUPABASE_PUBLISHABLE_KEY_2: 'sb_publishable_short' },
+    { SUPABASE_PUBLISHABLE_KEY_2: 'invalid' },
     { SUPABASE_URL_2: undefined },
     { SUPABASE_URL_2: 'https://other.supabase.co' },
     { SUPABASE_URL_2: URL2 + '/' },
@@ -104,14 +108,11 @@ test('missing, privileged, unattested or other-project configuration blocks befo
     { AGY_OPERATOR_ORIGIN: ORIGIN.replace('https:', 'http:') },
     { AGY_OPERATOR_INVITATIONS_ENABLED: 'false' },
   ];
-  // With no real attestation, even well-formed matching claims must stay disabled.
+  // With no real attestation, even well-formed prefix must stay disabled.
   for (const pin of [false, true]) {
     const { create, counters } = isolatedReceiver({ pin });
     for (const overrides of pin ? invalid : [{}, ...invalid]) {
-      const env = { ...ENV, ...overrides };
-      Object.defineProperty(env, 'SUPABASE_SERVICE_ROLE_KEY', {
-        get() { throw Error('privileged key must never be read'); },
-      });
+      const env = trapLegacy({ ...ENV, ...overrides });
       assert.equal(create({ env }).ready(), false);
       let providerCalls = 0;
       const receiver = create({ env, provider: {
@@ -126,6 +127,18 @@ test('missing, privileged, unattested or other-project configuration blocks befo
     }
     assert.deepEqual(counters, { sdkLoads: 0, network: 0 });
   }
+});
+
+test('even an independently pinned wrong syntactic type fails before SDK', () => {
+  let sdkLoads = 0;
+  const invalidKey = 'sb_secret_fixture_only_no_real_key_B002';
+  const { create, counters } = isolatedReceiver({
+    pin: true, pinnedKey: invalidKey,
+    sdk: { createClient() { sdkLoads++; throw Error('SDK must not load'); } },
+  });
+  assert.equal(create({ env: trapLegacy({ ...ENV, SUPABASE_PUBLISHABLE_KEY_2: invalidKey }) }).ready(), false);
+  assert.equal(sdkLoads, 0);
+  assert.deepEqual(counters, { sdkLoads: 0, network: 0 });
 });
 
 test('isolated attested fixture uses only public key and invited user session', async () => {
@@ -157,10 +170,7 @@ test('isolated attested fixture uses only public key and invited user session', 
       } };
     },
   } });
-  const env = { ...ENV };
-  Object.defineProperty(env, 'SUPABASE_SERVICE_ROLE_KEY', {
-    get() { throw Error('privileged key must never be read'); },
-  });
+  const env = trapLegacy({ ...ENV });
   const h = await serve(create({ env }));
   try {
     const response = await post(h.url);
@@ -176,7 +186,7 @@ test('controlled invitation has no MCP, SQL, grant, session or cookies; rejects 
   let calls = 0;
   const { create } = isolatedReceiver({ pin: true });
   const h = await serve(create({
-    env: { ...ENV },
+    env: trapLegacy({ ...ENV }),
     provider: { async acceptInvitation(access, refresh, password) {
       calls++;
       assert.equal(access, invite.accessToken);

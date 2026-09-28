@@ -15,16 +15,14 @@ const USER = { id: '11111111-1111-4111-8111-111111111111', email: 'operator@exam
 const NOGRANT = { id: '22222222-2222-4222-8222-222222222222', email: 'nogrant@example.test',
   email_confirmed_at: '2026-01-01T00:00:00Z' };
 const PASSWORD = 'controlled-fixture-password-not-a-secret';
-const PUBLIC_KEY = 'eyJhbGciOiJIUzI1NiJ9.' +
-  Buffer.from(JSON.stringify({ role: 'anon', ref: 'lxlcivzuevowckbcxczc' })).toString('base64url') + '.synthetic_signature';
-const SERVICE_KEY = 'eyJhbGciOiJIUzI1NiJ9.' +
-  Buffer.from(JSON.stringify({ role: 'service_role', ref: 'lxlcivzuevowckbcxczc' })).toString('base64url') +
-  '.synthetic_service_signature';
+const PUBLIC_KEY = 'sb_publishable_fixture_only_no_real_key_A001';
+const SERVICE_KEY = 'sb_secret_fixture_only_no_real_key_B002';
 const ENV = { AGY_OPERATOR_AUTH_ENABLED: 'true', AGY_OPERATOR_ORIGIN: ORIGIN,
-  SUPABASE_URL_2: URL2, SUPABASE_ANON_KEY_2: PUBLIC_KEY,
-  SUPABASE_SERVICE_ROLE_KEY_2: SERVICE_KEY };
+  SUPABASE_URL_2: URL2, SUPABASE_PUBLISHABLE_KEY_2: PUBLIC_KEY,
+  SUPABASE_SECRET_KEY_2: SERVICE_KEY };
 
-function loadInMemory({ sdk, pin = true, privilegedPin = true, privilegedKey = SERVICE_KEY, unlock = true } = {}) {
+function loadInMemory({ sdk, fetchImpl, pin = true, publicKey = PUBLIC_KEY, privilegedPin = true,
+  privilegedKey = SERVICE_KEY, unlock = true } = {}) {
   const filename = path.join(ROOT, 'operator-auth.cjs');
   let source = fs.readFileSync(filename, 'utf8');
   if (unlock) {
@@ -33,15 +31,15 @@ function loadInMemory({ sdk, pin = true, privilegedPin = true, privilegedKey = S
     source = source.replace(marker, 'const OPERATOR_AUTH_RELEASE_ENABLED = true;');
   }
   if (pin) {
-    const marker = 'const VERIFIED_AUTH_ANON_KEY_SHA256 = null;';
+    const marker = 'const VERIFIED_PUBLISHABLE_KEY_2_SHA256 = null;';
     if (!source.includes(marker)) throw Error('Production public-key pin changed');
-    source = source.replace(marker, 'const VERIFIED_AUTH_ANON_KEY_SHA256 = ' +
-      JSON.stringify(createHash('sha256').update(PUBLIC_KEY).digest('hex')) + ';');
+    source = source.replace(marker, 'const VERIFIED_PUBLISHABLE_KEY_2_SHA256 = ' +
+      JSON.stringify(createHash('sha256').update(publicKey).digest('hex')) + ';');
   }
   if (privilegedPin) {
-    const marker = 'const VERIFIED_SERVICE_ROLE_KEY_2_SHA256 = null;';
+    const marker = 'const VERIFIED_SECRET_KEY_2_SHA256 = null;';
     if (!source.includes(marker)) throw Error('Production privileged-key pin changed');
-    source = source.replace(marker, 'const VERIFIED_SERVICE_ROLE_KEY_2_SHA256 = ' +
+    source = source.replace(marker, 'const VERIFIED_SECRET_KEY_2_SHA256 = ' +
       JSON.stringify(createHash('sha256').update(privilegedKey).digest('hex')) + ';');
   }
   const counters = { sdk: 0, network: 0 };
@@ -57,7 +55,11 @@ function loadInMemory({ sdk, pin = true, privilegedPin = true, privilegedKey = S
       return originalRequire(name);
     },
     process: { env: {} },
-    fetch() { counters.network++; throw Error('External network is forbidden in tests'); },
+    fetch(...args) {
+      counters.network++;
+      if (fetchImpl) return fetchImpl(...args); // intercepted local response only
+      throw Error('External network is forbidden in tests');
+    },
   }, { filename });
   return { ...module.exports, counters };
 }

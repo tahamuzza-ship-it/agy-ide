@@ -5,31 +5,26 @@ const { createHash } = require('node:crypto');
 const { invitationPage } = require('./operator-invitation-page.cjs');
 const SUPABASE_ORIGIN = 'https://lxlcivzuevowckbcxczc.supabase.co';
 const OPERATOR_ORIGIN = 'https://agy-ide-production.up.railway.app';
-// No public key has been independently attested for this project.
-// Keep null until a separately authorized review pins its SHA-256 (never the key).
-const VERIFIED_ANON_KEY_SHA256 = null;
+// Modern Publishable keys are opaque; their prefix is type, NOT project proof.
+// Keep null until a separately authorized, independent attestation of this exact key.
+const VERIFIED_PUBLISHABLE_KEY_2_SHA256 = null;
 const PATH = '/api/agy/operator/invitation';
 
-function validPublicKey(key) {
-  if (typeof key !== 'string' || key.length > 8192 ||
-      !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(key)) return false;
-  try {
-    const claims = JSON.parse(Buffer.from(key.split('.')[1], 'base64url').toString('utf8'));
-    // Decoding claims is NOT proof of project ownership or signature validity.
-    // Only an independently attested fingerprint can enable this receiver.
-    return claims?.role === 'anon' && claims.ref === 'lxlcivzuevowckbcxczc' &&
-      typeof VERIFIED_ANON_KEY_SHA256 === 'string' &&
-      /^[a-f0-9]{64}$/.test(VERIFIED_ANON_KEY_SHA256) &&
-      createHash('sha256').update(key).digest('hex') === VERIFIED_ANON_KEY_SHA256;
-  } catch { return false; }
+function validPublishableKey(key) {
+  // Only an independently attested exact digest binds the key to Supabase 2.
+  return typeof key === 'string' && key.length <= 8192 &&
+    /^sb_publishable_[A-Za-z0-9_-]{8,}$/.test(key) &&
+    typeof VERIFIED_PUBLISHABLE_KEY_2_SHA256 === 'string' &&
+    /^[a-f0-9]{64}$/.test(VERIFIED_PUBLISHABLE_KEY_2_SHA256) &&
+    createHash('sha256').update(key).digest('hex') === VERIFIED_PUBLISHABLE_KEY_2_SHA256;
 }
 
 function createInvitationReceiver({ env = process.env, provider, now = Date.now } = {}) {
   const origin = env.AGY_OPERATOR_ORIGIN;
-  const publicKey = env.SUPABASE_ANON_KEY_2;
+  const publicKey = env.SUPABASE_PUBLISHABLE_KEY_2;
   const enabled = env.AGY_OPERATOR_INVITATIONS_ENABLED === 'true' &&
     origin === OPERATOR_ORIGIN && env.SUPABASE_URL_2 === SUPABASE_ORIGIN &&
-    validPublicKey(publicKey);
+    validPublishableKey(publicKey);
   // Validate ALL configuration before loading the SDK or making any network call.
   // Injected test providers cannot bypass these checks. No privileged-key fallback.
   if (provider === undefined && enabled) {

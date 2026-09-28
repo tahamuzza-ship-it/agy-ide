@@ -10,39 +10,30 @@ const APP = 'agy-ide';
 const OPERATOR_SUPABASE_ORIGIN = 'https://lxlcivzuevowckbcxczc.supabase.co';
 const OPERATOR_ORIGIN = 'https://agy-ide-production.up.railway.app';
 const OPERATOR_AUTH_RELEASE_ENABLED = false;
-// No public key was independently attested; decode claims AND pin independently before a later approval.
-const VERIFIED_AUTH_ANON_KEY_SHA256 = null;
-// This pin is independent of the anon pin. The database client must NEVER
-// reuse the legacy SUPABASE_SERVICE_ROLE_KEY (which may belong to another project).
-const VERIFIED_SERVICE_ROLE_KEY_2_SHA256 = null;
+// Opaque modern keys: prefixes indicate syntax/type, NOT project provenance.
+// Independent out-of-band attestation of both exact key fingerprints is pending.
+const VERIFIED_PUBLISHABLE_KEY_2_SHA256 = null;
+const VERIFIED_SECRET_KEY_2_SHA256 = null;
 const COOKIE = { sid: '__Host-agy_operator', token: '__Host-agy_identity', csrf: '__Host-agy_csrf' };
 const digest = value => createHash('sha256').update(value).digest('hex');
 const fail = (status, code) => { throw new OperatorError(status, code); };
 const same = (a, b) => typeof a === 'string' && typeof b === 'string' &&
   Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
-function validPublicKey(key) {
-  if (typeof key !== 'string' || key.length > 8192 ||
-      !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(key)) return false;
-  try {
-    const claims = JSON.parse(Buffer.from(key.split('.')[1], 'base64url').toString('utf8'));
-    // Claims are not evidence of the key's origin: only independent SHA-256 pinning is.
-    return claims?.role === 'anon' && claims.ref === 'lxlcivzuevowckbcxczc' &&
-      typeof VERIFIED_AUTH_ANON_KEY_SHA256 === 'string' &&
-      /^[a-f0-9]{64}$/.test(VERIFIED_AUTH_ANON_KEY_SHA256) &&
-      digest(key) === VERIFIED_AUTH_ANON_KEY_SHA256;
-  } catch { return false; }
+function validPublishableKey(key) {
+  // Modern sb_publishable_ keys are opaque; NEVER decode them as JWTs.
+  return typeof key === 'string' && key.length <= 8192 &&
+    /^sb_publishable_[A-Za-z0-9_-]{8,}$/.test(key) &&
+    typeof VERIFIED_PUBLISHABLE_KEY_2_SHA256 === 'string' &&
+    /^[a-f0-9]{64}$/.test(VERIFIED_PUBLISHABLE_KEY_2_SHA256) &&
+    same(digest(key), VERIFIED_PUBLISHABLE_KEY_2_SHA256);
 }
-function validServiceRoleKey(key) {
-  if (typeof key !== 'string' || key.length > 8192 ||
-      !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(key)) return false;
-  try {
-    const claims = JSON.parse(Buffer.from(key.split('.')[1], 'base64url').toString('utf8'));
-    // JWT claims alone are NOT proof; require an independently attested fingerprint.
-    return claims?.role === 'service_role' && claims.ref === 'lxlcivzuevowckbcxczc' &&
-      typeof VERIFIED_SERVICE_ROLE_KEY_2_SHA256 === 'string' &&
-      /^[a-f0-9]{64}$/.test(VERIFIED_SERVICE_ROLE_KEY_2_SHA256) &&
-      digest(key) === VERIFIED_SERVICE_ROLE_KEY_2_SHA256;
-  } catch { return false; }
+function validSecretKey(key) {
+  // Secret is for the server-side store ONLY, never for browser or Auth flows.
+  return typeof key === 'string' && key.length <= 8192 &&
+    /^sb_secret_[A-Za-z0-9_-]{8,}$/.test(key) &&
+    typeof VERIFIED_SECRET_KEY_2_SHA256 === 'string' &&
+    /^[a-f0-9]{64}$/.test(VERIFIED_SECRET_KEY_2_SHA256) &&
+    same(digest(key), VERIFIED_SECRET_KEY_2_SHA256);
 }
 function cookies(req) {
   const out = {};
@@ -67,22 +58,23 @@ function identity(user) {
 }
 
 function createSupabaseAdapters(env = process.env) {
-  // Check all public config before reading the project-specific DB credential.
-  // Never read or fall back to the legacy SUPABASE_SERVICE_ROLE_KEY.
+  // Check all public config before reading project-specific Secret. NEVER read
+  // legacy anon/service-role names, accept env-supplied pins, or infer provenance from prefixes.
   if (!OPERATOR_AUTH_RELEASE_ENABLED || env.AGY_OPERATOR_AUTH_ENABLED !== 'true' ||
       env.AGY_OPERATOR_ORIGIN !== OPERATOR_ORIGIN ||
-      env.SUPABASE_URL_2 !== OPERATOR_SUPABASE_ORIGIN ||
-      !validPublicKey(env.SUPABASE_ANON_KEY_2)) return null;
-  // Reject a mismatched/unattested DB credential BEFORE loading SDK or making requests.
-  const key = env.SUPABASE_SERVICE_ROLE_KEY_2;
-  if (!validServiceRoleKey(key)) return null;
+      env.SUPABASE_URL_2 !== OPERATOR_SUPABASE_ORIGIN) return null;
+  const publicKey = env.SUPABASE_PUBLISHABLE_KEY_2;
+  if (!validPublishableKey(publicKey)) return null;
+  // Reject mismatched/unattested Secret BEFORE loading SDK or making requests.
+  const key = env.SUPABASE_SECRET_KEY_2;
+  if (!validSecretKey(key)) return null;
   const { createClient } = require('@supabase/supabase-js');
   const options = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: { fetch: (url, init = {}) => fetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(8000) }) } };
   // The privileged DB client NEVER signs in. Separate public-key Auth clients
   // cannot replace the privileged grant/session storage client.
   const db = createClient(OPERATOR_SUPABASE_ORIGIN, key, options);
-  const auth = () => createClient(OPERATOR_SUPABASE_ORIGIN, env.SUPABASE_ANON_KEY_2, options).auth;
+  const auth = () => createClient(OPERATOR_SUPABASE_ORIGIN, publicKey, options).auth;
   async function check(query) {
     const { data, error } = await query;
     if (error) fail(503, 'OPERADOR_ALMACEN_NO_DISPONIBLE');
