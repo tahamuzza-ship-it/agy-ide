@@ -646,6 +646,7 @@ app.use(express.json({ limit: '8mb' }));
 require('./operator-invitation.cjs').registerInvitationRoutes(app);
 // Separate, fail-closed operator login/session/logout. No MCP registration here.
 require('./operator-auth.cjs').createOperatorAuthority().routes(app, requirePwd);
+require('./yarbis-mcp.cjs').registerMcpRoutes(app, requirePwd);
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, filePath) {
     if (filePath.endsWith('.html')) {
