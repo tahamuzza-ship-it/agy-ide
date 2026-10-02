@@ -11,9 +11,11 @@ const OPERATOR_SUPABASE_ORIGIN = 'https://lxlcivzuevowckbcxczc.supabase.co';
 const OPERATOR_ORIGIN = 'https://agy-ide-production.up.railway.app';
 const OPERATOR_AUTH_RELEASE_ENABLED = false;
 // Opaque modern keys: prefixes indicate syntax/type, NOT project provenance.
-// Independent out-of-band attestation of both exact key fingerprints is pending.
-const VERIFIED_PUBLISHABLE_KEY_2_SHA256 = null;
-const VERIFIED_SECRET_KEY_2_SHA256 = null;
+// Operator supplied these SHA-256 digests from the offline checker and declared
+// a comparison with Railway. Live server matching is NOT yet independently tested.
+// Recording fingerprints does not enable this release or the native MCP provider.
+const VERIFIED_PUBLISHABLE_KEY_2_SHA256 = '3c523619e6b6edd67af075609b181f41fe07c2e475433d8c44026c9c8d5755e1';
+const VERIFIED_SECRET_KEY_2_SHA256 = '26b0e1dadf559d675fe7436503718732a42b1ec619fc974729c03442b5ea36c3';
 const COOKIE = { sid: '__Host-agy_operator', token: '__Host-agy_identity', csrf: '__Host-agy_csrf' };
 const NATIVE_MCP_SCOPES = Object.freeze(['agy.capabilities.read', 'agy.help.read']);
 const OPERATOR_SCOPES = Object.freeze(['memory.read', 'execution.propose', ...NATIVE_MCP_SCOPES]);
