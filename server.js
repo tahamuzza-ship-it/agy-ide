@@ -11,6 +11,11 @@ const {
 } = require('./notebooklm-cloud-admin.cjs');
 
 const app  = express();
+// Isolated native provider: independent OFF gate, before body/static middleware.
+require('./mcp-phase1/register.cjs').registerProviderReview(app, {
+  getOperatorAuthority: () => agyOperatorAuthority,
+  getIssuer: () => process.env.AGY_OPERATOR_ORIGIN,
+});
 const PORT = process.env.PORT || 3000;
 
 // Nombre histórico conservado para evitar una migración mecánica masiva.
@@ -644,8 +649,9 @@ const TG_WEBHOOK_SECRET   = process.env.TELEGRAM_WEBHOOK_SECRET; // optional but
 
 app.use(express.json({ limit: '8mb' }));
 require('./operator-invitation.cjs').registerInvitationRoutes(app);
-// Separate, fail-closed operator login/session/logout. No MCP registration here.
-require('./operator-auth.cjs').createOperatorAuthority().routes(app, requirePwd);
+// One canonical authority for login and the separately gated native provider.
+const agyOperatorAuthority = require('./operator-auth.cjs').createOperatorAuthority();
+agyOperatorAuthority.routes(app, requirePwd);
 require('./yarbis-mcp.cjs').registerMcpRoutes(app, requirePwd);
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, filePath) {

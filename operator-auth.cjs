@@ -15,7 +15,29 @@ const OPERATOR_AUTH_RELEASE_ENABLED = false;
 const VERIFIED_PUBLISHABLE_KEY_2_SHA256 = null;
 const VERIFIED_SECRET_KEY_2_SHA256 = null;
 const COOKIE = { sid: '__Host-agy_operator', token: '__Host-agy_identity', csrf: '__Host-agy_csrf' };
+const NATIVE_MCP_SCOPES = Object.freeze(['agy.capabilities.read', 'agy.help.read']);
+const OPERATOR_SCOPES = Object.freeze(['memory.read', 'execution.propose', ...NATIVE_MCP_SCOPES]);
+// Preserve Node >=18 compatibility: AbortSignal.any is not present in early 18.
+function requestSignal(original) {
+  const timeout = AbortSignal.timeout(8000);
+  if (!original) return timeout;
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any([original, timeout]);
+  const controller = new AbortController();
+  const abort = () => {
+    original.removeEventListener('abort', abort);
+    timeout.removeEventListener('abort', abort);
+    controller.abort();
+  };
+  if (original.aborted || timeout.aborted) abort();
+  else {
+    original.addEventListener('abort', abort, { once: true });
+    timeout.addEventListener('abort', abort, { once: true });
+  }
+  return controller.signal;
+}
 const digest = value => createHash('sha256').update(value).digest('hex');
+// Only the canonical permission can be unbounded. Sessions remain finite.
+const grantExpiry = value => value === 'infinity' ? Number.POSITIVE_INFINITY : Date.parse(value);
 const fail = (status, code) => { throw new OperatorError(status, code); };
 const same = (a, b) => typeof a === 'string' && typeof b === 'string' &&
   Buffer.byteLength(a) === Buffer.byteLength(b) && timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -70,17 +92,21 @@ function createSupabaseAdapters(env = process.env) {
   if (!validSecretKey(key)) return null;
   const { createClient } = require('@supabase/supabase-js');
   const options = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    global: { fetch: (url, init = {}) => fetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(8000) }) } };
+    global: { fetch: (url, init = {}) => fetch(url, { ...init, redirect: 'error',
+      signal: requestSignal(init.signal) }) } };
   // The privileged DB client NEVER signs in. Separate public-key Auth clients
   // cannot replace the privileged grant/session storage client.
   const db = createClient(OPERATOR_SUPABASE_ORIGIN, key, options);
   const auth = () => createClient(OPERATOR_SUPABASE_ORIGIN, publicKey, options).auth;
+  const nativeMcp = require('./mcp-phase1/src/supabase-authority.cjs')
+    .createSupabaseAuthority({ db, auth: { auth: { getUser: token => auth().getUser(token) } } });
   async function check(query) {
     const { data, error } = await query;
     if (error) fail(503, 'OPERADOR_ALMACEN_NO_DISPONIBLE');
     return data;
   }
   return {
+    nativeMcp,
     provider: {
       async login(email, password) {
         const { data, error } = await auth().signInWithPassword({ email, password });
@@ -114,6 +140,13 @@ function createOperatorAuthority({ adapters, env = process.env, now = Date.now }
   const attempts = new Map();
   function ready() { return Boolean(OPERATOR_AUTH_RELEASE_ENABLED && configured && validOrigin); }
   function requireReady() { if (!ready()) fail(503, 'OPERADOR_AUTORIDAD_NO_CONFIGURADA'); }
+  const nativeMcp = configured?.nativeMcp;
+  const nativeCapability = nativeMcp && typeof nativeMcp.call === 'function' &&
+    typeof nativeMcp.identity === 'function' ? Object.freeze({
+      call(...args) { requireReady(); return nativeMcp.call(...args); },
+      identity(...args) { requireReady(); return nativeMcp.identity(...args); },
+    }) : null;
+  function getNativeMcpAuthority() { return ready() ? nativeCapability : null; }
   function protect(req) {
     requireReady();
     if (req.headers.origin !== origin || req.headers['x-agy-operator-request'] !== '1' ||
@@ -150,18 +183,42 @@ function createOperatorAuthority({ adapters, env = process.env, now = Date.now }
     const user = identity(await configured.provider.user(token));
     if (user.id !== session.user_id) fail(401, 'OPERADOR_SESION_INVALIDA');
     const grant = await configured.store.grant(user.id); // NO authorization cache.
-    const expires = grant && Date.parse(grant.expires_at);
+    const expires = grant && grantExpiry(grant.expires_at);
     const allowed = grant && grant.user_id === user.id && grant.application === APP && !grant.revoked_at &&
-      Number.isFinite(expires) && expires > now() && Array.isArray(grant.scopes) &&
-      grant.scopes.length > 0 && grant.scopes.every(s => ['memory.read', 'execution.propose'].includes(s));
+      (Number.isFinite(expires) || expires === Number.POSITIVE_INFINITY) &&
+      expires > now() && Array.isArray(grant.scopes) &&
+      grant.scopes.length > 0 && grant.scopes.every(s => OPERATOR_SCOPES.includes(s));
     return { user, session, grant: allowed ? grant : null, proof };
   }
   async function verifyOperator(req) {
     const state = await current(req, true);
     if (!state.grant) fail(403, 'OPERADOR_AGY_SIN_PERMISO');
     return { audience: APP, subject: state.user.id, sessionId: state.session.id_hash,
-      scopes: state.grant.scopes, expiresAt: Math.min(Date.parse(state.session.expires_at), Date.parse(state.grant.expires_at)),
+      scopes: state.grant.scopes, expiresAt: Math.min(Date.parse(state.session.expires_at), grantExpiry(state.grant.expires_at)),
       csrfVerified: true };
+  }
+  // Private adapter: reuse the canonical online identity, session and app grant.
+  async function resolveNativeMcpOperator(req) {
+    requireReady();
+    const approvalPage = req.method === 'GET' &&
+      /^\/api\/agy\/link\/approve\/[A-Za-z0-9_-]{43}$/.test(req.path || '');
+    const approvalForm = req.method === 'POST' && req.path === '/api/agy/link/approve';
+    if (!approvalPage && !approvalForm) fail(403, 'OPERADOR_MCP_RUTA_INVALIDA');
+    if (req.headers.host !== new URL(origin).host) fail(403, 'OPERADOR_ORIGEN_INVALIDO');
+    const state = await current(req);
+    if (!state.grant) fail(403, 'OPERADOR_AGY_SIN_PERMISO');
+    const scopes = [...new Set(state.grant.scopes.filter(s => NATIVE_MCP_SCOPES.includes(s)))];
+    if (!scopes.length) fail(403, 'OPERADOR_MCP_SIN_PERMISO');
+    if (approvalForm && (req.headers.origin !== origin ||
+        (req.headers['sec-fetch-site'] && req.headers['sec-fetch-site'] !== 'same-origin') ||
+        !same(req.body?.csrf_token, state.proof))) fail(403, 'OPERADOR_CSRF_INVALIDO');
+    const values = cookies(req);
+    return {
+      audience: APP, issuer: origin, operatorId: state.user.id, scopes,
+      sessionId: values[COOKIE.sid], accessToken: values[COOKIE.token],
+      csrfToken: state.proof, csrfVerified: approvalForm,
+      expiresAt: Math.min(Date.parse(state.session.expires_at), grantExpiry(state.grant.expires_at)),
+    };
   }
   function routes(app, requirePwd) {
     const wrap = handler => async (req, res) => {
@@ -208,6 +265,6 @@ function createOperatorAuthority({ adapters, env = process.env, now = Date.now }
       res.json({ ok: true });
     }));
   }
-  return { ready, verifyOperator, routes };
+  return { ready, verifyOperator, resolveNativeMcpOperator, getNativeMcpAuthority, routes };
 }
 module.exports = { createOperatorAuthority, createSupabaseAdapters };
