@@ -1,6 +1,6 @@
 'use strict';
 
-// REVIEW ONLY: immutable lock; no production login/session/logout until separate authorization.
+// Individually authorized operator sessions; immutable release gate plus pinned config.
 // No enrollment or grant-management HTTP API. Invitation receiver is a separate deployed module.
 const { randomBytes, createHash, timingSafeEqual } = require('node:crypto');
 class OperatorError extends Error {
@@ -9,7 +9,9 @@ class OperatorError extends Error {
 const APP = 'agy-ide';
 const OPERATOR_SUPABASE_ORIGIN = 'https://lxlcivzuevowckbcxczc.supabase.co';
 const OPERATOR_ORIGIN = 'https://agy-ide-production.up.railway.app';
-const OPERATOR_AUTH_RELEASE_ENABLED = false;
+// Explicit operator authorization received for read-only AGY/Make activation.
+// Supabase key pins, per-application grants, CSRF and revocation remain mandatory.
+const OPERATOR_AUTH_RELEASE_ENABLED = true;
 // Opaque modern keys: prefixes indicate syntax/type, NOT project provenance.
 // Operator supplied these SHA-256 digests from the offline checker and declared
 // a comparison with Railway. Live server matching is NOT yet independently tested.
@@ -149,6 +151,29 @@ function createOperatorAuthority({ adapters, env = process.env, now = Date.now }
       identity(...args) { requireReady(); return nativeMcp.identity(...args); },
     }) : null;
   function getNativeMcpAuthority() { return ready() ? nativeCapability : null; }
+  let healthValue = false, healthExpires = 0, healthPending = null;
+  async function publicHealth() {
+    if (!ready() || !nativeCapability) return false;
+    if (now() < healthExpires) return healthValue;
+    if (healthPending) return healthPending;
+    healthPending = (async () => {
+      let verified = false;
+      try {
+        const result = await nativeCapability.call('health', {
+          issuer: OPERATOR_ORIGIN, resource: OPERATOR_ORIGIN + '/api/mcp/agy',
+        }, AbortSignal.timeout(8000));
+        verified = result.contract === 'agy-phase1-authority-v1'
+          && result.persistent === true && result.atomicCodeRedemption === true
+          && result.onlineOperatorValidation === true
+          && result.limitsEnforced === true && result.auditRedacted === true;
+      } catch { /* Never return database diagnostics or synthesize success. */ }
+      healthValue = verified;
+      healthExpires = now() + 30000;
+      return verified;
+    })();
+    try { return await healthPending; }
+    finally { healthPending = null; }
+  }
   function protect(req) {
     requireReady();
     if (req.headers.origin !== origin || req.headers['x-agy-operator-request'] !== '1' ||
@@ -229,6 +254,19 @@ function createOperatorAuthority({ adapters, env = process.env, now = Date.now }
         res.status(error instanceof OperatorError ? error.status : 503).json({ ok: false, error: error instanceof OperatorError ? error.code : 'OPERADOR_SERVICIO_NO_DISPONIBLE' });
       }
     };
+    app.get('/api/agy/operator/access', (req, res) => {
+      const page = require('./operator-access-page.cjs').accessPage(req.query?.next);
+      res.set(page.headers).type('html').send(page.html);
+    });
+    // Public readiness contains only booleans; never credentials, identities,
+    // database errors, grants or session contents. The RPC is read-only.
+    app.get('/api/agy/operator/ready', wrap(async (_req, res) => {
+      const configured = ready();
+      // One bounded probe per process/30 s, including failures. Anonymous
+      // concurrent requests cannot flood the authority's transaction lock.
+      const persistenceReady = await publicHealth();
+      res.json({ ok: true, configured, persistenceReady });
+    }));
     app.get('/api/agy/operator/session', requirePwd, wrap(async (req, res) => {
       if (!ready()) return res.json({ ok: true, configured: false, authenticated: false, authorized: false });
       const state = await current(req);
