@@ -79,6 +79,9 @@ function createEngine({ authority, issuer, resolveOperator } = {}) {
           '<button type="submit">Aprobar vinculación</button></form></html>';
         return response(200, html, {
           'content-type': 'text/html; charset=utf-8',
+          // Browser form POSTs under no-referrer may send Origin: null.
+          // Disclose only the public issuer origin, never the request path.
+          'referrer-policy': 'origin',
           'content-security-policy': "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
         });
       }
@@ -98,6 +101,9 @@ function createEngine({ authority, issuer, resolveOperator } = {}) {
         '<script nonce="' + nonce + '">document.forms[0].submit()</script></html>';
       return response(200, html, {
         'content-type': 'text/html; charset=utf-8',
+        // Preserve the pinned Origin on the HTTPS -> loopback form POST too.
+        // Strict/same-origin policies can null it on that transition.
+        'referrer-policy': 'origin',
         'content-security-policy': `default-src 'none'; script-src 'nonce-${nonce}'; form-action ${CALLBACK}; frame-ancestors 'none'; base-uri 'none'`,
       });
     }
