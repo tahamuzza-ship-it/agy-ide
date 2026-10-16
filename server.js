@@ -654,6 +654,15 @@ require('./operator-invitation.cjs').registerInvitationRoutes(app);
 const agyOperatorAuthority = require('./operator-auth.cjs').createOperatorAuthority();
 agyOperatorAuthority.routes(app, requirePwd);
 require('./yarbis-mcp.cjs').registerMcpRoutes(app, requirePwd);
+app.get(['/', '/index.html'], (_req, res, next) => {
+  try {
+    const html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+    const closing = html.toLowerCase().lastIndexOf('</body>');
+    if (closing < 0) return next();
+    const link = '<a id="agy-local-ai-link" href="/local-ai" target="_blank" rel="noopener" style="position:fixed;bottom:12px;left:12px;z-index:100;background:#12213a;color:#ddecff;padding:9px 13px;border:1px solid #466086;border-radius:8px;font:13px system-ui;text-decoration:none">IA local · PC3 / PC4</a>';
+    res.set('Cache-Control', 'no-store').type('html').send(html.slice(0, closing) + link + html.slice(closing));
+  } catch (error) { next(error); }
+});
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, filePath) {
     if (filePath.endsWith('.html')) {
@@ -1315,6 +1324,11 @@ function requirePwd(req, res, next) {
 
 registerYarbisReadRoutes(app, requirePwd);
 registerPc3Console(app, requirePwd);
+require('./ai-local.cjs').register(app, requirePwd, {
+  pagePath: path.join(__dirname, 'public', 'local-ai.html'),
+  // Both engines were tested; the receiver is still checked before every dispatch.
+  pc4Enabled: process.env.PC4_INFERENCE_ENABLED !== 'false',
+});
 {
   const cloudVariables = [
     process.env.NOTEBOOKLM_CLOUD_URL,

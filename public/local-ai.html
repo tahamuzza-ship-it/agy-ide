@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AGY · Motores de mis equipos</title>
+<style>body{font:17px system-ui;background:#101827;color:#eef5ff;max-width:760px;margin:30px auto;padding:20px}label{display:block;margin:16px 0 6px}input,select,textarea,button{box-sizing:border-box;font:inherit;padding:12px;border-radius:8px;border:1px solid #56657a}textarea,input{width:100%}textarea{min-height:120px}button{cursor:pointer;margin:8px 6px 8px 0}pre{white-space:pre-wrap;background:#1b2b40;padding:20px;border-radius:10px}small{color:#c0cee0}</style>
+<h1>Habla con tus equipos</h1><p>Texto, dictado y lectura de respuestas. Sin herramientas del modelo.</p>
+<label for="pwd">Contraseña del IDE</label><input id="pwd" type="password" autocomplete="off"><small>Se mantiene solo en memoria de esta página. No se guarda.</small>
+<label for="node">Motor</label><select id="node"><option>PC3</option><option>PC4</option></select><small id="pc4-note"></small>
+<label for="text">Tu consulta</label><textarea id="text" maxlength="12000"></textarea>
+<button id="mic">Dictar</button><button id="send">Enviar</button><button id="read">Leer respuesta</button><button id="stop">Silenciar</button>
+<p id="status" role="status">Listo para consultar. El motor debe estar conectado.</p><pre id="answer" aria-live="polite"></pre>
+<small>Dictado y síntesis dependen del navegador y sus permisos; el reconocimiento puede usar servicios del navegador. Si no hay soporte, usa texto. Cada envío es una consulta independiente.</small>
+<script>
+const el=id=>document.getElementById(id);
+const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+fetch('/api/local-ai/config',{cache:'no-store'}).then(r=>r.json()).then(c=>{
+ if(!c.pc4Enabled){el('node').options[1].disabled=true;el('pc4-note').textContent='PC4 pendiente de activación del receptor y worker.'}
+}).catch(()=>say('No se pudo comprobar la configuración.'));
+let recognition,answer='',busy=false;
+function say(t){el('status').textContent=t}
+function silence(){window.speechSynthesis?.cancel()}
+el('stop').onclick=silence;
+el('read').onclick=()=>{silence();recognition?.abort();if(!window.speechSynthesis)return say('Lectura de voz no disponible.');if(answer){const u=new SpeechSynthesisUtterance(answer);u.lang='es-CO';window.speechSynthesis.speak(u)}};
+el('mic').disabled=!Recognition;
+el('mic').onclick=()=>{silence();recognition?.abort();recognition=new Recognition();recognition.lang='es-CO';recognition.interimResults=false;recognition.onresult=e=>{el('text').value=e.results[0][0].transcript;say('Dictado recibido. Pulsa Enviar.')};recognition.onerror=()=>say('No se pudo dictar. Revisa el permiso de micrófono o escribe.');recognition.start();say('Escuchando…')};
+el('send').onclick=async()=>{
+ if(busy)return;if(!el('pwd').value||!el('text').value.trim())return say('Introduce la contraseña y una consulta.');
+ busy=true;el('send').disabled=true;answer='';el('answer').textContent='';silence();recognition?.abort();
+ const headers={'Content-Type':'application/json','x-agyide-pwd':encodeURIComponent(el('pwd').value)};
+ try{
+  const config=await (await fetch('/api/local-ai/config',{cache:'no-store'})).json();
+  if(config.authMode==='cibercode'){
+   const auth=await fetch('/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:el('pwd').value})});
+   const data=await auth.json();if(!auth.ok||!data.token)throw Error('Acceso no autorizado');
+   delete headers['x-agyide-pwd'];headers['x-cibercode-token']=data.token;
+  }
+  say('Enviando una sola solicitud…');
+  let r=await fetch('/api/local-ai/chat',{method:'POST',headers,body:JSON.stringify({node:el('node').value,text:el('text').value}),signal:AbortSignal.timeout(20000)});
+  let b=await r.json();if(!r.ok)throw Error(b.error||'Acceso no autorizado');
+  headers['x-inference-access']=b.access;
+  const id=b.id;say('Esperando respuesta de '+b.node+'…');
+  for(let n=0;n<100;n++){
+   await new Promise(resolve=>setTimeout(resolve,2000));
+   r=await fetch('/api/local-ai/chat/'+encodeURIComponent(id),{headers,cache:'no-store',signal:AbortSignal.timeout(15000)});b=await r.json();
+   if(!r.ok)throw Error(b.error||'Consulta no disponible');
+   if(b.status==='failed')throw Error(b.error);
+   if(b.status==='completed'){answer=b.text;el('answer').textContent=answer;say('Respuesta recibida de '+b.node+'. Puedes pulsar Leer respuesta.');return}
+  }
+  throw Error('Tiempo agotado. No se ha reenviado la consulta.');
+ }catch(e){say('No completado: '+e.message+'. No se reenvía automáticamente.')}
+ finally{busy=false;el('send').disabled=false}
+};
+window.addEventListener('pagehide',()=>{silence();recognition?.abort()});
+</script></html>
