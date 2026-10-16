@@ -96,6 +96,9 @@ function register(app, requirePwd, { env = process.env, fetchImpl = fetch, authM
   app.get('/local-ai', (_req, res) => {
     res.set('Cache-Control', 'no-store').sendFile(pagePath);
   });
+  app.get('/local-ai.js', (_req, res) => {
+    res.set('Cache-Control', 'no-store').sendFile(path.join(path.dirname(pagePath), 'local-ai.js'));
+  });
   app.get('/api/local-ai/config', (_req, res) => {
     res.set('Cache-Control', 'no-store').json({ authMode, pc4Enabled });
   });
