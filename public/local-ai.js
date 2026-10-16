@@ -1,6 +1,13 @@
 (() => {
   'use strict';
   const el = id => document.getElementById(id);
+  function setPasswordVisible(visible) {
+    el('pwd').type = visible ? 'text' : 'password';
+    el('pwd-toggle').setAttribute('aria-pressed', String(visible));
+    el('pwd-toggle').setAttribute('aria-label', visible ? 'Ocultar contraseña' : 'Mostrar contraseña');
+    el('pwd-toggle-label').textContent = visible ? 'Ocultar' : 'Mostrar';
+  }
+  el('pwd-toggle').onclick = () => setPasswordVisible(el('pwd').type === 'password');
   const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   let busy = false, answer = '', recognition = null;
   const say = text => { el('status').textContent = text; };
@@ -178,5 +185,5 @@
       el('send').textContent = 'Enviar';
     }
   };
-  window.addEventListener('pagehide', () => { stopDictation(); silence(); });
+  window.addEventListener('pagehide', () => { setPasswordVisible(false); stopDictation(); silence(); });
 })();

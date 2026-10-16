@@ -3,7 +3,13 @@
 <title>AGY · Motores de mis equipos</title>
 <style>body{font:17px system-ui;background:#101827;color:#eef5ff;max-width:760px;margin:30px auto;padding:20px}label{display:block;margin:16px 0 6px}input,select,textarea,button{box-sizing:border-box;font:inherit;padding:12px;border-radius:8px;border:1px solid #56657a}textarea,input{width:100%}textarea{min-height:120px}button{cursor:pointer;margin:8px 6px 8px 0}pre{white-space:pre-wrap;background:#1b2b40;padding:20px;border-radius:10px}small{color:#c0cee0}</style>
 <h1>Habla con tus equipos</h1><p>Texto, dictado y lectura de respuestas. Sin herramientas del modelo.</p>
-<label for="pwd">Contraseña del IDE</label><input id="pwd" type="password" autocomplete="off"><small>Se mantiene solo en memoria de esta página. No se guarda.</small>
+<style>.password-wrap{display:flex;gap:8px;align-items:stretch}.password-wrap input{min-width:0;flex:1}.password-toggle{display:flex;align-items:center;justify-content:center;gap:7px;margin:0;flex-shrink:0;min-height:48px}.password-toggle:focus-visible{outline:3px solid #81baff;outline-offset:3px}</style>
+<label for="pwd">Contraseña del IDE</label>
+<div class="password-wrap">
+<input id="pwd" type="password" autocomplete="off" autocapitalize="none" spellcheck="false">
+<button id="pwd-toggle" class="password-toggle" type="button" aria-label="Mostrar contraseña" aria-controls="pwd" aria-pressed="false"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span id="pwd-toggle-label">Mostrar</span></button>
+</div>
+<small>Se mantiene solo en memoria de esta página. No se guarda.</small>
 <label for="node">Motor</label><select id="node"><option>PC3</option><option>PC4</option></select><small id="pc4-note"></small>
 <label for="text">Tu consulta</label><textarea id="text" maxlength="12000"></textarea>
 <button id="mic">Dictar</button><button id="send">Enviar</button><button id="read">Leer respuesta</button><button id="stop">Silenciar</button>
