@@ -1,4 +1,5 @@
 const express = require('express');
+const pc4EyeStore = require('./pc4-eye-store.cjs').createPc4EyeStore();
 const path    = require('path');
 const fs      = require('fs');
 const crypto  = require('crypto');
@@ -2335,7 +2336,7 @@ function _eyeFresh(id) {
   return e;
 }
 
-app.post('/api/equipos/report', (req, res) => {
+app.post('/api/equipos/report', async (req, res) => {
   const key = req.headers['x-equipos-key'] || req.headers['x-agyide-pwd'];
   // Nunca autorizar si el servidor no tiene llave configurada o la petición no la trae
   if (!EQUIPOS_REPORT_KEY || !key || key !== EQUIPOS_REPORT_KEY) {
@@ -2345,7 +2346,8 @@ app.post('/api/equipos/report', (req, res) => {
   }
   const { pc, shot, terminal } = req.body || {};
   const id = String(pc || '').toUpperCase();
-  if (!['PC1', 'PC2', 'PC3'].includes(id)) return res.status(400).json({ error: 'pc debe ser PC1, PC2 o PC3' });
+  if (!['PC1', 'PC2', 'PC3', 'PC4'].includes(id)) return res.status(400).json({ error: 'pc debe ser PC1, PC2, PC3 o PC4' });
+  if (id === 'PC4' && (typeof shot !== 'string' || !shot.length)) return res.status(400).json({ error: 'PC4 requiere captura' });
   if (_eyePaused[id]) { delete _equiposEye[id]; return res.json({ ok: true, paused: true }); }
   const entry = _equiposEye[id] || {};
   if (typeof shot === 'string' && shot.length) {
@@ -2355,18 +2357,22 @@ app.post('/api/equipos/report', (req, res) => {
     const isPng = buf.length > 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47;
     const isJpg = buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff;
     if (!isPng && !isJpg) return res.status(400).json({ error: 'la captura debe ser PNG o JPEG' });
+    if (id === 'PC4') {
+      try { await pc4EyeStore.save(buf, isPng ? 'image/png' : 'image/jpeg'); }
+      catch { return res.status(503).json({ error: 'PC4: almacenamiento no disponible' }); }
+    }
     entry.mime = isPng ? 'image/png' : 'image/jpeg';
     entry.shot = buf;
     // Rodaje activo: guarda esta captura en Supabase (nunca en disco del PC)
-    if (_film.active && _film.count < PELICULA_MAX) {
+    if (id !== 'PC4' && _film.active && _film.count < PELICULA_MAX) {
       _peliculaUpload(id, buf, entry.mime).catch(e => console.error('[pelicula]', e.message));
     }
   }
-  if (typeof terminal === 'string') {
+  if (id !== 'PC4' && typeof terminal === 'string') {
     entry.terminal = terminal.split('\n').slice(-80).join('\n').slice(-12000);
   }
   const h = req.body && req.body.health;
-  if (h && typeof h === 'object') {
+  if (id !== 'PC4' && h && typeof h === 'object') {
     const dpct = Number(h.disk_pct), rpct = Number(h.ram_pct);
     entry.health = {
       disk_pct: Number.isFinite(dpct) ? Math.max(0, Math.min(100, Math.round(dpct))) : null,
@@ -2658,7 +2664,7 @@ app.post('/api/equipos/pause', requirePwd, (req, res) => {
 
 app.get('/api/equipos/screens', requirePwd, (_req, res) => {
   const out = {};
-  ['PC1', 'PC2'].forEach((id) => {
+  ['PC1', 'PC2', 'PC4'].forEach((id) => {
     const e = _eyeFresh(id);
     out[id] = e
       ? { ts: e.ts, seconds_ago: Math.round((Date.now() - e.ts) / 1000), has_shot: !!e.shot, terminal: e.terminal || '', paused: !!_eyePaused[id] }
