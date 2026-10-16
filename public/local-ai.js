@@ -19,17 +19,32 @@
     catch { voice('El navegador no confirmó el cierre del dictado. Puedes seguir escribiendo.'); }
   }
   async function json(url, options = {}, timeout = 15000) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
-    try {
-      const response = await fetch(url, { ...options, signal: controller.signal, cache: 'no-store' });
-      const body = await response.json();
-      if (!response.ok) throw Error(body.error || 'HTTP ' + response.status);
-      return body;
-    } catch (error) {
-      if (error.name === 'AbortError') throw Error('La conexión tardó demasiado. Puedes volver a usar el formulario; no se reenvió nada.');
-      throw error;
-    } finally { clearTimeout(timer); }
+    const readOnly = !options.method || options.method === 'GET';
+    for (let attempt = 0; ; attempt++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeout);
+      try {
+        const response = await fetch(url, { ...options, signal: controller.signal, cache: 'no-store' });
+        const raw = await response.text();
+        if (!raw.trim()) throw Object.assign(Error('El servidor devolvió una respuesta vacía.'), { retryable: true });
+        let body;
+        try { body = JSON.parse(raw); }
+        catch { throw Object.assign(Error('La conexión devolvió una respuesta incompleta o no válida.'), { retryable: true }); }
+        if (!response.ok) throw Object.assign(Error(body.error || 'HTTP ' + response.status),
+          { retryable: response.status >= 500 || response.status === 429 || response.status === 304 });
+        return body;
+      } catch (error) {
+        if (error.name === 'AbortError' || error instanceof TypeError) {
+          error = Object.assign(Error('La conexión se interrumpió o tardó demasiado.'), { retryable: true });
+        }
+        if (!readOnly) {
+          error.message += ' No se reenvió la solicitud; podría haber llegado al servidor.';
+          throw error;
+        }
+        if (!error.retryable || attempt >= 2) throw error;
+      } finally { clearTimeout(timer); }
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
   }
   json('/api/local-ai/config', {}, 10000).then(config => {
     el('node').options[1].disabled = !config.pc4Enabled;
@@ -127,13 +142,22 @@
       }
       phase = 'Enviando una sola solicitud a ' + node;
       const job = await json('/api/local-ai/chat', { method: 'POST', headers, body: JSON.stringify({ node, text }) }, 20000);
+      if (!job.id || !job.access) throw Error('No llegó el identificador de la consulta. No se reenvió automáticamente.');
       headers['x-inference-access'] = job.access;
       phase = 'Esperando respuesta de ' + node;
       while (Date.now() < deadline) {
         await new Promise(resolve => setTimeout(resolve, 2000));
         const remaining = deadline - Date.now();
         if (remaining <= 0) break;
-        const result = await json('/api/local-ai/chat/' + encodeURIComponent(job.id), { headers }, Math.min(15000, remaining));
+        let result;
+        try {
+          result = await json('/api/local-ai/chat/' + encodeURIComponent(job.id), { headers }, Math.min(15000, remaining));
+          phase = 'Esperando respuesta de ' + node;
+        } catch (error) {
+          if (!error.retryable) throw error;
+          phase = 'Reconectando para recuperar la misma respuesta de ' + node;
+          continue;
+        }
         if (result.status === 'failed') throw Error(result.error || 'El equipo informó un fallo.');
         if (result.status === 'completed') {
           answer = result.text;
