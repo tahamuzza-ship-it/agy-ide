@@ -33,7 +33,7 @@ function registerCibercodeRoutes(app, options = {}) {
 
     const missionPayload = {
       target: 'PC4',
-      source: 'cibercode',
+      source: 'text',
       execution_mode: 'foreground',
       instruction: PREFIX + JSON.stringify({
         type: 'inference',
@@ -46,6 +46,9 @@ function registerCibercodeRoutes(app, options = {}) {
 
     const headers = await getDispatchHeaders();
 
+    // 0. Comprobar capacidades
+    await fetchImpl(BASE + '/api/inference/capabilities', { method: 'GET', headers }).catch(() => {});
+
     // 1. Crear misión
     const resCreate = await fetchImpl(BASE + '/api/missions', {
       method: 'POST',
@@ -53,7 +56,10 @@ function registerCibercodeRoutes(app, options = {}) {
       body: JSON.stringify(missionPayload),
       signal: AbortSignal.timeout(15000)
     });
-    if (!resCreate.ok) throw new Error(`ERROR_CREANDO_MISION_${resCreate.status}`);
+    if (!resCreate.ok) {
+      const errBody = await resCreate.text().catch(() => '');
+      throw new Error(`ERROR_CREANDO_MISION_${resCreate.status}: ${errBody}`);
+    }
     const missionData = await resCreate.json();
     const missionId = missionData.id;
     if (!missionId) throw new Error('MISSION_ID_NOT_RETURNED');
