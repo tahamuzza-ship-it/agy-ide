@@ -1,151 +1,460 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Manual de uso — AGY IDE</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual Didáctico Interactivo — CIBERCODE 2.0 Soberano</title>
   <style>
-    :root { color-scheme: dark; --cyan:#00f3ff; --green:#86efac; --yellow:#ffe08a; --ink:#08101f; --panel:#0d1830; --muted:#a7b5cc; }
-    * { box-sizing:border-box; }
-    body { margin:0; min-height:100vh; background:radial-gradient(circle at top right,rgba(0,243,255,.12),transparent 32rem),linear-gradient(145deg,#050913,#0b1528 55%,#090b17); color:#f4f8ff; font:16px/1.55 Inter,Segoe UI,Arial,sans-serif; }
-    main { width:min(920px,calc(100% - 32px)); margin:0 auto; padding:36px 0 64px; }
-    .back { display:inline-flex; align-items:center; gap:8px; margin-bottom:24px; color:var(--cyan); text-decoration:none; font-weight:800; letter-spacing:.03em; }
-    header { padding:30px; border:1px solid rgba(0,243,255,.26); border-radius:20px; background:linear-gradient(135deg,rgba(11,31,57,.96),rgba(20,17,54,.9)); box-shadow:0 18px 60px rgba(0,0,0,.3); }
-    h1,h2,h3 { margin:0; font-family:Orbitron,Segoe UI,Arial,sans-serif; }
-    h1 { color:var(--cyan); font-size:clamp(1.7rem,5vw,2.7rem); letter-spacing:.035em; }
-    .lead { color:var(--muted); max-width:700px; margin:12px 0 0; }
-    .notice { margin-top:22px; padding:14px 16px; border-left:4px solid var(--yellow); border-radius:8px; background:rgba(255,203,64,.09); color:#fff2bb; }
-    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(255px,1fr)); gap:16px; margin:24px 0; }
-    section { margin-top:20px; padding:24px; border:1px solid rgba(150,180,220,.16); border-radius:16px; background:rgba(13,24,48,.82); }
-    h2 { color:var(--green); font-size:1.12rem; letter-spacing:.045em; }
-    h3 { color:var(--yellow); font-size:.9rem; margin:18px 0 7px; letter-spacing:.025em; }
-    p { margin:9px 0; }
-    ul,ol { padding-left:22px; margin:10px 0; }
-    li { margin:7px 0; }
-    .phrase { margin:11px 0; padding:12px 14px; border:1px solid rgba(0,243,255,.22); border-radius:9px; background:#071225; color:var(--cyan); font-family:"Fira Code",Consolas,monospace; font-size:.91rem; }
-    .tag { display:inline-block; margin-bottom:8px; padding:4px 8px; border-radius:999px; background:rgba(0,243,255,.12); color:var(--cyan); font-size:.73rem; font-weight:800; letter-spacing:.06em; }
-    .safe { color:#ffd0d0; }
-    footer { color:#7f91ad; text-align:center; font-size:.85rem; margin-top:30px; }
-    .pc1-table { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:16px; }
-    .pc1-card { padding:20px; border:1px solid rgba(0,243,255,.26); border-radius:14px; background:linear-gradient(145deg,rgba(4,27,48,.96),rgba(8,18,37,.94)); }
-    .pc1-card.review { border-color:rgba(134,239,172,.3); background:linear-gradient(145deg,rgba(8,44,35,.9),rgba(8,18,37,.94)); }
-    .pc1-card h3 { margin:0 0 10px; color:var(--cyan); font-size:1rem; line-height:1.35; }
-    .pc1-card.review h3 { color:var(--green); }
-    .pc1-label { display:block; margin:15px 0 5px; color:#cbd9ef; font-size:.75rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
-    .pc1-command { padding:12px 13px; border-radius:9px; background:rgba(0,0,0,.26); border-left:3px solid var(--cyan); color:#f7fbff; font-weight:700; line-height:1.5; }
-    .pc1-card.review .pc1-command { border-left-color:var(--green); }
-    .pc1-result { margin:14px 0 0; color:var(--muted); font-size:.92rem; }
-    .pc1-result strong { color:#fff; }
-    @media (max-width:560px) { main { width:min(100% - 20px,920px); padding-top:18px; } header,section { padding:19px; border-radius:13px; } .pc1-table { grid-template-columns:1fr; } }
+    :root {
+      --bg-main: #090d16;
+      --bg-card: #111827;
+      --bg-card-hover: #1e293b;
+      --border: #1f293d;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #38bdf8;
+      --green: #10b981;
+      --blue-deep: #3b82f6;
+      --amber: #f59e0b;
+      --purple: #8b5cf6;
+      --red: #ef4444;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    body { background: var(--bg-main); color: var(--text-main); line-height: 1.6; padding: 24px; }
+    .container { max-width: 1080px; margin: 0 auto; }
+
+    /* Encabezado */
+    .header {
+      background: linear-gradient(135deg, #131c31 0%, #0b1120 100%);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .header-title h1 { font-size: 1.7rem; color: #fff; display: flex; align-items: center; gap: 10px; }
+    .header-title p { color: var(--text-muted); font-size: 0.95rem; margin-top: 4px; }
+    .badge-live {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--green);
+      border: 1px solid var(--green);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .pulse-dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; box-shadow: 0 0 8px var(--green); }
+
+    /* Barra de Navegación Didáctica */
+    .nav-tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+      overflow-x: auto;
+    }
+    .tab-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 10px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover { background: var(--bg-card-hover); color: #fff; }
+    .tab-btn.active {
+      background: #1e293b;
+      color: var(--primary);
+      border-color: var(--primary);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+    }
+
+    /* Tarjetas de Concepto Didáctico */
+    .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 18px; margin-bottom: 24px; }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      transition: transform 0.2s;
+    }
+    .card:hover { transform: translateY(-2px); border-color: rgba(56, 189, 248, 0.4); }
+    .card-icon { font-size: 2rem; margin-bottom: 10px; }
+    .card h3 { font-size: 1.15rem; margin-bottom: 8px; color: #fff; }
+    .card p { color: var(--text-muted); font-size: 0.88rem; }
+
+    /* Simulador Visual de las 3 Divisiones */
+    .mockup-container {
+      background: #040711;
+      border: 1px solid #1f293d;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+    .mockup-header {
+      background: #131c31;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+    }
+    .mockup-3col {
+      display: grid;
+      grid-template-columns: 240px 1fr 340px;
+      gap: 12px;
+      min-height: 280px;
+    }
+    @media (max-width: 900px) {
+      .mockup-3col { grid-template-columns: 1fr; }
+    }
+    .mockup-panel {
+      background: var(--bg-card);
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 0.82rem;
+    }
+    .mockup-panel h4 { color: var(--primary); margin-bottom: 8px; font-size: 0.9rem; }
+
+    /* Simulador de Chat */
+    .chat-preview {
+      background: #060913;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      margin: 14px 0;
+    }
+    .chat-bubble {
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      max-width: 90%;
+      font-size: 0.88rem;
+    }
+    .chat-bubble.user {
+      background: #1e293b;
+      color: #fff;
+      margin-left: auto;
+      border: 1px solid #334155;
+    }
+    .chat-bubble.agent {
+      background: #0f2027;
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    /* Banco de Ejemplos a 1 Clic */
+    .example-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .example-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .example-title { font-weight: 700; color: #fff; font-size: 1rem; display: flex; align-items: center; gap: 8px; }
+    .btn-copy {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.2s;
+    }
+    .btn-copy:hover { background: #1d4ed8; }
+    .btn-copy.copied { background: var(--green); }
+    pre {
+      background: #05070e;
+      border: 1px solid #1e293b;
+      padding: 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.82rem;
+      color: #cbd5e1;
+      margin-top: 8px;
+    }
+
+    /* Toast flotante */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--green);
+      color: #000;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-weight: 700;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      display: none;
+      z-index: 9999;
+    }
   </style>
 </head>
 <body>
-  <main>
-    <a class="back" href="./">← Volver a AGY IDE</a>
-    <header>
-      <h1>📖 Manual de uso de AGY IDE</h1>
-      <p class="lead">Guía rápida para hablar con AGY, escribirle, trabajar con código y enviar misiones seguras a PC1.</p>
-      <div class="notice"><strong>Regla sencilla:</strong> una orden dirigida a PC1 se envía inmediatamente. Una pregunta por tareas pendientes solo consulta la lista.</div>
-    </header>
 
-    <div class="grid">
-      <section>
-        <span class="tag">EN 30 SEGUNDOS</span>
-        <h2>Lo esencial</h2>
-        <ol>
-          <li>Elige el equipo destino: <strong>PC1</strong>, <strong>PC2</strong> o <strong>Cualquiera</strong>.</li>
-          <li>Escribe una instrucción en el chat o toca el micrófono.</li>
-          <li>Una orden para PC1 crea una misión; una consulta de pendientes solo muestra la lista.</li>
-        </ol>
-      </section>
-      <section>
-        <span class="tag">BOTÓN DE SEGURIDAD</span>
-        <h2>Detener una ejecución</h2>
-        <p>Para detener algo que corre en una terminal, usa <strong>Ctrl+C</strong>. Las misiones enviadas aparecen en <strong>Entrada PC1</strong> para que puedas ver su estado.</p>
-      </section>
+<div class="container">
+
+  <!-- ENCABEZADO -->
+  <header class="header">
+    <div class="header-title">
+      <h1>⚡ CIBERCODE 2.0 SOBERANO</h1>
+      <p>Manual Didáctico Interactivo — Filosofía "Para el Campesino" (Cero Enredos Técnicos)</p>
+    </div>
+    <div class="badge-live">
+      <span class="pulse-dot"></span>
+      Supernodo PC4 i9 Activo (24 Cores)
+    </div>
+  </header>
+
+  <!-- PESTAÑAS DE NAVEGACIÓN -->
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="switchSection('arquitectura')">🏛️ 1. Las 3 Divisiones</button>
+    <button class="tab-btn" onclick="switchSection('cerebros')">🧠 2. Los Dos Cerebros</button>
+    <button class="tab-btn" onclick="switchSection('terminal')">⚡ 3. La Terminal Auto-Correctora</button>
+    <button class="tab-btn" onclick="switchSection('banco')">📋 4. Pruebas Listas a 1 Clic</button>
+  </div>
+
+  <!-- SECCIÓN 1: ARQUITECTURA DE LAS 3 DIVISIONES -->
+  <section id="sec-arquitectura">
+    <div class="grid-3">
+      <div class="card">
+        <div class="card-icon">📁</div>
+        <h3>1. Columna Izquierda: El Archivador</h3>
+        <p>Aquí reposan los archivos de PC4. Como una gaveta de oficina, puede ver qué scripts existen, abrir nuevos proyectos de flores o cálculo de fletes y cambiar a la configuración.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">📝</div>
+        <h3>2. Columna Centro: La Mesa de Trabajo</h3>
+        <p>El editor principal (Monaco). Es el bloc de notas profesional donde el código vive, con pestañas superiores y el botón <strong>"💾 Guardar en PC4"</strong> que certifica el archivo con huella digital SHA-256.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🧠</div>
+        <h3>3. Columna Derecha: El Ingeniero y el Taller</h3>
+        <p>Arriba tiene al agente de Inteligencia Artificial para hablar y pedir código. Abajo tiene la <strong>Terminal Replit</strong> que prueba el carro en la pista y lo arregla si falla.</p>
+      </div>
     </div>
 
-    <section>
-      <h2>⌨️ Usar AGY por texto</h2>
-      <p>Escribe en la caja de chat y pulsa la flecha <strong>➤</strong> para enviarlo. Puedes pedir explicaciones, pasos o ayuda con un archivo.</p>
-      <div class="phrase">“Explícame qué hace este código antes de cambiarlo.”</div>
-      <div class="phrase">“Dame los pasos para comprobar si este script está funcionando.”</div>
-      <div class="phrase">“Ayúdame a corregir este error sin borrar mi trabajo.”</div>
-      <p>El dictado normal también deja el texto en la caja de chat: revísalo y envíalo manualmente cuando estés conforme.</p>
-    </section>
-
-    <section>
-      <h2>🎤 Usar AGY por voz</h2>
-      <ol>
-        <li>Toca el botón <strong>🎤</strong> junto al chat.</li>
-        <li>Habla con normalidad.</li>
-        <li>Para dictado normal, revisa el texto que quedó escrito y envíalo con <strong>➤</strong>.</li>
-      </ol>
-      <h3>Órdenes de voz del Buzón 1</h3>
-      <p><strong>Para enviar una tarea</strong>, habla con naturalidad. Estas órdenes crean la misión inmediatamente:</p>
-      <div class="phrase">“AGY, dile a PC1 que revise el disco.”</div>
-      <div class="phrase">“Misión para PC1: revisa el disco.”</div>
-      <div class="phrase">“Manda a PC1 a revisar el disco.”</div>
-      <div class="phrase">“PC1, revisa el disco.”</div>
-      <p>AGY responde: <strong>“Entendido, orden enviada a PC1.”</strong></p>
-      <p><strong>Para ver pendientes</strong>, pregunta:</p>
-      <div class="phrase">“¿Qué tareas tiene PC1 pendientes?”</div>
-      <div class="phrase">“Muéstrame las misiones pendientes de PC1.”</div>
-      <div class="phrase">“Consulta el Buzón 1.”</div>
-    </section>
-
-    <section>
-      <h2>📬 Buzón 1: misiones para PC1</h2>
-      <p>Solo hay dos cosas que necesitas saber:</p>
-      <div class="pc1-table" aria-label="Comandos para PC1">
-        <article class="pc1-card">
-          <h3>1. MANDAR UNA MISIÓN A PC1</h3>
-          <span class="pc1-label">Habla como una persona normal</span>
-          <div class="pc1-command">“AGY, dile a PC1 que revise la cámara.”</div>
-          <div class="pc1-command">“Misión para PC1: revisar el disco.”</div>
-          <div class="pc1-command">“Manda a PC1 a comprobar el listener.”</div>
-          <div class="pc1-command">“PC1, revisa la memoria.”</div>
-          <p class="pc1-result"><strong>Resultado:</strong> AGY responde “Entendido, orden enviada a PC1.” y la tarea queda en <strong>Entrada PC1</strong> como <strong>PENDIENTE</strong>.</p>
-        </article>
-        <article class="pc1-card review">
-          <h3>2. VER MISIONES PENDIENTES DE PC1</h3>
-          <span class="pc1-label">Di o escribe</span>
-          <div class="pc1-command">“¿Qué tareas tiene PC1 pendientes?”</div>
-          <span class="pc1-label">También puedes decir</span>
-          <div class="pc1-command">“Muéstrame las misiones pendientes de PC1.”</div>
-          <div class="pc1-command">“Consulta el Buzón 1.”</div>
-          <p class="pc1-result"><strong>Resultado:</strong> ves la lista real de tareas de <strong>Entrada PC1</strong>, con su estado: PENDIENTE, EN_PROCESO, COMPLETADA o ERROR.</p>
-        </article>
+    <!-- Esquema Visual Interactivo -->
+    <div class="mockup-container">
+      <div class="mockup-header">
+        <span>ESQUEMA EXACTO DE LA PANTALLA EN CIBERCODE 2.0</span>
+        <span style="color:var(--primary);">Arrastre los divisores con el ratón para agrandar o achicar</span>
       </div>
-      <p class="safe"><strong>Regla fácil:</strong> una orden crea una tarea; una pregunta por pendientes solo muestra la lista.</p>
-    </section>
+      <div class="mockup-3col">
+        <div class="mockup-panel" style="border-color:#38bdf8;">
+          <h4>📁 IZQUIERDA (Archivos)</h4>
+          • <code>despacho_flores_miami.py</code><br>
+          • <code>calculador_fletes.py</code><br>
+          • <code>hola_soberano.py</code><br><br>
+          <span style="color:var(--text-muted); font-size:0.75rem;">◄► Divisor Vertical Resizable</span>
+        </div>
+        <div class="mockup-panel" style="border-color:#10b981;">
+          <h4>📝 CENTRO (Editor Monaco)</h4>
+          Pestaña: <strong>hola_soberano.py</strong> | SHA-256: <code>76064d7c</code><br><br>
+          <code>def calcular_despacho():</code><br>
+          <code>&nbsp;&nbsp;cajas = 150</code><br>
+          <code>&nbsp;&nbsp;total = cajas * 18.50</code><br><br>
+          <button class="btn-copy" style="padding:4px 8px; font-size:0.75rem;" onclick="mostrarToast('Simulación: Guardado en PC4')">💾 Guardar en PC4</button>
+        </div>
+        <div class="mockup-panel" style="border-color:#8b5cf6;">
+          <h4>🧠 DERECHA (Qwen + Terminal)</h4>
+          [ 🟢 1.5B Ultraligero ] [ 🔵 7B Pensamiento Prof. ]<br><br>
+          💬 Chat con Qwen (Escribe tu pedido)<br><br>
+          <div style="border-top:1px dashed var(--border); padding-top:6px; margin-top:6px;">
+            ▲▼ <strong>Divisor Horizontal</strong><br>
+            <strong>⚡ TERMINAL REPLIT SOBERANO</strong><br>
+            <span style="color:var(--green);">✅ Exit Code 0: Script verificado</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-    <section>
-      <h2>💻 Trabajar con código</h2>
-      <h3>Editor</h3>
-      <p>El panel izquierdo es el editor. Abre o selecciona archivos desde <strong>📁 ARCHIVOS</strong>, haz tus cambios y revisa antes de ejecutar.</p>
-      <h3>Ejecutar</h3>
-      <p>El botón <strong>▶ EJECUTAR</strong> corre el contenido actual para el equipo seleccionado. El resultado aparece en <strong>OUTPUT — AGY</strong>.</p>
-      <p class="safe"><strong>Antes de ejecutar:</strong> confirma que elegiste PC1 o PC2 correctamente y revisa cualquier comando que modifique archivos, servicios o configuraciones.</p>
-      <h3>Ayuda con comandos</h3>
-      <p>El botón <strong>📋 COMANDOS</strong> muestra comandos frecuentes y permite copiarlos. El botón <strong>💻 CIBERCODE</strong> abre el entorno especializado para crear aplicaciones.</p>
-    </section>
+  <!-- SECCIÓN 2: LOS DOS CEREBROS DE QWEN -->
+  <section id="sec-cerebros" style="display:none;">
+    <div class="grid-3">
+      <div class="card" style="border-color: rgba(16, 185, 129, 0.4);">
+        <div class="card-icon">🟢</div>
+        <h3 style="color:var(--green);">1.5B Ultraligero (El Mensajero Veloz)</h3>
+        <p><strong>¿Para qué sirve?</strong> Tareas rápidas que toman 1 a 2 segundos. Ideal para cálculos directos de cajas, fletes, sumas de inventario, pequeñas funciones y preguntas puntuales.</p>
+        <p style="margin-top:8px; font-size:0.8rem; color:#a7f3d0;">• Consume menos de 1 GB de RAM.<br>• Libera la memoria automáticamente tras 15 segundos.</p>
+      </div>
 
-    <section>
-      <h2>🎯 Modo /goal</h2>
-      <p>Usa <strong>/goal</strong> cuando quieras que AGY convierta una meta grande en pasos. Explica el resultado que buscas, revisa el plan y mantén el control de lo que se ejecuta.</p>
-      <div class="phrase">“Quiero comprobar que PC1 y PC2 están conectados y recibir un resumen.”</div>
-    </section>
+      <div class="card" style="border-color: rgba(59, 130, 246, 0.4);">
+        <div class="card-icon">🔵</div>
+        <h3 style="color:var(--blue-deep);">7B Pensamiento Profundo (El Ingeniero Senior)</h3>
+        <p><strong>¿Para qué sirve?</strong> Tareas de arquitectura, análisis de bases de datos complejas, scripts con múltiples condiciones lógicas y deducción de errores difíciles.</p>
+        <p style="margin-top:8px; font-size:0.8rem; color:#bfdbfe;">• Utiliza razonamiento riguroso en los 24 núcleos de PC4.<br>• Resuelve casos límite y validaciones cruzadas.</p>
+      </div>
+    </div>
 
-    <section>
-      <h2>🧭 Si no sabes qué decir</h2>
-      <p>Empieza por una de estas frases:</p>
-      <div class="phrase">“Recuérdame cómo usar el Buzón 1 por voz.”</div>
-      <div class="phrase">“¿Qué puedo hacer desde esta pantalla?”</div>
-      <div class="phrase">“Explícame el siguiente paso con palabras sencillas.”</div>
-    </section>
+    <!-- Diálogo Ilustrativo -->
+    <div class="chat-preview">
+      <div style="font-weight:600; font-size:0.85rem; margin-bottom:10px; color:var(--text-muted);">
+        EJEMPLO DE CÓMO HABLARLE A QWEN EN ESPAÑOL CLARO:
+      </div>
+      <div class="chat-bubble user">
+        "Qwen, calcula el costo de un despacho de 200 cajas de rosas a Miami: cada caja vale $19.20, agrégale 14% de flete y un seguro de $50. Muestra el total con dos decimales."
+      </div>
+      <div class="chat-bubble agent">
+        <strong>⚡ Qwen (1.5B Ultraligero):</strong><br>
+        "¡Con gusto! Aquí tienes el script listo. Cópialo al editor central con 1 clic para probarlo en la terminal."
+      </div>
+    </div>
+  </section>
 
-    <footer>AGY IDE · Manual de uso rápido</footer>
-  </main>
+  <!-- SECCIÓN 3: LA TERMINAL AUTO-CORRECTORA -->
+  <section id="sec-terminal" style="display:none;">
+    <div class="card" style="margin-bottom:20px;">
+      <h3>¿Cómo funciona el Bucle Replit Agent (Self-Healing)?</h3>
+      <p>A diferencia de una consola normal donde si hay un error usted tiene que ponerse a investigar por qué falló, en CIBERCODE 2.0 el sistema se cura solo:</p>
+      <br>
+      <ol style="padding-left:20px; font-size:0.9rem; color:var(--text-muted);">
+        <li>Usted pulsa el botón <strong>`⚡ EJECUTAR Y AUTO-CORREGIR EN PC4`</strong>.</li>
+        <li>PC4 arranca el script en sus 24 núcleos.</li>
+        <li><strong>Si el código funciona perfecto:</strong> La terminal se ilumina en verde: <code>✅ [EXIT CODE 0] Script verificado exitosamente</code> y muestra los resultados reales.</li>
+        <li><strong>Si el código tiene un bug o error:</strong> Qwen captura el error internamente, lo arregla de inmediato en el archivo y lo vuelve a correr sin que usted tenga que escribir una sola línea de código.</li>
+      </ol>
+    </div>
+
+    <div class="example-box">
+      <div class="example-header">
+        <span class="example-title">🧪 Prueba Didáctica: Provocar un Error a Propósito para Ver la Auto-Corrección</span>
+        <button class="btn-copy" onclick="copiarTexto(this, 'codeErrorDemo')">📋 Copiar Código con Bug</button>
+      </div>
+      <p style="font-size:0.85rem; color:var(--text-muted);">Pegue este código en el editor central y pulse <strong>"⚡ EJECUTAR Y AUTO-CORREGIR"</strong>. Verá cómo la terminal detecta que falta un paréntesis o una variable, lo corrige y termina en verde.</p>
+      <pre id="codeErrorDemo"># Código con error a propósito (Falta cerrar comillas y variable indefinida)
+def prueba_autocuracion():
+    precio_caja = 25.0
+    total = precio_caja * cantidad_desconocida
+    print("El resultado es: + str(total)
+
+prueba_autocuracion()</pre>
+    </div>
+  </section>
+
+  <!-- SECCIÓN 4: BANCO DE PRUEBAS A 1 CLIC -->
+  <section id="sec-banco" style="display:none;">
+    
+    <!-- Prueba 1 -->
+    <div class="example-box">
+      <div class="example-header">
+        <span class="example-title">🌸 Prueba 1: Cálculo de Despacho Floral Miami</span>
+        <button class="btn-copy" onclick="copiarTexto(this, 'p1Prompt')">📋 Copiar Pregunta para Qwen</button>
+      </div>
+      <p style="font-size:0.85rem; color:var(--text-muted);">Pegue esto en el chat de la derecha y pulse <strong>"🚀 Enviar a Qwen ($0.00)"</strong>:</p>
+      <pre id="p1Prompt">Escribe un script en Python que calcule el costo total de un despacho de flores: recibe 150 cajas a $18.50 cada una, le suma un 12% de flete aéreo de Miami y un seguro de $45. Imprime el desglose y el total final.</pre>
+    </div>
+
+    <!-- Prueba 2 -->
+    <div class="example-box">
+      <div class="example-header">
+        <span class="example-title">🔵 Prueba 2: Filtro de Clientes con Pensamiento Profundo</span>
+        <button class="btn-copy" onclick="copiarTexto(this, 'p2Prompt')">📋 Copiar Requerimiento Complejo</button>
+      </div>
+      <p style="font-size:0.85rem; color:var(--text-muted);">Active el botón <strong>"🔵 7B Pensamiento Profundo"</strong> y envíe esta orden:</p>
+      <pre id="p2Prompt">Diseña una función que reciba una lista de clientes de flores con sus facturas pendientes y días de mora. Si la mora supera 30 días, clasifícalos como 'Riesgo Alto' y calcula un interés del 2.5%; si es menor a 30 días, clasifícalos como 'Al Día'. Muestra una tabla ordenada por el total adeudado.</pre>
+    </div>
+
+    <!-- Prueba 3 -->
+    <div class="example-box">
+      <div class="example-header">
+        <span class="example-title">⚡ Prueba 3: Script Listo para Pegar en el Editor y Correr en la Terminal</span>
+        <button class="btn-copy" onclick="copiarTexto(this, 'p3Code')">📋 Copiar Script Directo</button>
+      </div>
+      <p style="font-size:0.85rem; color:var(--text-muted);">Pegue esto directamente en el Editor Monaco (Centro), pulse <strong>"💾 Guardar en PC4"</strong> y luego <strong>"⚡ EJECUTAR"</strong>:</p>
+      <pre id="p3Code"># ==========================================
+# CIBERCODE 2.0 — VERIFICACIÓN FÁCTICA EN PC4
+# ==========================================
+import sys
+
+cajas = 150
+precio = 18.50
+flete = (cajas * precio) * 0.12
+seguro = 45.00
+gran_total = (cajas * precio) + flete + seguro
+
+print("==========================================")
+print(f"📦 Cajas: {cajas} x ${precio:.2f} = ${cajas * precio:.2f}")
+print(f"✈️ Flete Aéreo Miami (12%): ${flete:.2f}")
+print(f"🛡️ Seguro de Carga: ${seguro:.2f}")
+print("------------------------------------------")
+print(f"💰 TOTAL FINAL DEL DESPACHO: ${gran_total:.2f}")
+print("==========================================")
+print(f"🚀 Ejecutado exitosamente con Python {sys.version.split()[0]} en PC4")
+</pre>
+    </div>
+
+  </section>
+
+</div>
+
+<!-- TOAST FLOTANTE -->
+<div class="toast" id="toast">✅ ¡Copiado al portapapeles! Listo para pegar con Ctrl+V</div>
+
+<script>
+  function switchSection(secId) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+
+    document.querySelectorAll('section').forEach(s => s.style.display = 'none');
+    const target = document.getElementById('sec-' + secId);
+    if (target) target.style.display = 'block';
+  }
+
+  function copiarTexto(btn, elementId) {
+    const el = document.getElementById(elementId);
+    const text = el ? el.innerText : elementId;
+    navigator.clipboard.writeText(text).then(() => {
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '✅ ¡Copiado!';
+      btn.classList.add('copied');
+      mostrarToast('✅ ¡Copiado al portapapeles! Listo para pegar con Ctrl+V');
+      setTimeout(() => {
+        btn.innerHTML = originalText;
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+  }
+
+  function mostrarToast(msg) {
+    const toast = document.getElementById('toast');
+    if (msg) toast.innerText = msg;
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 2500);
+  }
+</script>
+
 </body>
 </html>
