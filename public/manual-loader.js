@@ -1,4 +1,8 @@
 (function () {
+  // Blindaje SGN: si el documento ya es la Consola Interactiva de CIBERCODE 2.0, NO sobrescribir el DOM
+  if (document.querySelector('.test-card') || document.querySelector('.didactic-box') || document.title.includes('CIBERCODE')) {
+    return;
+  }
   if (!document.getElementById('manual-content')) {
     document.body.innerHTML =
       '<main><button id="manual-close" type="button">← Volver a AGY IDE</button>' +
