@@ -580,7 +580,138 @@
     .log-error { color: #f87171; }
     .log-success { color: #4ade80; font-weight: bold; }
     .log-heal { color: #38bdf8; }
+
+    /* Modal ZIPS SGN (Skill: gestion-enlaces-descargables-y-web-sgn) */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 6, 13, 0.84);
+      backdrop-filter: blur(8px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-box {
+      background: #090f1e;
+      border: 1px solid #1e2e4f;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 860px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 10px 40px rgba(0, 243, 255, 0.15), 0 0 0 1px rgba(0, 243, 255, 0.2);
+      overflow: hidden;
+    }
+    .modal-header {
+      padding: 14px 20px;
+      background: #070c18;
+      border-bottom: 1px solid #1b263b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .modal-title {
+      font-family: 'Orbitron', monospace;
+      font-size: 0.95rem;
+      color: var(--cyan);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 1.2rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    .modal-close:hover { color: #fff; background: rgba(255,255,255,0.08); }
+    .modal-body {
+      padding: 18px 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .zips-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 12px;
+    }
+    .zip-card {
+      background: #050914;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: all 0.2s ease;
+    }
+    .zip-card:hover {
+      border-color: var(--cyan);
+      box-shadow: 0 0 12px rgba(0, 243, 255, 0.15);
+    }
+    .zip-card-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .zip-card-desc {
+      font-size: 0.72rem;
+      color: #94a3b8;
+      line-height: 1.35;
+    }
+    .zip-hash {
+      font-family: 'Fira Code', monospace;
+      font-size: 0.65rem;
+      color: #38bdf8;
+      background: #020617;
+      padding: 4px 6px;
+      border-radius: 4px;
+      border: 1px solid #0f172a;
+      word-break: break-all;
+    }
+    .btn-zip-dl {
+      background: linear-gradient(135deg, #0284c7, #0ea5e9);
+      color: #fff;
+      text-decoration: none;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 0.73rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: center;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-zip-dl:hover { filter: brightness(1.15); }
+    .zip-dropzone {
+      border: 2px dashed #334155;
+      background: #030712;
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .zip-dropzone.dragover {
+      border-color: var(--cyan);
+      background: rgba(0, 243, 255, 0.05);
+    }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.43.0/min/vs/loader.js"></script>
 </head>
 <body>
@@ -601,6 +732,9 @@
       <a href="/cibercode-manual.html" target="_blank" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px; background:linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); color:#fff; padding:4px 12px; border-radius:6px; font-size:0.75rem; font-weight:700; border:1px solid #a78bfa; box-shadow:0 0 10px rgba(139,92,246,0.3); cursor:pointer;">
         📖 MANUAL
       </a>
+      <button id="btnOpenZips" onclick="abrirModalZips()" style="display:inline-flex; align-items:center; gap:6px; background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color:#fff; padding:4px 12px; border-radius:6px; font-size:0.75rem; font-weight:700; border:1px solid #38bdf8; box-shadow:0 0 10px rgba(56,189,248,0.3); cursor:pointer;">
+        📦 ZIPS
+      </button>
     </div>
 
     <!-- Conmutador Visual de 3 Vías -->
@@ -769,6 +903,134 @@
 
     </aside>
 
+  </div>
+
+  <!-- MODAL GESTOR DE PAQUETES & ZIPS SGN -->
+  <div id="modalZips" class="modal-overlay" style="display:none;" onclick="cerrarModalZipsSiFondo(event)">
+    <div class="modal-box" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <div>
+          <div class="modal-title">
+            <span>📦</span> GESTOR DE PAQUETES & ZIPS SGN
+          </div>
+          <div style="font-size:0.68rem; color:#94a3b8; margin-top:2px;">
+            Gobernado por la Skill <strong style="color:var(--cyan)">gestion-enlaces-descargables-y-web-sgn</strong> (Paquete 3 Infraestructura Red #15)
+          </div>
+        </div>
+        <button class="modal-close" onclick="cerrarModalZips()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        
+        <!-- SECCIÓN 1: DESCARGAS OFICIALES SGN -->
+        <div>
+          <div style="font-size:0.78rem; font-weight:700; color:#38bdf8; margin-bottom:8px; display:flex; align-items:center; gap:6px;">
+            <span>⬇️</span> DESCARGAS OFICIALES DIRECTAS (ATTACHMENT + SHA-256)
+          </div>
+          <div class="zips-grid">
+            
+            <!-- Tarjeta 1: Manual CIBERCODE 2.0 -->
+            <div class="zip-card">
+              <div class="zip-card-title">
+                <span>MANUAL_CIBERCODE_2_SGN.zip</span>
+                <span style="font-size:0.65rem; background:#1e293b; color:#4ade80; padding:2px 6px; border-radius:4px;">OFICIAL</span>
+              </div>
+              <div class="zip-card-desc">
+                Consola didáctica interactiva completa con las 8 Pruebas de Fuego (P1 a P8), autoguardado y blindaje anti-regresión a texto plano.
+              </div>
+              <div class="zip-hash" title="Hash criptográfico SHA-256">
+                SHA-256: b25873a25ae5716bfd1656874d956652ecedf892198296f7fd8f0d1efdc9db16
+              </div>
+              <a href="/descargar-manual.zip" class="btn-zip-dl" download="MANUAL_CIBERCODE_2_SGN.zip">
+                ⬇️ Descargar ZIP (~40.5 KB)
+              </a>
+            </div>
+
+            <!-- Tarjeta 2: Skill Gestión de Enlaces -->
+            <div class="zip-card">
+              <div class="zip-card-title">
+                <span>SKILL_GESTION_ENLACES...zip</span>
+                <span style="font-size:0.65rem; background:#1e293b; color:#38bdf8; padding:2px 6px; border-radius:4px;">SKILL #54</span>
+              </div>
+              <div class="zip-card-desc">
+                Paquete de la Skill para diferenciar y gobernar enlaces web interactivos vs descargas directas de binarios con verificación criptográfica.
+              </div>
+              <div class="zip-hash" title="Hash criptográfico SHA-256">
+                SHA-256: 73f989e2d3775f1b06e82101b887a68c430ea9c78c6165e50da036970738968e
+              </div>
+              <a href="/descargar-zip?file=SKILL_GESTION_ENLACES_DESCARGABLES_Y_WEB.zip" class="btn-zip-dl" download="SKILL_GESTION_ENLACES_DESCARGABLES_Y_WEB.zip">
+                ⬇️ Descargar Skill ZIP (~4.2 KB)
+              </a>
+            </div>
+
+            <!-- Tarjeta 3: Exportar Código del Editor -->
+            <div class="zip-card">
+              <div class="zip-card-title">
+                <span>EXPORTAR_CODIGO_ACTUAL.zip</span>
+                <span style="font-size:0.65rem; background:#1e293b; color:#a855f7; padding:2px 6px; border-radius:4px;">EDITOR</span>
+              </div>
+              <div class="zip-card-desc">
+                Empaqueta al instante el código que tienes abierto en Monaco Editor y descárgalo empaquetado en formato ZIP a costo cero ($0.00).
+              </div>
+              <div class="zip-hash" id="zipEditorFileLabel">
+                Archivo activo: hola_soberano.py
+              </div>
+              <button class="btn-zip-dl" style="background:linear-gradient(135deg, #7c3aed, #9333ea);" onclick="descargarCodigoComoZip()">
+                📦 Empaquetar y Descargar (.zip)
+              </button>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- SECCIÓN 2: SUBIR ARCHIVOS / PAQUETES ZIP (UPLOAD) -->
+        <div style="background:#050914; border:1px solid #1e293b; border-radius:8px; padding:14px;">
+          <div style="font-size:0.78rem; font-weight:700; color:#4ade80; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+            <span>⬆️</span> SUBIR ARCHIVO O PAQUETE ZIP A CIBERCODE (CERTIFICACIÓN SHA-256)
+          </div>
+
+          <div id="zipDropzone" class="zip-dropzone" onclick="document.getElementById('inputZipFile').click()" ondragover="handleZipDragOver(event)" ondragleave="handleZipDragLeave(event)" ondrop="handleZipDrop(event)">
+            <input type="file" id="inputZipFile" accept=".zip,.tar.gz,.json,.py,.txt,.html,.js" style="display:none;" onchange="handleZipFileSelected(event)">
+            <div style="font-size:1.6rem; margin-bottom:6px;">📁</div>
+            <div style="font-size:0.8rem; font-weight:600; color:#e2e8f0;">Arrastra y suelta tu archivo aquí, o haz clic para examinar</div>
+            <div style="font-size:0.7rem; color:#94a3b8; margin-top:4px;">Formatos aceptados: .zip, .tar.gz, .json, .py, .txt, .html (Máx 50MB)</div>
+          </div>
+
+          <!-- Panel de Archivo Seleccionado -->
+          <div id="zipUploadPreview" style="display:none; margin-top:12px; background:#020617; border:1px solid #1e293b; border-radius:6px; padding:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <strong id="uploadFileName" style="font-size:0.8rem; color:#f1f5f9;">nombre.zip</strong>
+                <span id="uploadFileSize" style="font-size:0.7rem; color:#94a3b8; margin-left:8px;">0 KB</span>
+              </div>
+              <button class="btn-zip-dl" style="background:#22c55e; color:#040814; font-weight:700;" id="btnConfirmUpload" onclick="ejecutarSubidaZip()">
+                🚀 Subir y Certificar
+              </button>
+            </div>
+            <div id="uploadFileHash" style="font-family:'Fira Code', monospace; font-size:0.67rem; color:#38bdf8; margin-top:6px;">
+              Calculando SHA-256 en cliente...
+            </div>
+            <div id="uploadStatusMsg" style="font-size:0.73rem; margin-top:6px; display:none;"></div>
+          </div>
+        </div>
+
+        <!-- SECCIÓN 3: REPOSITORIO DE ZIPS Y PAQUETES EN SERVIDOR -->
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="font-size:0.78rem; font-weight:700; color:#e2e8f0; display:flex; align-items:center; gap:6px;">
+              <span>📂</span> HISTORIAL DE PAQUETES DISPONIBLES EN CIBERCODE
+            </div>
+            <button onclick="cargarListaZipsServidor()" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; padding:3px 8px; border-radius:4px; font-size:0.7rem; cursor:pointer;">
+              🔄 Actualizar Lista
+            </button>
+          </div>
+          <div id="serverZipsList" style="display:flex; flex-direction:column; gap:6px;">
+            <div style="font-size:0.72rem; color:#94a3b8; padding:8px; text-align:center;">Cargando inventario de paquetes...</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
   </div>
 
   <script src="/cibercode.js"></script>

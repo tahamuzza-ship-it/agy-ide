@@ -1,4 +1,7 @@
 'use strict';
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 const { randomUUID } = require('node:crypto');
 
 const BASE = 'https://yarbis-autonomous-control-production.up.railway.app';
@@ -191,6 +194,157 @@ function registerCibercodeRoutes(app, options = {}) {
   app.get('/manual.html', manualHandler);
   app.get('/cibercode-manual', manualHandler);
   app.get('/cibercode-manual.html', manualHandler);
+
+  // Enlace de Descarga Directa Forzada (HTML y ZIP estilo Replit)
+  app.get(['/descargar-manual', '/api/descargar-manual'], (_req, res) => {
+    res.download(path.join(__dirname, 'public/cibercode-manual.html'), 'MANUAL_DIDACTICO_CIBERCODE_2.html');
+  });
+  app.get(['/descargar-manual.zip', '/api/descargar-manual.zip', '/manual.zip'], (_req, res) => {
+    res.download(path.join(__dirname, 'public/MANUAL_CIBERCODE_2_SGN.zip'), 'MANUAL_CIBERCODE_2_SGN.zip');
+  });
+
+  // ── GESTIÓN DE ENLACES DESCARGABLES Y SUBIDA DE ZIPS (Skill SGN #54) ──
+  const uploadsDir = path.join(__dirname, 'public', 'uploads');
+  if (!fs.existsSync(uploadsDir)) {
+    try { fs.mkdirSync(uploadsDir, { recursive: true }); } catch (e) {}
+  }
+
+  // 1. Listar ZIPs disponibles en servidor (Oficiales y Subidos)
+  const listZipsHandler = (_req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const zips = [];
+    
+    // Archivos oficiales en public/
+    const oficiales = [
+      {
+        nombre: 'MANUAL_CIBERCODE_2_SGN.zip',
+        ruta: path.join(__dirname, 'public', 'MANUAL_CIBERCODE_2_SGN.zip'),
+        tipo: 'Oficial SGN',
+        descripcion: 'Consola didáctica interactiva de CIBERCODE 2.0 con 8 pruebas de fuego'
+      },
+      {
+        nombre: 'SKILL_GESTION_ENLACES_DESCARGABLES_Y_WEB.zip',
+        ruta: path.join(__dirname, 'public', 'SKILL_GESTION_ENLACES_DESCARGABLES_Y_WEB.zip'),
+        tipo: 'Oficial SGN',
+        descripcion: 'Skill canónica SGN #54 (Paquete 3 Infraestructura Red #15)'
+      }
+    ];
+
+    oficiales.forEach(item => {
+      if (fs.existsSync(item.ruta)) {
+        try {
+          const buf = fs.readFileSync(item.ruta);
+          const hash = crypto.createHash('sha256').update(buf).digest('hex');
+          const stat = fs.statSync(item.ruta);
+          zips.push({
+            filename: item.nombre,
+            tipo: item.tipo,
+            descripcion: item.descripcion,
+            size: stat.size,
+            sha256: hash,
+            downloadUrl: `/descargar-zip?file=${encodeURIComponent(item.nombre)}`,
+            mtime: stat.mtime
+          });
+        } catch (e) {}
+      }
+    });
+
+    // Archivos subidos en public/uploads/
+    if (fs.existsSync(uploadsDir)) {
+      try {
+        const files = fs.readdirSync(uploadsDir);
+        files.forEach(file => {
+          const fullPath = path.join(uploadsDir, file);
+          try {
+            const stat = fs.statSync(fullPath);
+            if (stat.isFile()) {
+              const buf = fs.readFileSync(fullPath);
+              const hash = crypto.createHash('sha256').update(buf).digest('hex');
+              zips.push({
+                filename: file,
+                tipo: 'Subido por Usuario',
+                descripcion: 'Paquete transferido a CIBERCODE',
+                size: stat.size,
+                sha256: hash,
+                downloadUrl: `/descargar-zip?file=${encodeURIComponent(file)}`,
+                mtime: stat.mtime
+              });
+            }
+          } catch (e) {}
+        });
+      } catch (e) {}
+    }
+
+    res.json({ status: 'success', zips });
+  };
+  app.get(['/api/cibercode/zips', '/api/zips'], listZipsHandler);
+
+  // 2. Descarga forzada directa (Content-Disposition: attachment + X-SHA256)
+  const downloadZipHandler = (req, res) => {
+    const rawFile = req.query.file || req.params.file || '';
+    const safeFile = path.basename(rawFile);
+    if (!safeFile) {
+      return res.status(400).send('Nombre de archivo no especificado.');
+    }
+
+    let target = path.join(__dirname, 'public', safeFile);
+    if (!fs.existsSync(target)) {
+      target = path.join(uploadsDir, safeFile);
+    }
+
+    if (!fs.existsSync(target)) {
+      return res.status(404).send('Archivo no encontrado en el servidor.');
+    }
+
+    try {
+      const buf = fs.readFileSync(target);
+      const hash = crypto.createHash('sha256').update(buf).digest('hex');
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeFile}"`);
+      res.setHeader('X-SHA256', hash);
+      res.download(target, safeFile);
+    } catch (err) {
+      res.status(500).send('Error leyendo archivo para descarga: ' + err.message);
+    }
+  };
+  app.get(['/descargar-zip', '/api/descargar-zip', '/api/cibercode/descargar-zip'], downloadZipHandler);
+
+  // 3. Subir archivo/ZIP con certificación SHA-256
+  const expressMod = require('express');
+  const uploadZipHandler = (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+      const { filename, base64 } = req.body || {};
+      if (!filename || !base64) {
+        return res.status(400).json({ status: 'error', error: 'Se requiere filename y base64' });
+      }
+
+      const safeFilename = path.basename(filename);
+      const buf = Buffer.from(base64, 'base64');
+      if (buf.length === 0) {
+        return res.status(400).json({ status: 'error', error: 'Archivo vacío o base64 inválido' });
+      }
+
+      const hash = crypto.createHash('sha256').update(buf).digest('hex');
+      const destPath = path.join(uploadsDir, safeFilename);
+      fs.writeFileSync(destPath, buf);
+
+      console.log(`[CIBERCODE ZIP UPLOAD] Archivo guardado: ${safeFilename} (${buf.length} bytes, SHA-256: ${hash})`);
+
+      return res.json({
+        status: 'success',
+        filename: safeFilename,
+        size: buf.length,
+        sha256: hash,
+        downloadUrl: `/descargar-zip?file=${encodeURIComponent(safeFilename)}`,
+        message: 'Archivo subido y certificado con éxito en CIBERCODE 2.0'
+      });
+    } catch (err) {
+      console.error('[CIBERCODE ZIP UPLOAD ERROR]:', err);
+      res.status(500).json({ status: 'error', error: err.message });
+    }
+  };
+  app.post(['/api/cibercode/upload-zip', '/api/upload-zip'], expressMod.json({ limit: '50mb' }), uploadZipHandler);
 
   console.log('[CIBERCODE 2.0] Rutas de relay agéntico hacia PC4 registradas con éxito.');
 }

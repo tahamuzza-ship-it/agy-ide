@@ -456,3 +456,239 @@ document.addEventListener('DOMContentLoaded', function () {
     cambiarVia('local');
   }
 });
+
+// ── 10. GESTOR DE PAQUETES & ZIPS SGN (Skill: gestion-enlaces-descargables-y-web-sgn) ──
+let selectedZipFile = null;
+let selectedZipBase64 = null;
+let selectedZipSha256 = null;
+
+function abrirModalZips() {
+  const modal = document.getElementById('modalZips');
+  if (!modal) return;
+  modal.style.display = 'flex';
+
+  const editorLabel = document.getElementById('zipEditorFileLabel');
+  if (editorLabel) {
+    const fileName = currentFilePath ? currentFilePath.split(/[/\\]/).pop() : 'script.py';
+    editorLabel.textContent = `Archivo activo: ${fileName}`;
+  }
+
+  cargarListaZipsServidor();
+}
+
+function cerrarModalZips() {
+  const modal = document.getElementById('modalZips');
+  if (modal) modal.style.display = 'none';
+  selectedZipFile = null;
+  selectedZipBase64 = null;
+  selectedZipSha256 = null;
+  const preview = document.getElementById('zipUploadPreview');
+  if (preview) preview.style.display = 'none';
+  const statusMsg = document.getElementById('uploadStatusMsg');
+  if (statusMsg) statusMsg.style.display = 'none';
+}
+
+function cerrarModalZipsSiFondo(e) {
+  if (e.target.id === 'modalZips') cerrarModalZips();
+}
+
+async function descargarCodigoComoZip() {
+  if (!editor) {
+    alert('Monaco Editor aún no está listo.');
+    return;
+  }
+  const content = editor.getValue();
+  const rawName = currentFilePath ? currentFilePath.split(/[/\\]/).pop() : 'script.py';
+  const baseName = rawName.replace(/\.[^/.]+$/, "");
+
+  if (typeof JSZip !== 'undefined') {
+    const zip = new JSZip();
+    zip.file(rawName, content);
+    zip.file("LEAME_SGN.txt", `CIBERCODE 2.0 — Antigravity IDE Soberano\nArchivo: ${rawName}\nFecha: ${new Date().toISOString()}\nGenerado bajo la Constitución SGN.\n`);
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${baseName}_SGN.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } else {
+    // Fallback descarga directa del archivo con attachment
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = rawName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+}
+
+function handleZipDragOver(e) {
+  e.preventDefault();
+  const dz = document.getElementById('zipDropzone');
+  if (dz) dz.classList.add('dragover');
+}
+
+function handleZipDragLeave(e) {
+  e.preventDefault();
+  const dz = document.getElementById('zipDropzone');
+  if (dz) dz.classList.remove('dragover');
+}
+
+function handleZipDrop(e) {
+  e.preventDefault();
+  const dz = document.getElementById('zipDropzone');
+  if (dz) dz.classList.remove('dragover');
+  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    procesarArchivoSeleccionado(e.dataTransfer.files[0]);
+  }
+}
+
+function handleZipFileSelected(e) {
+  if (e.target.files && e.target.files.length > 0) {
+    procesarArchivoSeleccionado(e.target.files[0]);
+  }
+}
+
+async function procesarArchivoSeleccionado(file) {
+  selectedZipFile = file;
+  const preview = document.getElementById('zipUploadPreview');
+  const nameEl = document.getElementById('uploadFileName');
+  const sizeEl = document.getElementById('uploadFileSize');
+  const hashEl = document.getElementById('uploadFileHash');
+  const statusMsg = document.getElementById('uploadStatusMsg');
+  const btn = document.getElementById('btnConfirmUpload');
+
+  if (preview) preview.style.display = 'block';
+  if (statusMsg) statusMsg.style.display = 'none';
+  if (btn) { btn.disabled = true; btn.textContent = 'Calculando SHA-256...'; }
+
+  if (nameEl) nameEl.textContent = file.name;
+  if (sizeEl) {
+    const kb = (file.size / 1024).toFixed(1);
+    const mb = (file.size / (1024 * 1024)).toFixed(2);
+    sizeEl.textContent = file.size > 1048576 ? `${mb} MB` : `${kb} KB`;
+  }
+  if (hashEl) hashEl.textContent = 'Calculando hash SHA-256 en cliente...';
+
+  // Leer y calcular SHA-256 en cliente
+  const reader = new FileReader();
+  reader.onload = async function (evt) {
+    const arrayBuffer = evt.target.result;
+    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    selectedZipSha256 = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    
+    // Convertir a base64
+    let binary = '';
+    const bytes = new Uint8Array(arrayBuffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    selectedZipBase64 = btoa(binary);
+
+    if (hashEl) hashEl.textContent = `SHA-256 (Local): ${selectedZipSha256}`;
+    if (btn) { btn.disabled = false; btn.textContent = '🚀 Subir y Certificar'; }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function ejecutarSubidaZip() {
+  if (!selectedZipFile || !selectedZipBase64) {
+    alert('Primero selecciona un archivo válido.');
+    return;
+  }
+
+  const btn = document.getElementById('btnConfirmUpload');
+  const statusMsg = document.getElementById('uploadStatusMsg');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Transfiriendo...'; }
+  if (statusMsg) {
+    statusMsg.style.display = 'block';
+    statusMsg.style.color = '#38bdf8';
+    statusMsg.textContent = 'Subiendo paquete a CIBERCODE...';
+  }
+
+  try {
+    const res = await fetch('/api/cibercode/upload-zip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filename: selectedZipFile.name,
+        base64: selectedZipBase64
+      })
+    });
+
+    const data = await res.json();
+    if (data.status === 'success') {
+      if (statusMsg) {
+        statusMsg.style.color = '#4ade80';
+        statusMsg.innerHTML = `✅ <strong>${escapeHtml(data.filename)}</strong> subido y certificado exitosamente.<br>
+          <span style="font-family:'Fira Code', monospace; font-size:0.67rem; color:#a7f3d0;">SHA-256 Servidor: ${data.sha256}</span> • 
+          <a href="${data.downloadUrl}" download style="color:#00f3ff; text-decoration:underline;">Descargar directo</a>`;
+      }
+      cargarListaZipsServidor();
+    } else {
+      if (statusMsg) {
+        statusMsg.style.color = '#f87171';
+        statusMsg.textContent = `❌ Error del servidor: ${data.error || 'Fallo desconocido'}`;
+      }
+    }
+  } catch (err) {
+    if (statusMsg) {
+      statusMsg.style.color = '#f87171';
+      statusMsg.textContent = `❌ Error de red: ${err.message}`;
+    }
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🚀 Subir y Certificar'; }
+  }
+}
+
+async function cargarListaZipsServidor() {
+  const container = document.getElementById('serverZipsList');
+  if (!container) return;
+
+  try {
+    const res = await fetch('/api/cibercode/zips', { cache: 'no-store' });
+    const data = await res.json();
+
+    if (data.status === 'success' && Array.isArray(data.zips) && data.zips.length > 0) {
+      container.innerHTML = '';
+      data.zips.forEach(z => {
+        const item = document.createElement('div');
+        item.style.cssText = 'background:#020617; border:1px solid #1e293b; border-radius:6px; padding:8px 12px; display:flex; justify-content:space-between; align-items:center; gap:8px;';
+        
+        const kb = (z.size / 1024).toFixed(1);
+        const mb = (z.size / (1024 * 1024)).toFixed(2);
+        const sizeStr = z.size > 1048576 ? `${mb} MB` : `${kb} KB`;
+        const badgeColor = z.tipo.includes('Oficial') ? '#4ade80' : '#38bdf8';
+
+        item.innerHTML = `
+          <div style="flex:1; overflow:hidden;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <strong style="font-size:0.77rem; color:#f1f5f9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(z.filename)}</strong>
+              <span style="font-size:0.62rem; background:#0f172a; color:${badgeColor}; border:1px solid #1e293b; padding:1px 5px; border-radius:4px;">${escapeHtml(z.tipo)}</span>
+              <span style="font-size:0.68rem; color:#94a3b8;">(${sizeStr})</span>
+            </div>
+            <div style="font-family:'Fira Code', monospace; font-size:0.63rem; color:#64748b; margin-top:2px;">
+              SHA-256: ${z.sha256}
+            </div>
+          </div>
+          <a href="${z.downloadUrl}" download="${escapeHtml(z.filename)}" class="btn-zip-dl" style="padding:4px 9px; font-size:0.68rem; flex-shrink:0;">
+            ⬇️ Descargar
+          </a>
+        `;
+        container.appendChild(item);
+      });
+    } else {
+      container.innerHTML = '<div style="font-size:0.72rem; color:#94a3b8; padding:8px; text-align:center;">No hay paquetes adicionales en el servidor.</div>';
+    }
+  } catch (err) {
+    container.innerHTML = `<div style="font-size:0.72rem; color:#f59e0b; padding:8px; text-align:center;">No se pudo consultar el servidor: ${err.message}</div>`;
+  }
+}
