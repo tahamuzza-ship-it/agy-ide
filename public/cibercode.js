@@ -225,6 +225,7 @@ function renderTreeItems(items, parentElement, depth = 0) {
 }
 
 async function abrirArchivo(filePath, clickedEl) {
+  if (window.innerWidth <= 768 && typeof setMobileView === 'function') { setMobileView('editor'); }
   document.querySelectorAll('.tree-item').forEach(t => t.classList.remove('active'));
   if (clickedEl) clickedEl.classList.add('active');
 
@@ -690,5 +691,20 @@ async function cargarListaZipsServidor() {
     }
   } catch (err) {
     container.innerHTML = `<div style="font-size:0.72rem; color:#f59e0b; padding:8px; text-align:center;">No se pudo consultar el servidor: ${err.message}</div>`;
+  }
+}
+
+
+// ── GESTIÓN DE VISTAS EN DISPOSITIVOS MÓVILES (SGN MOBILE) ──
+function setMobileView(viewName) {
+  document.body.classList.remove('mobile-view-files', 'mobile-view-editor', 'mobile-view-chat', 'mobile-view-terminal');
+  document.body.classList.add('mobile-view-' + viewName);
+
+  document.querySelectorAll('.mobile-tab-btn').forEach(btn => btn.classList.remove('active'));
+  const activeBtn = document.getElementById('mTab' + viewName.charAt(0).toUpperCase() + viewName.slice(1));
+  if (activeBtn) activeBtn.classList.add('active');
+
+  if (viewName === 'editor' && typeof editor !== 'undefined' && editor) {
+    setTimeout(() => editor.layout(), 120);
   }
 }

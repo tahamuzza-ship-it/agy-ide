@@ -710,6 +710,167 @@
       border-color: var(--cyan);
       background: rgba(0, 243, 255, 0.05);
     }
+  
+    /* =======================================================
+       OPTIMIZACIONES RESPONSIVAS PARA MÓVILES (CIBERCODE IDE)
+       ======================================================= */
+    .mobile-bottom-bar {
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      body {
+        overflow: hidden !important;
+      }
+      
+      /* Header en Móvil: compacto y sin desbordes */
+      header {
+        padding: 0 8px !important;
+        gap: 6px !important;
+      }
+      .header-left {
+        gap: 6px !important;
+      }
+      .menu-bar, .connection-selector, .header-right .badge {
+        display: none !important;
+      }
+      .header-right {
+        gap: 6px !important;
+      }
+      #target-label {
+        font-size: 0.68rem !important;
+        max-width: 105px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+      .logo {
+        font-size: 0.86rem !important;
+      }
+      header a[href="/cibercode-manual.html"],
+      header a[href="/cibercode-zips.html"] {
+        padding: 4px 8px !important;
+        font-size: 0.68rem !important;
+      }
+
+      /* Workspace en Móvil: Se ajusta para dejar espacio a la barra inferior */
+      .workspace-3col {
+        height: calc(100vh - 44px - 54px) !important;
+        flex-direction: column !important;
+        position: relative !important;
+      }
+
+      /* Divisores ocultos en móvil */
+      .resizer-col, .resizer-row {
+        display: none !important;
+      }
+
+      /* Las 3 Columnas ocupan el 100% a pantalla completa */
+      .col-left, .col-center, .col-right {
+        width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+        height: 100% !important;
+        flex: 1 !important;
+        border: none !important;
+      }
+
+      /* Activity bar en col-left */
+      .activity-bar {
+        display: none !important;
+      }
+
+      /* Gestión de Vistas Móviles (Tabs) */
+      body:not([class*="mobile-view-"]) .col-left,
+      body:not([class*="mobile-view-"]) .col-right,
+      body.mobile-view-editor .col-left,
+      body.mobile-view-editor .col-right {
+        display: none !important;
+      }
+      body:not([class*="mobile-view-"]) .col-center,
+      body.mobile-view-editor .col-center {
+        display: flex !important;
+      }
+
+      body.mobile-view-files .col-left {
+        display: flex !important;
+      }
+      body.mobile-view-files .col-center,
+      body.mobile-view-files .col-right {
+        display: none !important;
+      }
+
+      body.mobile-view-chat .col-right {
+        display: flex !important;
+      }
+      body.mobile-view-chat .chat-section {
+        display: flex !important;
+        height: 100% !important;
+      }
+      body.mobile-view-chat .terminal-section,
+      body.mobile-view-chat .col-left,
+      body.mobile-view-chat .col-center {
+        display: none !important;
+      }
+
+      body.mobile-view-terminal .col-right {
+        display: flex !important;
+      }
+      body.mobile-view-terminal .terminal-section {
+        display: flex !important;
+        height: 100% !important;
+      }
+      body.mobile-view-terminal .chat-section,
+      body.mobile-view-terminal .col-left,
+      body.mobile-view-terminal .col-center {
+        display: none !important;
+      }
+
+      /* Barra de Navegación Inferior Móvil (Mobile Bottom Bar) */
+      .mobile-bottom-bar {
+        display: flex !important;
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        height: 54px !important;
+        background: #050914 !important;
+        border-top: 1px solid var(--border) !important;
+        z-index: 1000 !important;
+        justify-content: space-around !important;
+        align-items: center !important;
+        padding: 0 4px !important;
+      }
+      .mobile-tab-btn {
+        flex: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        height: 100% !important;
+        background: transparent !important;
+        border: none !important;
+        color: var(--text-muted) !important;
+        cursor: pointer !important;
+        padding: 4px 0 !important;
+        gap: 2px !important;
+        transition: all 0.2s ease !important;
+      }
+      .mobile-tab-btn .m-icon {
+        font-size: 1.15rem !important;
+      }
+      .mobile-tab-btn .m-label {
+        font-size: 0.65rem !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.02em !important;
+      }
+      .mobile-tab-btn.active {
+        color: var(--cyan) !important;
+        background: rgba(0, 243, 255, 0.08) !important;
+        border-top: 2px solid var(--cyan) !important;
+      }
+    }
+
   </style>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.43.0/min/vs/loader.js"></script>
@@ -905,6 +1066,27 @@
     </aside>
 
   </div>
+
+  
+  <!-- BARRA DE NAVEGACIÓN INFERIOR PARA MÓVILES (SGN MOBILE APP STYLE) -->
+  <nav class="mobile-bottom-bar" id="mobileBottomBar">
+    <button class="mobile-tab-btn" onclick="setMobileView('files')" id="mTabFiles">
+      <span class="m-icon">📁</span>
+      <span class="m-label">Archivos</span>
+    </button>
+    <button class="mobile-tab-btn active" onclick="setMobileView('editor')" id="mTabEditor">
+      <span class="m-icon">💻</span>
+      <span class="m-label">Editor</span>
+    </button>
+    <button class="mobile-tab-btn" onclick="setMobileView('chat')" id="mTabChat">
+      <span class="m-icon">💬</span>
+      <span class="m-label">Qwen IA</span>
+    </button>
+    <button class="mobile-tab-btn" onclick="setMobileView('terminal')" id="mTabTerminal">
+      <span class="m-icon">⚡</span>
+      <span class="m-label">Terminal</span>
+    </button>
+  </nav>
 
   <script src="/cibercode.js"></script>
 </body>
