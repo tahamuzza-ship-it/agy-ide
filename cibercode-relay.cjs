@@ -195,6 +195,17 @@ function registerCibercodeRoutes(app, options = {}) {
   app.get('/cibercode-manual', manualHandler);
   app.get('/cibercode-manual.html', manualHandler);
 
+  // Servir la Consola Didáctica y Centro de Distribución ZIPS (Skill #54)
+  const zipsWindowHandler = (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Content-Type', 'text/html; charset=UTF-8');
+    res.sendFile(path.join(__dirname, 'public/cibercode-zips.html'));
+  };
+  app.get('/zips', zipsWindowHandler);
+  app.get('/zips.html', zipsWindowHandler);
+  app.get('/cibercode-zips', zipsWindowHandler);
+  app.get('/cibercode-zips.html', zipsWindowHandler);
+
   // Enlace de Descarga Directa Forzada (HTML y ZIP estilo Replit)
   app.get(['/descargar-manual', '/api/descargar-manual'], (_req, res) => {
     res.download(path.join(__dirname, 'public/cibercode-manual.html'), 'MANUAL_DIDACTICO_CIBERCODE_2.html');
