@@ -659,9 +659,12 @@ app.get(['/', '/index.html'], (_req, res, next) => {
     const html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
     const closing = html.toLowerCase().lastIndexOf('</body>');
     if (closing < 0) return next();
-    const link = '<a id="agy-local-ai-link" href="/local-ai" target="_blank" rel="noopener" style="position:fixed;bottom:12px;left:12px;z-index:100;background:#12213a;color:#ddecff;padding:9px 13px;border:1px solid #466086;border-radius:8px;font:13px system-ui;text-decoration:none">IA local · PC3 / PC4</a>';
+    const link = '<a id="agy-local-ai-link" href="/local-ai" target="_blank" rel="noopener" style="position:fixed;bottom:12px;left:12px;z-index:100;background:#12213a;color:#ddecff;padding:9px 13px;border:1px solid #466086;border-radius:8px;font:13px system-ui;text-decoration:none">IA local · PC3 / PC4</a><a id="cibercode-link" href="/cibercode" target="_blank" rel="noopener" style="position:fixed;bottom:12px;left:165px;z-index:100;background:#052e16;color:#4ade80;padding:9px 13px;border:1px solid #22c55e;border-radius:8px;font:13px system-ui;text-decoration:none;font-weight:600">⚡ CIBERCODE 2.0</a>';
     res.set('Cache-Control', 'no-store').type('html').send(html.slice(0, closing) + link + html.slice(closing));
   } catch (error) { next(error); }
+});
+app.get('/cibercode', (_req, res) => {
+  res.set('Cache-Control', 'no-store').sendFile(path.join(__dirname, 'public', 'cibercode.html'));
 });
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, filePath) {
