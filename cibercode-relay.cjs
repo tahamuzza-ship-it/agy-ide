@@ -182,6 +182,15 @@ function registerCibercodeRoutes(app, options = {}) {
   app.post('/api/cibercode/api/exec/self-heal', healHandler);
   app.post('/api/exec/self-heal', healHandler);
 
+  // Servir el Manual Interactivo CIBERCODE 2.0 idéntico a la Batería de Pruebas
+  const path = require('path');
+  const manualHandler = (_req, res) => {
+    res.sendFile(path.join(__dirname, 'public/manual.html'));
+  };
+  app.get('/manual', manualHandler);
+  app.get('/manual.html', manualHandler);
+  app.get('/cibercode-manual.html', manualHandler);
+
   console.log('[CIBERCODE 2.0] Rutas de relay agéntico hacia PC4 registradas con éxito.');
 }
 

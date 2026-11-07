@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consola Didáctica y Batería de Pruebas — CIBERCODE 2.0 Soberano</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --border: #30363d;
+            --primary: #238636;
+            --primary-hover: #2ea043;
+            --blue: #58a6ff;
+            --purple: #bc8cff;
+            --yellow: #d29922;
+            --red: #f85149;
+            --green: #3fb950;
+            --text: #c9d1d9;
+            --text-white: #f0f6fc;
+            --text-dim: #8b949e;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            line-height: 1.5;
+            padding: 24px 16px 100px 16px;
+        }
+        .container {
+            max-width: 980px;
+            margin: 0 auto;
+        }
+        .header {
+            background: linear-gradient(135deg, #1f242c 0%, #161b22 100%);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        .header h1 {
+            color: var(--text-white);
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .header p {
+            color: var(--text-dim);
+            margin-top: 8px;
+            font-size: 14px;
+        }
+        .badge-bar {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            background: rgba(88, 166, 255, 0.15);
+            color: var(--blue);
+            border: 1px solid rgba(88, 166, 255, 0.3);
+        }
+        .badge.purple {
+            background: rgba(188, 140, 255, 0.15);
+            color: var(--purple);
+            border-color: rgba(188, 140, 255, 0.3);
+        }
+        .badge.green {
+            background: rgba(35, 134, 54, 0.15);
+            color: var(--green);
+            border-color: rgba(35, 134, 54, 0.3);
+        }
+        .badge.yellow {
+            background: rgba(210, 153, 34, 0.15);
+            color: var(--yellow);
+            border-color: rgba(210, 153, 34, 0.3);
+        }
+
+        /* Bloques de Explicación Didáctica */
+        .didactic-box {
+            background: #111620;
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--blue);
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+        }
+        .didactic-box h3 {
+            color: var(--text-white);
+            font-size: 16px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .didactic-box p {
+            font-size: 13.5px;
+            color: var(--text-dim);
+            line-height: 1.6;
+        }
+
+        .section-header {
+            color: var(--text-white);
+            font-size: 18px;
+            font-weight: 700;
+            margin: 32px 0 14px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+        .section-desc {
+            font-size: 13px;
+            color: var(--text-dim);
+            margin-top: -8px;
+            margin-bottom: 16px;
+        }
+
+        /* Tarjeta de Prueba */
+        .test-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .test-card:hover {
+            border-color: #58a6ff;
+            box-shadow: 0 4px 18px rgba(0,0,0,0.3);
+        }
+        .test-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .test-num {
+            font-weight: 700;
+            font-size: 15px;
+            color: var(--text-white);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .mode-badge {
+            font-size: 11px;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge-ultra {
+            background: rgba(63, 185, 80, 0.15);
+            color: #3fb950;
+            border: 1px solid rgba(63, 185, 80, 0.3);
+        }
+        .badge-deep {
+            background: rgba(188, 140, 255, 0.2);
+            color: var(--purple);
+            border: 1px solid rgba(188, 140, 255, 0.4);
+        }
+        .badge-terminal {
+            background: rgba(210, 153, 34, 0.2);
+            color: var(--yellow);
+            border: 1px solid rgba(210, 153, 34, 0.4);
+        }
+        .badge-editor {
+            background: rgba(88, 166, 255, 0.15);
+            color: var(--blue);
+            border: 1px solid rgba(88, 166, 255, 0.3);
+        }
+
+        .test-instruction {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-bottom: 10px;
+        }
+
+        .prompt-box {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 14px;
+            margin: 12px 0;
+            position: relative;
+        }
+        .prompt-text {
+            color: #79c0ff;
+            font-size: 13.5px;
+            font-weight: 500;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            font-family: inherit;
+        }
+        .copy-btn {
+            background: #21262d;
+            color: var(--text-white);
+            border: 1px solid var(--border);
+            padding: 6px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 10px;
+            transition: all 0.2s;
+        }
+        .copy-btn:hover {
+            background: #30363d;
+            border-color: #8b949e;
+        }
+        .copy-btn.copied {
+            background: #238636;
+            border-color: #2ea043;
+            color: white;
+        }
+
+        .expected-box {
+            background: rgba(88, 166, 255, 0.05);
+            border-left: 3px solid var(--blue);
+            padding: 10px 14px;
+            border-radius: 0 6px 6px 0;
+            margin: 12px 0;
+            font-size: 12.5px;
+            color: #8b949e;
+        }
+        .expected-box strong {
+            color: var(--text-white);
+        }
+
+        .textarea-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-dim);
+            margin-top: 14px;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+        textarea.response-input {
+            width: 100%;
+            height: 95px;
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-white);
+            font-family: 'Fira Code', Consolas, monospace;
+            font-size: 12px;
+            padding: 10px;
+            resize: vertical;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        textarea.response-input:focus {
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+        }
+
+        .rating-bar {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .rating-label {
+            font-size: 12px;
+            color: var(--text-dim);
+            font-weight: 600;
+            margin-right: 4px;
+        }
+        .rate-btn {
+            background: #21262d;
+            border: 1px solid var(--border);
+            color: var(--text-dim);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .rate-btn:hover {
+            border-color: #8b949e;
+            color: var(--text-white);
+        }
+        .rate-btn.selected-pass {
+            background: rgba(35, 134, 54, 0.3);
+            border-color: #3fb950;
+            color: #3fb950;
+        }
+        .rate-btn.selected-warn {
+            background: rgba(210, 153, 34, 0.3);
+            border-color: #d29922;
+            color: #e3b341;
+        }
+        .rate-btn.selected-fail {
+            background: rgba(248, 81, 73, 0.3);
+            border-color: #f85149;
+            color: #f85149;
+        }
+
+        /* Panel Fijo Inferior */
+        .actions-panel {
+            position: fixed;
+            bottom: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 32px);
+            max-width: 980px;
+            background: rgba(22, 27, 34, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 14px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.7);
+            flex-wrap: wrap;
+            gap: 12px;
+            z-index: 1000;
+        }
+        .status-pill {
+            font-size: 12px;
+            color: #8b949e;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #3fb950;
+            box-shadow: 0 0 8px #3fb950;
+        }
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+        .btn-secondary {
+            background: #21262d;
+            border-color: var(--border);
+            color: var(--text);
+        }
+        .btn-secondary:hover {
+            background: #30363d;
+            color: var(--text-white);
+        }
+        .btn-danger {
+            background: rgba(248, 81, 73, 0.15);
+            border-color: rgba(248, 81, 73, 0.3);
+            color: var(--red);
+        }
+        .btn-danger:hover {
+            background: var(--red);
+            color: white;
+        }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #238636;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.25s ease;
+            z-index: 2000;
+            pointer-events: none;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- ENCABEZADO PRINCIPAL -->
+    <div class="header">
+        <h1>⚡ CONSOLA DE APRENDIZAJE Y PRUEBAS CIBERCODE 2.0</h1>
+        <p>Manual interactivo para probar en vivo los 3 paneles, la inferencia de Qwen y la Terminal Auto-Correctora en PC4.</p>
+        <div class="badge-bar">
+            <span class="badge green">● Supernodo PC4 i9 (24 Cores / 32 Hilos)</span>
+            <span class="badge">🟢 Qwen 1.5B Ultraligero ($0.00)</span>
+            <span class="badge purple">🔵 7B Pensamiento Profundo</span>
+            <span class="badge yellow">⚡ Terminal Replit Auto-Correctora</span>
+            <span class="badge">💾 Verificación SHA-256</span>
+        </div>
+    </div>
+
+    <!-- EXPLICACIÓN DIDÁCTICA INICIAL -->
+    <div class="didactic-box">
+        <h3>🌾 ¿Cómo usar este Manual Didáctico? (Modo Fácil a 1 Solo Clic)</h3>
+        <p>
+            1. Abre tu ventana de <strong>CIBERCODE 2.0</strong> en otra pestaña o pantalla.<br>
+            2. Lee cada prueba abajo: haz clic en <strong>📋 Copiar Orden</strong> y pégala en CiberCode con <code>Ctrl + V</code>.<br>
+            3. Cuando CiberCode responda o ejecute, <strong>copia su resultado y pégalo en la cajita gris</strong> de este manual.<br>
+            4. Califica con <strong>✅ Aprobado</strong>, <strong>⚠️ Advertencia</strong> o <strong>❌ Falló</strong>. ¡Todo se guarda automáticamente en tu computador!
+        </p>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- BLOQUE 1: INFERENCIA RÁPIDA CON QWEN 1.5B ULTRALIGERO               -->
+    <!-- ==================================================================== -->
+    <div class="section-header">
+        <span>🟢 BLOQUE 1: CEREBRO RÁPIDO (Qwen 1.5B Ultraligero)</span>
+    </div>
+    <div class="section-desc">
+        Ideal para tareas rápidas (1 a 2 segundos), sumas, cálculos de cajas, pequeños scripts y dudas inmediatas. Menos de 1 GB de RAM.
+    </div>
+
+    <!-- PRUEBA 1 -->
+    <div class="test-card" data-id="p1">
+        <div class="test-card-header">
+            <div class="test-num"><span>🌸 P1</span> Cálculo de Despacho Floral Miami</div>
+            <span class="mode-badge badge-ultra">🟢 1.5B Ultraligero</span>
+        </div>
+        <div class="test-instruction">
+            <strong>Paso:</strong> En la columna derecha de CiberCode, asegúrate de tener seleccionado <strong>🟢 1.5B Ultraligero</strong>. Copia esta pregunta y pégala en la caja de texto.
+        </div>
+        <div class="prompt-box">
+            <div class="prompt-text" id="prompt-p1">Escribe un script en Python que calcule el costo total de un despacho de flores: recibe 150 cajas a $18.50 cada una, le suma un 12% de flete aéreo de Miami y un seguro de $45. Imprime el desglose y el total final.</div>
+            <button class="copy-btn" onclick="copiarTexto('prompt-p1', this)">📋 Copiar Orden</button>
+        </div>
+        <div class="expected-box">
+            <strong>Resultado Esperado:</strong> Qwen responde en menos de 2 segundos generando un script limpio con las variables <code>cajas = 150</code>, <code>precio = 18.50</code>, el flete calculado y el total final de $3,153.00.
+        </div>
+        <label class="textarea-label">
+            <span>📥 Pega aquí la respuesta que te dio Qwen:</span>
+            <span style="font-size:11px; color:#58a6ff;">Se guarda solo</span>
+        </label>
+        <textarea class="response-input" id="resp-p1" placeholder="Pega aquí el código o la respuesta generada por Qwen..." oninput="autoGuardar()"></textarea>
+        <div class="rating-bar">
+            <span class="rating-label">Calificación:</span>
+            <button class="rate-btn" onclick="calificar('p1', 'pass', this)">✅ Aprobado</button>
+            <button class="rate-btn" onclick="calificar('p1', 'warn', this)">⚠️ Advertencia</button>
+            <button class="rate-btn" onclick="calificar('p1', 'fail', this)">❌ Falló</button>
+        </div>
+    </div>
+
+    <!-- PRUEBA 2 -->
+    <div class="test-card" data-id="p2">
+        <div class="test-card-header">
+            <div class="test-num"><span>📦 P2</span> Conversión de Cajas a Tallos y Cubos</div>
+            <span class="mode-badge badge-ultra">🟢 1.5B Ultraligero</span>
+        </div>
+        <div class="test-instruction">
+            <strong>Paso:</strong> Envía este pedido matemático sencillo a Qwen 1.5B para comprobar su velocidad de cálculo.
+        </div>
+        <div class="prompt-box">
+            <div class="prompt-text" id="prompt-p2">Haz una función en Python que reciba 80 cajas de claveles (cada caja trae 25 ramos de 20 tallos). Calcula el total de tallos y cuántos camiones se necesitan si cada camión carga 5,000 tallos.</div>
+            <button class="copy-btn" onclick="copiarTexto('prompt-p2', this)">📋 Copiar Orden</button>
+        </div>
+        <div class="expected-box">
+            <strong>Resultado Esperado:</strong> 80 * 25 * 20 = 40,000 tallos. Necesita 8 camiones exactos. Qwen debe mostrar el desglose matemático claro.
+        </div>
+        <label class="textarea-label">
+            <span>📥 Pega aquí la respuesta que te dio Qwen:</span>
+        </label>
+        <textarea class="response-input" id="resp-p2" placeholder="Pega aquí la respuesta generada..." oninput="autoGuardar()"></textarea>
+        <div class="rating-bar">
+            <span class="rating-label">Calificación:</span>
+            <button class="rate-btn" onclick="calificar('p2', 'pass', this)">✅ Aprobado</button>
+            <button class="rate-btn" onclick="calificar('p2', 'warn', this)">⚠️ Advertencia</button>
+            <button class="rate-btn" onclick="calificar('p2', 'fail', this)">❌ Falló</button>
+        </div>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- BLOQUE 2: PENSAMIENTO PROFUNDO CON QWEN 7B                          -->
+    <!-- ==================================================================== -->
+    <div class="section-header">
+        <span>🔵 BLOQUE 2: CEREBRO SENIOR (Qwen 7B Pensamiento Profundo)</span>
+    </div>
+    <div class="section-desc">
+        Ideal para deducción lógica, análisis de clientes morosos, algoritmos con muchas condiciones, contratos y arquitectura.
+    </div>
+
+    <!-- PRUEBA 3 -->
+    <div class="test-card" data-id="p3">
+        <div class="test-card-header">
+            <div class="test-num"><span>⚖️ P3</span> Auditoría de Facturas y Clientes Morosos</div>
+            <span class="mode-badge badge-deep">🔵 7B Pensamiento Profundo</span>
+        </div>
+        <div class="test-instruction">
+            <strong>Paso:</strong> Pulsa el botón <strong>🔵 7B Pensamiento Profundo</strong> en CiberCode. Luego pega esta orden estructurada.
+        </div>
+        <div class="prompt-box">
+            <div class="prompt-text" id="prompt-p3">Diseña una función que reciba una lista de clientes de flores con sus facturas pendientes y días de mora. Si la mora supera 30 días, clasifícalos como 'Riesgo Alto' y calcula un interés de mora del 2.5%; si está entre 15 y 30 días, clasifícalos como 'Riesgo Medio' con 1.0%; si es menor a 15 días, 'Al Día' sin interés. Imprime una tabla ordenada por el total a cobrar.</div>
+            <button class="copy-btn" onclick="copiarTexto('prompt-p3', this)">📋 Copiar Orden</button>
+        </div>
+        <div class="expected-box">
+            <strong>Resultado Esperado:</strong> Qwen 7B estructura la clase o función con las 3 categorías condicionales, aplica los porcentajes correctos y devuelve una tabla ordenada con formato tabular o texto limpio.
+        </div>
+        <label class="textarea-label">
+            <span>📥 Pega aquí la respuesta que te dio Qwen 7B:</span>
+        </label>
+        <textarea class="response-input" id="resp-p3" placeholder="Pega aquí el código de Pensamiento Profundo..." oninput="autoGuardar()"></textarea>
+        <div class="rating-bar">
+            <span class="rating-label">Calificación:</span>
+            <button class="rate-btn" onclick="calificar('p3', 'pass', this)">✅ Aprobado</button>
+            <button class="rate-btn" onclick="calificar('p3', 'warn', this)">⚠️ Advertencia</button>
+            <button class="rate-btn" onclick="calificar('p3', 'fail', this)">❌ Falló</button>
+        </div>
+    </div>
+
+    <!-- PRUEBA 4 -->
+    <div class="test-card" data-id="p4">
+        <div class="test-card-header">
+            <div class="test-num"><span>🌡️ P4</span> Control Térmico en Cuartos Fríos (Doral)</div>
+            <span class="mode-badge badge-deep">🔵 7B Pensamiento Profundo</span>
+        </div>
+        <div class="test-instruction">
+            <strong>Paso:</strong> Mantén activo <strong>Pensamiento Profundo</strong> para una deducción de ingeniería de frío.
+        </div>
+        <div class="prompt-box">
+            <div class="prompt-text" id="prompt-p4">Escribe un monitor en Python para cuartos fríos de rosas en Doral: recibe lecturas horarias de temperatura. El rango óptimo es entre 1.5°C y 3.5°C. Si supera 4.0°C por más de 2 horas seguidas, genera una 'ALERTA ROJA: Riesgo de Botrytis'. Muestra el reporte final con el conteo de incidentes.</div>
+            <button class="copy-btn" onclick="copiarTexto('prompt-p4', this)">📋 Copiar Orden</button>
+        </div>
+        <div class="expected-box">
+            <strong>Resultado Esperado:</strong> Algoritmo con seguimiento de racha horaria (contador consecutivo > 2) y emisión de alerta biológica específica de rosas.
+        </div>
+        <label class="textarea-label">
+            <span>📥 Pega aquí la respuesta que te dio Qwen:</span>
+        </label>
+        <textarea class="response-input" id="resp-p4" placeholder="Pega aquí el script generado..." oninput="autoGuardar()"></textarea>
+        <div class="rating-bar">
+            <span class="rating-label">Calificación:</span>
+            <button class="rate-btn" onclick="calificar('p4', 'pass', this)">✅ Aprobado</button>
+            <button class="rate-btn" onclick="calificar('p4', 'warn', this)">⚠️ Advertencia</button>
+            <button class="rate-btn" onclick="calificar('p4', 'fail', this)">❌ Falló</button>
+        </div>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- BLOQUE 3: EDITOR MONACO Y GUARDADO CON SHA-256                      -->
+    <!-- ==================================================================== -->
+    <div class="section-header">
+        <span>📝 BLOQUE 3: LA MESA DE TRABAJO (Editor Monaco y SHA-256)</span>
+    </div>
+    <div class="section-desc">
+        Comprueba la edición del archivo en la columna central, las pestañas superiores y la certificación criptográfica en PC4.
+    </div>
+
+    <!-- PRUEBA 5 -->
+    <div class="test-card" data-id="p5">
+        <div class="test-card-header">
+            <div class="test-num"><span>💾 P5</span> Pegar Código y Certificar Guardado con SHA-256</div>
+            <span class="mode-badge badge-editor">📝 Editor Monaco</span>
+        </div>
+        <div class="test-instruction">
+            <strong>Paso:</strong> Copia este código exacto, pégalo en el <strong>Editor Monaco (Centro)</strong> y haz clic en el botón <strong>"💾 Guardar en PC4"</strong>.
+        </div>
+        <div class="prompt-box">
+            <div class="prompt-text" id="prompt-p5"># =====================================================
+# SGN FLORALTRACK — DESPACHO CERTIFICADO PC4
+# =====================================================
+cajas_rosas = 220
+precio_caja = 21.00
+subtotal = cajas_rosas * precio_caja
+flete_aereo = subtotal * 0.12
+seguro_carga = 55.00
+total_liquidado = subtotal + flete_aereo + seguro_carga
+
+print("=====================================================")
+print(f"📦 Total Cajas: {cajas_rosas} | Subtotal: ${subtotal:.2f}")
+print(f"✈️ Flete Miami (12%): ${flete_aereo:.2f}")
+print(f"🛡️ Seguro Carga: ${seguro_carga:.2f}")
+print(f"💰 LIQUIDACIÓN TOTAL: ${total_liquidado:.2f}")
+print("=====================================================")
+</div>
+            <button class="copy-btn" onclick="copiarTexto('prompt-p5', this)">📋 Copiar Código para el Editor</button>
+        </div>
+        <div class="expected-box">
+            <strong>Resultado Esperado:</strong> Al pulsar "💾 Guardar en PC4", la etiqueta superior muestra una huella como <code>SHA-256: 76064d7c...</code> o mensaje de guardado exitoso confirmado.
+        </div>
+        <label class="textarea-label">
+            <span>📥 Pega aquí el mensaje de guardado o el SHA-256 que apareció:</span>
+        </label>
+        <textarea class="response-input" id="resp-p5" placeholder="Pega aquí el SHA-256 o confirmación..." oninput="autoGuardar()"></textarea>
+        <div class="rating-bar">
+            <span class="rating-label">Calificación:</span>
+            <button class="rate-btn" onclick="calificar('p5', 'pass', this)">✅ Aprobado</button>
+            <button class="rate-btn" onclick="calificar('p5', 'warn', this)">⚠️ Advertencia</button>
+            <button class="rate-btn" onclick="calificar('p5', 'fail', this)">❌ Falló</button>
+        </div>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- BLOQUE 4: LA TERMINAL REPLIT Y AUTO-CORRECCIÓN (SELF-HEALING)        -->
+    <!-- ==================================================================== -->
+    <div class="section-header">
+        <span>⚡ BLOQUE 4: LA TERMINAL AUTO-CORRECTORA (Bucle Replit Agent)</span>
+    </div>
+    <div class="section-desc">
+        La terminal ejecuta el código en los 24 núcleos de PC4. Si hay un error, Qwen lo intercepta, lo repara y lo vuelve a correr hasta dar Exit Code 0.
+    </div>
+
+    <!-- PRUEBA 6 -->
+    <div class="test-card" data-id="p6">
+        <div class="test-card-header">
+            <div class="test-num"><span>🚀 P6</span> Ejecución Limpia Directa (Exit Code 0)</div>
+            <span class="mode-badge badge-terminal">⚡ Terminal Replit</span>
+        </div>
+        <div class="test-instruction">
+            <strong>Paso:</strong> Con el código de la prueba P5 en el editor, pulsa el botón: <strong>"⚡ EJECUTAR Y AUTO-CORREGIR EN PC4"</strong> (en la terminal inferior derecha).
+        </div>
+        <div class="prompt-box">
+            <div class="prompt-text" id="prompt-p6">Acción: Pulsa el botón "⚡ EJECUTAR Y AUTO-CORREGIR EN PC4" en la barra de la terminal.</div>
+            <button class="copy-btn" onclick="copiarTexto('prompt-p6', this)">📋 Copiar Instrucción</button>
+        </div>
+        <div class="expected-box">
+            <strong>Resultado Esperado:</strong> La consola muestra:<br>
+            <code>⚡ [PC4 EXEC] Ejecutando en los 24 núcleos...</code><br>
+            <code>✅ [EXIT CODE 0] Script verificado exitosamente.</code><br>
+            Y desglosa la liquidación con Total: $5,239.40 en texto verde.
+        </div>
+        <label class="textarea-label">
+            <span>📥 Pega aquí los logs que salieron en la terminal:</span>
+        </label>
+        <textarea class="response-input" id="resp-p6" placeholder="Pega aquí los logs de la terminal..." oninput="autoGuardar()"></textarea>
+        <div class="rating-bar">
+            <span class="rating-label">Calificación:</span>
+            <button class="rate-btn" onclick="calificar('p6', 'pass', this)">✅ Aprobado</button>
+            <button class="rate-btn" onclick="calificar('p6', 'warn', this)">⚠️ Advertencia</button>
+            <button class="rate-btn" onclick="calificar('p6', 'fail', this)">❌ Falló</button>
+        </div>
+    </div>
+
+    <!-- PRUEBA 7 -->
+    <div class="test-card" data-id="p7">
+        <div class="test-card-header">
+            <div class="test-num"><span>🔥 P7</span> Prueba de Fuego: Provocar Error a Propósito (Auto-Corrección)</div>
+            <span class="mode-badge badge-terminal">⚡ Auto-Curación</span>
+        </div>
+        <div class="test-instruction">
+            <strong>Paso:</strong> Pega este código defectuoso en el editor central. Tiene un error intencional (comillas sin cerrar y variable que no existe). Pulsa <strong>"⚡ EJECUTAR Y AUTO-CORREGIR EN PC4"</strong>.
+        </div>
+        <div class="prompt-box">
+            <div class="prompt-text" id="prompt-p7"># CÓDIGO CON ERROR A PROPÓSITO
+def calcular_error():
+    cajas = 100
+    total = cajas * precio_inexistente
+    print("El resultado es: + str(total)
+
+calcular_error()
+</div>
+            <button class="copy-btn" onclick="copiarTexto('prompt-p7', this)">📋 Copiar Código con Bug</button>
+        </div>
+        <div class="expected-box">
+            <strong>Resultado Esperado:</strong> El bucle Replit Agent detecta el fallo, invoca a Qwen internamente para corregir la sintaxis y la variable, y la terminal termina en verde con <code>Iteraciones: 1 o 2</code> y <code>Exit Code 0</code>.
+        </div>
+        <label class="textarea-label">
+            <span>📥 Pega aquí el log de auto-corrección de la terminal:</span>
+        </label>
+        <textarea class="response-input" id="resp-p7" placeholder="Pega aquí el log del proceso de auto-curación..." oninput="autoGuardar()"></textarea>
+        <div class="rating-bar">
+            <span class="rating-label">Calificación:</span>
+            <button class="rate-btn" onclick="calificar('p7', 'pass', this)">✅ Aprobado</button>
+            <button class="rate-btn" onclick="calificar('p7', 'warn', this)">⚠️ Advertencia</button>
+            <button class="rate-btn" onclick="calificar('p7', 'fail', this)">❌ Falló</button>
+        </div>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- BLOQUE 5: ERGONOMÍA Y RESIZERS (VENTANAS AJUSTABLES)                 -->
+    <!-- ==================================================================== -->
+    <div class="section-header">
+        <span>📐 BLOQUE 5: ERGONOMÍA (Paneles Redimensionables con el Ratón)</span>
+    </div>
+    <div class="section-desc">
+        Verifica la comodidad de arrastrar los divisores verticales y horizontales para trabajar como en Google Antigravity.
+    </div>
+
+    <!-- PRUEBA 8 -->
+    <div class="test-card" data-id="p8">
+        <div class="test-card-header">
+            <div class="test-num"><span>🖱️ P8</span> Arrastre de Divisores y Conmutador de 3 Vías</div>
+            <span class="mode-badge badge-editor">📐 Ergonomía Antigravity</span>
+        </div>
+        <div class="test-instruction">
+            <strong>Paso:</strong> Prueba arrastrar la línea entre el editor y el chat (divisor vertical) y la línea arriba de la terminal (divisor horizontal). Luego prueba el botón <strong>🏎️ Local LAN</strong> y <strong>☁️ Nube Railway</strong>.
+        </div>
+        <div class="prompt-box">
+            <div class="prompt-text" id="prompt-p8">Verificación física:
+1. ¿El divisor vertical se arrastra con suavidad y el editor Monaco se reacomoda automáticamente?
+2. ¿El divisor de la terminal permite subir y bajar la consola sin deformar la pantalla?
+3. ¿El botón de Vía (Local LAN vs Nube Railway) cambia de color al hacer clic?</div>
+            <button class="copy-btn" onclick="copiarTexto('prompt-p8', this)">📋 Copiar Lista de Chequeo</button>
+        </div>
+        <div class="expected-box">
+            <strong>Resultado Esperado:</strong> Respuesta fluida en 60 FPS, el editor no se corta ni desaparece gracias a <code>automaticLayout: true</code> y los selectores responden al instante.
+        </div>
+        <label class="textarea-label">
+            <span>📥 Escribe tus observaciones de la interfaz:</span>
+        </label>
+        <textarea class="response-input" id="resp-p8" placeholder="Escribe aquí si los divisores y botones respondieron bien..." oninput="autoGuardar()"></textarea>
+        <div class="rating-bar">
+            <span class="rating-label">Calificación:</span>
+            <button class="rate-btn" onclick="calificar('p8', 'pass', this)">✅ Aprobado</button>
+            <button class="rate-btn" onclick="calificar('p8', 'warn', this)">⚠️ Advertencia</button>
+            <button class="rate-btn" onclick="calificar('p8', 'fail', this)">❌ Falló</button>
+        </div>
+    </div>
+
+</div>
+
+<!-- PANEL FIJO DE ACCIONES (STICKY BOTTOM) -->
+<div class="actions-panel">
+    <div class="status-pill">
+        <div class="status-dot"></div>
+        <span id="save-status">Sesión activa • Auto-guardado habilitado</span>
+    </div>
+    <div class="btn-group">
+        <button class="btn btn-secondary" onclick="exportarTXT()">📄 Exportar Resumen TXT</button>
+        <button class="btn btn-primary" onclick="exportarJSON()">📥 Guardar Informe JSON</button>
+        <button class="btn btn-danger" onclick="limpiarTodo()">🔄 Reiniciar Pruebas</button>
+    </div>
+</div>
+
+<!-- TOAST FLOTANTE -->
+<div class="toast" id="toast">✅ ¡Copiado al portapapeles! Listo para pegar con Ctrl+V</div>
+
+<script>
+    const STORAGE_KEY = 'CIBERCODE_2_AUDITORIA_DATA_V1';
+    const ratings = {};
+
+    function copiarTexto(elementId, btn) {
+        const el = document.getElementById(elementId);
+        const text = el ? el.innerText.trim() : elementId;
+        navigator.clipboard.writeText(text).then(() => {
+            const originalHTML = btn.innerHTML;
+            btn.innerHTML = '✅ ¡Copiado!';
+            btn.classList.add('copied');
+            showToast('✅ ¡Copiado al portapapeles! Pégalo con Ctrl+V en CiberCode');
+            setTimeout(() => {
+                btn.innerHTML = originalHTML;
+                btn.classList.remove('copied');
+            }, 2000);
+        });
+    }
+
+    function showToast(msg) {
+        const toast = document.getElementById('toast');
+        toast.textContent = msg;
+        toast.classList.add('show');
+        setTimeout(() => { toast.classList.remove('show'); }, 2500);
+    }
+
+    function calificar(testId, rating, btn) {
+        ratings[testId] = rating;
+        const card = document.querySelector(`.test-card[data-id="${testId}"]`);
+        if (card) {
+            card.querySelectorAll('.rate-btn').forEach(b => {
+                b.classList.remove('selected-pass', 'selected-warn', 'selected-fail');
+            });
+            if (rating === 'pass') btn.classList.add('selected-pass');
+            if (rating === 'warn') btn.classList.add('selected-warn');
+            if (rating === 'fail') btn.classList.add('selected-fail');
+        }
+        autoGuardar();
+    }
+
+    function autoGuardar() {
+        const respuestas = {};
+        for (let i = 1; i <= 8; i++) {
+            const el = document.getElementById('resp-p' + i);
+            if (el) respuestas['p' + i] = el.value;
+        }
+        const data = {
+            timestamp: new Date().toISOString(),
+            evaluador: "Roberto Bueno (Comandante SGN)",
+            respuestas: respuestas,
+            calificaciones: ratings
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        document.getElementById('save-status').textContent = 'Guardado en vivo: ' + new Date().toLocaleTimeString();
+    }
+
+    function restaurarDatos() {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        try {
+            const data = JSON.parse(raw);
+            if (data.respuestas) {
+                for (let k in data.respuestas) {
+                    const el = document.getElementById('resp-' + k);
+                    if (el) el.value = data.respuestas[k];
+                }
+            }
+            if (data.calificaciones) {
+                for (let k in data.calificaciones) {
+                    const val = data.calificaciones[k];
+                    ratings[k] = val;
+                    const card = document.querySelector(`.test-card[data-id="${k}"]`);
+                    if (card) {
+                        const btn = card.querySelector(`button[onclick*="'${val}'"]`);
+                        if (btn) {
+                            if (val === 'pass') btn.classList.add('selected-pass');
+                            if (val === 'warn') btn.classList.add('selected-warn');
+                            if (val === 'fail') btn.classList.add('selected-fail');
+                        }
+                    }
+                }
+            }
+            document.getElementById('save-status').textContent = 'Sesión anterior restaurada';
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    function compilarResultados() {
+        const listaPruebas = [];
+        const titulos = [
+            { id: "P1", bloque: "Inferencia Ultraligera", nombre: "Cálculo Despacho Floral Miami" },
+            { id: "P2", bloque: "Inferencia Ultraligera", nombre: "Conversión Cajas a Tallos y Cubos" },
+            { id: "P3", bloque: "Pensamiento Profundo", nombre: "Auditoría Facturas y Clientes Morosos" },
+            { id: "P4", bloque: "Pensamiento Profundo", nombre: "Control Térmico Cuartos Fríos Doral" },
+            { id: "P5", bloque: "Editor Monaco", nombre: "Edición y Certificación SHA-256 en PC4" },
+            { id: "P6", bloque: "Terminal Replit", nombre: "Ejecución Limpia Directa (Exit Code 0)" },
+            { id: "P7", bloque: "Terminal Replit", nombre: "Prueba de Fuego (Auto-Corrección Self-Healing)" },
+            { id: "P8", bloque: "Ergonomía Antigravity", nombre: "Arrastre de Divisores y Conmutador 3 Vías" }
+        ];
+
+        titulos.forEach((t, index) => {
+            const num = index + 1;
+            const promptEl = document.getElementById('prompt-p' + num);
+            const respEl = document.getElementById('resp-p' + num);
+            listaPruebas.push({
+                id: t.id,
+                bloque: t.bloque,
+                nombre: t.nombre,
+                orden_instruccion: promptEl ? promptEl.innerText.trim() : "",
+                resultado_obtenido: respEl ? respEl.value.trim() : "",
+                calificacion: ratings['p' + num] || "Sin calificar"
+            });
+        });
+
+        return {
+            auditoria: "AUDITORIA_CIBERCODE_2_SOBERANO_8_PRUEBAS",
+            fecha: new Date().toISOString(),
+            evaluador: "Roberto Bueno (Comandante SGN)",
+            supernodo: "PC4 i9 Minisforum (24 Cores / 32 Hilos)",
+            pruebas: listaPruebas
+        };
+    }
+
+    function exportarJSON() {
+        const payload = compilarResultados();
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `RESULTADOS_CIBERCODE_2_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('✅ Informe JSON descargado exitosamente');
+    }
+
+    function exportarTXT() {
+        const payload = compilarResultados();
+        let txt = `====================================================================\n`;
+        txt += `INFORME OFICIAL DE AUDITORIA Y PRUEBAS CIBERCODE 2.0 SOBERANO\n`;
+        txt += `Fecha: ${payload.fecha}\n`;
+        txt += `Evaluador: ${payload.evaluador}\n`;
+        txt += `Supernodo: ${payload.supernodo}\n`;
+        txt += `====================================================================\n\n`;
+
+        payload.pruebas.forEach(p => {
+            txt += `--------------------------------------------------------------------\n`;
+            txt += `[${p.id}] ${p.bloque} — ${p.nombre}\n`;
+            txt += `CALIFICACION: ${p.calificacion.toUpperCase()}\n`;
+            txt += `ORDEN UTILIZADA:\n${p.orden_instruccion}\n`;
+            txt += `RESULTADO OBTENIDO:\n${p.resultado_obtenido || '(Sin resultado pegado)'}\n\n`;
+        });
+
+        const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `INFORME_CIBERCODE_2_${new Date().toISOString().slice(0,10)}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('✅ Resumen TXT descargado exitosamente');
+    }
+
+    function limpiarTodo() {
+        if (confirm('¿Deseas borrar las respuestas pegadas y empezar de cero esta batería de pruebas?')) {
+            localStorage.removeItem(STORAGE_KEY);
+            location.reload();
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', restaurarDatos);
+</script>
+
+</body>
+</html>
