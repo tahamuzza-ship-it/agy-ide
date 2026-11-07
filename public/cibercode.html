@@ -63,6 +63,45 @@
       letter-spacing: 0.05em;
     }
     .badge-replit { background: rgba(34, 197, 94, 0.15); color: var(--green); border: 1px solid var(--green); }
+        /* Selector de 3 Vías */
+    .connection-selector {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      background: rgba(15, 23, 42, 0.7);
+      padding: 4px 8px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .btn-via {
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: var(--text-muted);
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .btn-via:hover:not(:disabled) {
+      color: #fff;
+      border-color: var(--cyan);
+    }
+    .btn-via.active {
+      background: rgba(0, 243, 255, 0.18);
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: 0 0 10px rgba(0, 243, 255, 0.35);
+    }
+    .btn-via:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
     .status-pill {
       font-size: 0.8rem;
       display: flex;
@@ -304,6 +343,13 @@
       ⚡ <span>CIBERCODE</span> 2.0
       <span class="badge badge-replit">Replit Agent Soberano ($0.00)</span>
     </div>
+    <div class="connection-selector">
+      <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">VÍA:</span>
+      <button id="btnViaLocal" class="btn-via active" onclick="cambiarVia('local')">🏎️ Local LAN (0ms)</button>
+      <button id="btnViaCloud" class="btn-via" onclick="cambiarVia('cloud')">☁️ Nube Railway</button>
+      <button id="btnViaCf" class="btn-via" onclick="cambiarVia('cloudflare')" disabled title="Próximamente">🛡️ Cloudflare</button>
+    </div>
+
     <div class="status-pill">
       <span class="dot"></span>
       <span id="target-label">Supernodo PC4 i9 (192.168.1.7:8888)</span>

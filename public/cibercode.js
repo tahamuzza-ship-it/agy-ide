@@ -9,10 +9,35 @@ let editor = null;
 let currentFilePath = '';
 let currentSpeed = 'ultraligero'; // 'ultraligero' (1.5B) o 'profundo' (7B)
 
-// Detección dinámica de Endpoint API (Directo LAN PC4 o Proxy Web)
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? 'http://127.0.0.1:8888'
-  : (window.location.protocol === 'file:' ? 'http://192.168.1.7:8888' : '/api/cibercode');
+let currentVia = 'local';
+let API_BASE = window.location.hostname.includes('railway.app') ? '/api/cibercode' : 'http://192.168.1.7:8888';
+
+// Conmutador Visual de 3 Vías
+function cambiarVia(via) {
+  currentVia = via;
+  document.querySelectorAll('.btn-via').forEach(b => b.classList.remove('active'));
+  const targetLabel = document.getElementById('target-label');
+
+  if (via === 'local') {
+    API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ? 'http://127.0.0.1:8888'
+      : 'http://192.168.1.7:8888';
+    const b = document.getElementById('btnViaLocal');
+    if (b) b.classList.add('active');
+    if (targetLabel) targetLabel.textContent = 'Supernodo PC4 i9 (192.168.1.7:8888)';
+  } else if (via === 'cloud') {
+    API_BASE = '/api/cibercode';
+    const b = document.getElementById('btnViaCloud');
+    if (b) b.classList.add('active');
+    if (targetLabel) targetLabel.textContent = 'Conectado: Nube Railway (Relay PC4)';
+  }
+  // Inicializar vía según contexto
+  if (window.location.hostname.includes('railway.app')) {
+    cambiarVia('cloud');
+  } else {
+    cambiarVia('local');
+  }
+}
 
 // Inicializar Monaco Editor
 require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.43.0/min/vs' } });
