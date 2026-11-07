@@ -416,6 +416,78 @@
             opacity: 1;
             transform: translateY(0);
         }
+    
+        /* =======================================================
+           OPTIMIZACIONES RESPONSIVAS PARA MÓVILES Y TABLETS (SGN)
+           ======================================================= */
+        @media (max-width: 768px) {
+            body {
+                padding: 12px 10px 80px 10px !important;
+            }
+            .container {
+                width: 100% !important;
+                padding: 0 !important;
+            }
+            .header {
+                padding: 16px 14px !important;
+                border-radius: 10px !important;
+                margin-bottom: 16px !important;
+            }
+            .header-top {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 12px !important;
+            }
+            .header h1 {
+                font-size: 1.15rem !important;
+                line-height: 1.35 !important;
+                flex-wrap: wrap !important;
+            }
+            .header p {
+                font-size: 0.82rem !important;
+            }
+            .badge-bar {
+                gap: 6px !important;
+            }
+            .badge {
+                font-size: 0.68rem !important;
+                padding: 3px 8px !important;
+            }
+            .progress-bar-bg {
+                width: 100% !important;
+            }
+            .test-card {
+                padding: 14px 12px !important;
+                border-radius: 8px !important;
+                margin-bottom: 14px !important;
+            }
+            .test-header {
+                flex-direction: column !important;
+                align-items: flex-start !important;
+                gap: 8px !important;
+            }
+            .action-row {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 8px !important;
+            }
+            .action-row button, .action-row a {
+                width: 100% !important;
+                justify-content: center !important;
+                padding: 11px 14px !important;
+                font-size: 0.84rem !important;
+                min-height: 44px !important; /* Touch target móvil estándar */
+            }
+            .code-box {
+                font-size: 0.70rem !important;
+                padding: 8px 10px !important;
+            }
+            .result-box {
+                font-size: 0.70rem !important;
+                padding: 8px 10px !important;
+            }
+        }
+    
     </style>
 </head>
 <body>

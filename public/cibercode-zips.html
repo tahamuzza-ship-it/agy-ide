@@ -382,6 +382,122 @@
         tr:hover td {
             background: rgba(15, 23, 42, 0.5);
         }
+    
+        /* =======================================================
+           OPTIMIZACIONES RESPONSIVAS PARA MÓVILES Y TABLETS (SGN)
+           ======================================================= */
+        @media (max-width: 768px) {
+            body {
+                padding: 12px 10px 80px 10px !important;
+            }
+            .container {
+                width: 100% !important;
+                padding: 0 !important;
+            }
+            .header {
+                padding: 16px 14px !important;
+                border-radius: 10px !important;
+                margin-bottom: 16px !important;
+            }
+            .header-top {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 12px !important;
+            }
+            .header h1 {
+                font-size: 1.15rem !important;
+                line-height: 1.35 !important;
+                flex-wrap: wrap !important;
+            }
+            .header p {
+                font-size: 0.82rem !important;
+            }
+            .btn-back-cibercode {
+                width: 100% !important;
+                justify-content: center !important;
+                padding: 10px 14px !important;
+                font-size: 0.82rem !important;
+                min-height: 42px !important;
+            }
+            .badge-bar {
+                gap: 6px !important;
+            }
+            .badge {
+                font-size: 0.68rem !important;
+                padding: 3px 8px !important;
+            }
+            .progress-card {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 12px !important;
+                padding: 14px !important;
+            }
+            .progress-info {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 8px !important;
+            }
+            .progress-bar-bg {
+                width: 100% !important;
+            }
+            .btn-reset-tests {
+                width: 100% !important;
+                text-align: center !important;
+                padding: 10px !important;
+                font-size: 0.78rem !important;
+                min-height: 40px !important;
+            }
+            .test-card {
+                padding: 14px 12px !important;
+                border-radius: 8px !important;
+                margin-bottom: 14px !important;
+            }
+            .test-header {
+                flex-direction: column !important;
+                align-items: flex-start !important;
+                gap: 8px !important;
+            }
+            .action-row {
+                flex-direction: column !important;
+                align-items: stretch !important;
+                gap: 8px !important;
+            }
+            .action-row .btn-action {
+                width: 100% !important;
+                justify-content: center !important;
+                padding: 11px 14px !important;
+                font-size: 0.84rem !important;
+                min-height: 44px !important; /* Touch target estándar */
+            }
+            .hash-box {
+                flex-direction: column !important;
+                align-items: flex-start !important;
+                gap: 8px !important;
+                padding: 8px 10px !important;
+                font-size: 0.68rem !important;
+            }
+            .btn-copy-hash {
+                align-self: flex-end !important;
+                padding: 6px 12px !important;
+                font-size: 0.72rem !important;
+                min-height: 32px !important;
+            }
+            .dropzone-box {
+                padding: 18px 12px !important;
+            }
+            .table-responsive {
+                -webkit-overflow-scrolling: touch !important;
+            }
+            table th, table td {
+                padding: 6px 8px !important;
+                font-size: 0.72rem !important;
+            }
+            .result-box {
+                font-size: 0.70rem !important;
+                padding: 8px 10px !important;
+            }
+        }
+    
     </style>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 </head>
