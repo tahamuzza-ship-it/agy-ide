@@ -3,32 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>⚡ CIBERCODE 2.0 — Clon Antigravity IDE Soberano</title>
+  <title>⚡ CIBERCODE 2.0 — Antigravity IDE Soberano</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-main: #060913;
-      --bg-panel: #0a0f1d;
-      --bg-header: #040711;
-      --bg-input: #080d1a;
-      --border: rgba(0, 243, 255, 0.18);
-      --border-dark: #151d30;
+      --bg-darkest: #03060d;
+      --bg-header: #070c18;
+      --bg-activity: #050914;
+      --bg-panel: #0a0f1e;
+      --bg-editor: #02050f;
+      --bg-terminal: #01040a;
+      --border: #151e33;
+      --border-light: rgba(0, 243, 255, 0.2);
       --cyan: #00f3ff;
-      --cyan-glow: rgba(0, 243, 255, 0.35);
+      --cyan-glow: rgba(0, 243, 255, 0.4);
       --magenta: #f000ff;
       --green: #22c55e;
+      --green-glow: rgba(34, 197, 94, 0.4);
       --blue: #38bdf8;
       --amber: #f59e0b;
       --red: #ef4444;
       --text: #e2e8f0;
       --text-muted: #8493a8;
+      --tab-active-bg: #0e162c;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--bg-main);
+      background: var(--bg-darkest);
       color: var(--text);
       height: 100vh;
       display: flex;
@@ -37,53 +41,57 @@
       user-select: none;
     }
 
-    /* ── BARRA SUPERIOR (HEADER) ── */
+    /* ── 1. BARRA SUPERIOR DE MENÚ Y ACCIÓN (TOP MENU BAR) ── */
     header {
       background: var(--bg-header);
-      border-bottom: 1px solid var(--border-dark);
-      padding: 0 16px;
+      border-bottom: 1px solid var(--border);
+      height: 44px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      height: 48px;
+      padding: 0 14px;
       flex-shrink: 0;
       z-index: 50;
     }
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
     .logo {
       font-family: 'Orbitron', monospace;
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       font-weight: 900;
       color: var(--cyan);
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       letter-spacing: 0.05em;
     }
     .logo span { color: var(--magenta); }
-    .badge {
-      font-family: 'Inter', sans-serif;
-      font-size: 0.68rem;
-      padding: 3px 8px;
-      border-radius: 10px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
+    .menu-bar {
+      display: flex;
+      gap: 4px;
     }
-    .badge-replit {
-      background: rgba(34, 197, 94, 0.12);
-      color: var(--green);
-      border: 1px solid rgba(34, 197, 94, 0.5);
+    .menu-item {
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.15s ease;
     }
+    .menu-item:hover { color: #fff; background: rgba(255, 255, 255, 0.06); }
 
     /* Selector de 3 Vías */
     .connection-selector {
       display: flex;
       gap: 6px;
       align-items: center;
-      background: rgba(15, 23, 42, 0.7);
+      background: rgba(15, 23, 42, 0.8);
       padding: 3px 8px;
       border-radius: 8px;
-      border: 1px solid var(--border-dark);
+      border: 1px solid var(--border);
     }
     .btn-via {
       background: #0b1120;
@@ -91,7 +99,7 @@
       color: var(--text-muted);
       padding: 4px 10px;
       border-radius: 6px;
-      font-size: 0.73rem;
+      font-size: 0.72rem;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s ease;
@@ -99,26 +107,25 @@
       align-items: center;
       gap: 4px;
     }
-    .btn-via:hover:not(:disabled) {
-      color: #fff;
-      border-color: var(--cyan);
-    }
+    .btn-via:hover:not(:disabled) { color: #fff; border-color: var(--cyan); }
     .btn-via.active {
       background: rgba(0, 243, 255, 0.15);
       border-color: var(--cyan);
       color: var(--cyan);
-      box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+      box-shadow: 0 0 10px var(--cyan-glow);
     }
-    .btn-via:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
+    .btn-via:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    .status-pill {
-      font-size: 0.78rem;
+    .header-right {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 12px;
+    }
+    .status-pill {
+      font-size: 0.76rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
       color: var(--text-muted);
     }
     .dot {
@@ -127,233 +134,94 @@
       border-radius: 50%;
       background: var(--green);
       box-shadow: 0 0 8px var(--green);
-      display: inline-block;
+    }
+    .badge {
+      font-size: 0.68rem;
+      padding: 2px 7px;
+      border-radius: 8px;
+      font-weight: 600;
+      text-transform: uppercase;
     }
 
-    /* ── ESPACIO DE TRABAJO ESTILO ANTIGRAVITY ── */
-    .workspace {
+    /* ── 2. CONTENEDOR PRINCIPAL DE 3 COLUMNAS (ANTIGRAVITY LAYOUT) ── */
+    .workspace-3col {
       display: flex;
       flex-direction: row;
       flex: 1;
-      height: calc(100vh - 48px);
+      height: calc(100vh - 44px);
       overflow: hidden;
       position: relative;
     }
 
-    /* ── PANEL LATERAL IZQUIERDO (CHATS & EXPLORER) ── */
-    .panel-left {
-      width: 380px;
-      min-width: 280px;
-      max-width: 650px;
+    /* ── COLUMNA 1 (IZQUIERDA: ACTIVITY BAR + EXPLORADOR) ── */
+    .col-left {
+      width: 280px;
+      min-width: 200px;
+      max-width: 500px;
       background: var(--bg-panel);
       display: flex;
-      flex-direction: column;
-      flex-shrink: 0;
+      flex-direction: row;
       overflow: hidden;
-      border-right: 1px solid var(--border-dark);
-    }
-
-    /* Pestañas de Navegación Lateral */
-    .left-tabs {
-      display: flex;
-      background: #080d19;
-      border-bottom: 1px solid var(--border-dark);
+      border-right: 1px solid var(--border);
       flex-shrink: 0;
     }
-    .tab-btn {
-      flex: 1;
-      padding: 10px 12px;
-      background: transparent;
-      border: none;
-      border-bottom: 2px solid transparent;
-      color: var(--text-muted);
-      font-family: 'Inter', sans-serif;
-      font-size: 0.8rem;
-      font-weight: 600;
-      cursor: pointer;
+    /* Barra delgada de iconos a la izquierda (Activity Bar) */
+    .activity-bar {
+      width: 44px;
+      background: var(--bg-activity);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 10px 0;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+    .activity-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
-      transition: all 0.2s ease;
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      transition: all 0.15s ease;
+      border: 1px solid transparent;
     }
-    .tab-btn:hover { color: var(--text); background: rgba(255, 255, 255, 0.02); }
-    .tab-btn.active {
+    .activity-icon:hover { color: #fff; background: rgba(255, 255, 255, 0.05); }
+    .activity-icon.active {
       color: var(--cyan);
-      border-bottom-color: var(--cyan);
-      background: rgba(0, 243, 255, 0.04);
+      background: rgba(0, 243, 255, 0.12);
+      border-color: rgba(0, 243, 255, 0.3);
     }
 
-    .tab-content {
+    /* Contenido del Panel Izquierdo (Explorador / Settings) */
+    .left-body {
       flex: 1;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
-
-    /* Pestaña: CHAT QWEN */
-    .chat-view {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      overflow: hidden;
-    }
-    .speed-selector {
-      display: flex;
-      gap: 8px;
+    .left-title-bar {
       padding: 10px 12px;
-      background: #080d19;
-      border-bottom: 1px solid var(--border-dark);
-      flex-shrink: 0;
-    }
-    .btn-speed {
-      flex: 1;
-      background: #0d1424;
-      border: 1px solid #1e293b;
-      padding: 6px 8px;
-      border-radius: 6px;
-      color: var(--text-muted);
-      font-size: 0.73rem;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      text-align: left;
-    }
-    .btn-speed strong { display: block; font-size: 0.77rem; color: #cbd5e1; }
-    .btn-speed:hover { border-color: #475569; }
-    .btn-speed.active-green {
-      border-color: var(--green);
-      background: rgba(34, 197, 94, 0.1);
-      box-shadow: 0 0 10px rgba(34, 197, 94, 0.2);
-    }
-    .btn-speed.active-green strong { color: var(--green); }
-    .btn-speed.active-blue {
-      border-color: var(--blue);
-      background: rgba(56, 189, 248, 0.1);
-      box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
-    }
-    .btn-speed.active-blue strong { color: var(--blue); }
-
-    .chat-messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 12px;
+      background: #080d1a;
+      border-bottom: 1px solid var(--border);
       display: flex;
-      flex-direction: column;
-      gap: 10px;
-      scroll-behavior: smooth;
-    }
-    .chat-msg {
-      padding: 10px 12px;
-      border-radius: 8px;
-      font-size: 0.82rem;
-      line-height: 1.5;
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      white-space: pre-wrap;
-      word-break: break-word;
-      user-select: text;
-    }
-    .chat-msg.system {
-      background: rgba(15, 23, 42, 0.6);
-      color: var(--text-muted);
-      font-style: italic;
-      font-size: 0.76rem;
-      border-left: 3px solid var(--blue);
-    }
-    .chat-msg.user {
-      background: rgba(0, 243, 255, 0.08);
-      border-color: rgba(0, 243, 255, 0.25);
-      color: #e0f2fe;
-    }
-    .chat-msg.qwen {
-      background: #0d1527;
-      border-left: 3px solid var(--cyan);
-      color: #f1f5f9;
-    }
-    .chat-msg pre {
-      background: #020617;
-      padding: 8px 10px;
-      border-radius: 6px;
-      margin-top: 6px;
-      overflow-x: auto;
-      font-family: 'Fira Code', monospace;
-      font-size: 0.75rem;
-      border: 1px solid #1e293b;
-    }
-
-    .chat-input-area {
-      padding: 10px 12px;
-      background: #070c18;
-      border-top: 1px solid var(--border-dark);
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      flex-shrink: 0;
-    }
-    .chat-input-area textarea {
-      width: 100%;
-      height: 68px;
-      background: var(--bg-input);
-      border: 1px solid #1e293b;
-      border-radius: 6px;
-      color: #fff;
-      font-family: 'Inter', sans-serif;
-      font-size: 0.82rem;
-      padding: 8px 10px;
-      resize: none;
-      outline: none;
-      transition: border-color 0.2s ease;
-      user-select: text;
-    }
-    .chat-input-area textarea:focus {
-      border-color: var(--cyan);
-      box-shadow: 0 0 8px rgba(0, 243, 255, 0.2);
-    }
-    .chat-actions {
-      display: flex;
-      justify-content: space-between;
       align-items: center;
-    }
-    .btn-send {
-      background: linear-gradient(135deg, #0284c7, #00f3ff);
-      color: #040814;
-      border: none;
-      border-radius: 6px;
-      padding: 8px 14px;
-      font-weight: 700;
-      font-size: 0.78rem;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      box-shadow: 0 0 12px rgba(0, 243, 255, 0.35);
-      margin-left: auto;
-    }
-    .btn-send:hover { filter: brightness(1.15); box-shadow: 0 0 16px rgba(0, 243, 255, 0.5); }
-
-    /* Pestaña: ARCHIVOS PC4 */
-    .files-view {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      overflow: hidden;
-    }
-    .files-header {
-      padding: 10px 14px;
-      background: #080d19;
-      border-bottom: 1px solid var(--border-dark);
-      display: flex;
       justify-content: space-between;
-      align-items: center;
       font-family: 'Orbitron', sans-serif;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       color: var(--cyan);
       letter-spacing: 0.05em;
-      flex-shrink: 0;
     }
     .file-tree {
       flex: 1;
       overflow-y: auto;
       padding: 8px;
       font-family: 'Fira Code', monospace;
-      font-size: 0.8rem;
+      font-size: 0.78rem;
     }
     .tree-item {
       padding: 5px 8px;
@@ -363,7 +231,6 @@
       align-items: center;
       gap: 6px;
       color: var(--text);
-      user-select: none;
       transition: background 0.15s ease;
     }
     .tree-item:hover { background: rgba(0, 243, 255, 0.08); }
@@ -372,8 +239,8 @@
 
     /* ── DIVISORES REDIMENSIONABLES (SPLITTERS) ── */
     .resizer-col {
-      width: 5px;
-      background: var(--border-dark);
+      width: 4px;
+      background: var(--border);
       cursor: col-resize;
       flex-shrink: 0;
       transition: background 0.2s ease;
@@ -383,10 +250,9 @@
       background: var(--cyan);
       box-shadow: 0 0 10px var(--cyan);
     }
-
     .resizer-row {
-      height: 5px;
-      background: var(--border-dark);
+      height: 4px;
+      background: var(--border);
       cursor: row-resize;
       flex-shrink: 0;
       transition: background 0.2s ease;
@@ -397,49 +263,67 @@
       box-shadow: 0 0 10px var(--cyan);
     }
 
-    /* ── COLUMNA CENTRAL-DERECHA (EDITOR & TERMINAL) ── */
-    .panel-main {
+    /* ── COLUMNA 2 (CENTRO: MONACO CODE EDITOR + TABS) ── */
+    .col-center {
       flex: 1;
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      min-width: 350px;
-      background: #020617;
+      min-width: 320px;
+      background: var(--bg-editor);
     }
-
-    /* Editor Superior */
-    .editor-section {
-      flex: 1;
+    /* Pestañas de Archivos Estilo VS Code */
+    .editor-tabs {
+      height: 35px;
+      background: #060a16;
+      border-bottom: 1px solid var(--border);
       display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      min-height: 140px;
+      align-items: center;
+      padding: 0 8px;
+      gap: 4px;
+      overflow-x: auto;
+      flex-shrink: 0;
+    }
+    .editor-tab {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      background: #090e1e;
+      border: 1px solid var(--border);
+      border-bottom: none;
+      border-radius: 6px 6px 0 0;
+      font-size: 0.75rem;
+      font-family: 'Fira Code', monospace;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .editor-tab.active {
+      background: var(--tab-active-bg);
+      color: var(--cyan);
+      border-color: rgba(0, 243, 255, 0.4);
+      font-weight: 600;
     }
     .editor-toolbar {
-      height: 38px;
+      height: 36px;
       background: #070c18;
-      border-bottom: 1px solid var(--border-dark);
+      border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 0 14px;
       flex-shrink: 0;
     }
-    .file-info {
+    .file-meta {
       display: flex;
       align-items: center;
       gap: 10px;
-      font-size: 0.78rem;
-    }
-    .file-name {
-      color: #f8fafc;
-      font-weight: 600;
-      font-family: 'Fira Code', monospace;
+      font-size: 0.76rem;
     }
     .sha-tag {
-      color: var(--text-muted);
-      font-size: 0.7rem;
       font-family: 'Fira Code', monospace;
+      font-size: 0.68rem;
+      color: var(--text-muted);
       background: rgba(255, 255, 255, 0.04);
       padding: 2px 6px;
       border-radius: 4px;
@@ -471,22 +355,187 @@
       overflow: hidden;
     }
 
-    /* Terminal & Replit Agent Inferior */
-    .terminal-section {
-      height: 230px;
-      min-height: 110px;
-      max-height: 550px;
+    /* ── COLUMNA 3 (DERECHA: AGENTE QWEN + TERMINAL & AUTO-CORRECCIÓN) ── */
+    .col-right {
+      width: 420px;
+      min-width: 300px;
+      max-width: 700px;
+      background: var(--bg-panel);
       display: flex;
       flex-direction: column;
-      background: #040712;
+      overflow: hidden;
+      border-left: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    /* Subsección Superior: CHAT CON EL AGENTE QWEN */
+    .agent-chat-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-height: 180px;
+    }
+    .agent-header {
+      padding: 8px 12px;
+      background: #080d1a;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .agent-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.74rem;
+      color: var(--cyan);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      letter-spacing: 0.04em;
+    }
+    .speed-selector {
+      display: flex;
+      gap: 6px;
+      padding: 8px 12px;
+      background: #070b16;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .btn-speed {
+      flex: 1;
+      background: #0d1424;
+      border: 1px solid #1e293b;
+      padding: 5px 8px;
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: left;
+    }
+    .btn-speed strong { display: block; font-size: 0.75rem; color: #cbd5e1; }
+    .btn-speed.active-green {
+      border-color: var(--green);
+      background: rgba(34, 197, 94, 0.1);
+      box-shadow: 0 0 10px rgba(34, 197, 94, 0.2);
+    }
+    .btn-speed.active-green strong { color: var(--green); }
+    .btn-speed.active-blue {
+      border-color: var(--blue);
+      background: rgba(56, 189, 248, 0.1);
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+    }
+    .btn-speed.active-blue strong { color: var(--blue); }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      scroll-behavior: smooth;
+    }
+    .chat-msg {
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      line-height: 1.45;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      white-space: pre-wrap;
+      word-break: break-word;
+      user-select: text;
+    }
+    .chat-msg.system {
+      background: rgba(15, 23, 42, 0.5);
+      color: var(--text-muted);
+      font-size: 0.74rem;
+      border-left: 3px solid var(--blue);
+    }
+    .chat-msg.user {
+      background: rgba(0, 243, 255, 0.08);
+      border-color: rgba(0, 243, 255, 0.25);
+      color: #e0f2fe;
+    }
+    .chat-msg.qwen {
+      background: #0d1527;
+      border-left: 3px solid var(--cyan);
+      color: #f1f5f9;
+    }
+    .chat-msg pre {
+      background: #020617;
+      padding: 8px;
+      border-radius: 4px;
+      margin-top: 5px;
+      overflow-x: auto;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.74rem;
+      border: 1px solid #1e293b;
+    }
+
+    .chat-input-box {
+      padding: 8px 12px;
+      background: #060914;
+      border-top: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .chat-input-box textarea {
+      width: 100%;
+      height: 56px;
+      background: #090e1e;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.8rem;
+      padding: 6px 8px;
+      resize: none;
+      outline: none;
+      user-select: text;
+    }
+    .chat-input-box textarea:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 6px var(--cyan-glow);
+    }
+    .chat-btn-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .btn-send {
+      background: linear-gradient(135deg, #0284c7, #00f3ff);
+      color: #040814;
+      border: none;
+      border-radius: 5px;
+      padding: 6px 12px;
+      font-weight: 700;
+      font-size: 0.74rem;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+      margin-left: auto;
+    }
+    .btn-send:hover { filter: brightness(1.15); }
+
+    /* Subsección Inferior: TERMINAL & REPLIT SELF-HEALING */
+    .terminal-section {
+      height: 220px;
+      min-height: 100px;
+      max-height: 500px;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-terminal);
       overflow: hidden;
       flex-shrink: 0;
-      border-top: 1px solid var(--border-dark);
+      border-top: 1px solid var(--border);
     }
     .terminal-header {
-      padding: 8px 14px;
-      background: #070c18;
-      border-bottom: 1px solid var(--border-dark);
+      padding: 6px 10px;
+      background: #060a16;
+      border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -494,47 +543,40 @@
     }
     .terminal-title {
       font-family: 'Orbitron', sans-serif;
-      font-size: 0.76rem;
+      font-size: 0.72rem;
       color: var(--green);
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       letter-spacing: 0.04em;
-    }
-    .terminal-controls {
-      display: flex;
-      align-items: center;
-      gap: 10px;
     }
     .btn-exec {
       background: linear-gradient(135deg, #15803d, #22c55e);
       color: #fff;
-      padding: 6px 14px;
-      border-radius: 6px;
+      padding: 5px 12px;
+      border-radius: 5px;
       font-weight: 700;
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       cursor: pointer;
       border: none;
-      box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+      box-shadow: 0 0 10px rgba(34, 197, 94, 0.4);
       display: flex;
       align-items: center;
-      gap: 6px;
-      transition: all 0.2s ease;
+      gap: 5px;
     }
-    .btn-exec:hover { filter: brightness(1.15); box-shadow: 0 0 16px rgba(34, 197, 94, 0.6); }
-
+    .btn-exec:hover { filter: brightness(1.15); }
     .terminal-body {
       flex: 1;
       background: #01040a;
-      padding: 10px 14px;
+      padding: 8px 10px;
       font-family: 'Fira Code', monospace;
-      font-size: 0.76rem;
+      font-size: 0.74rem;
       overflow-y: auto;
       color: #a7f3d0;
-      line-height: 1.5;
+      line-height: 1.45;
       user-select: text;
     }
-    .log-line { margin-bottom: 3px; }
+    .log-line { margin-bottom: 2px; }
     .log-error { color: #f87171; }
     .log-success { color: #4ade80; font-weight: bold; }
     .log-heal { color: #38bdf8; }
@@ -543,134 +585,185 @@
 </head>
 <body>
 
-  <!-- BARRA SUPERIOR -->
+  <!-- 1. BARRA SUPERIOR (TOP MENU BAR) -->
   <header>
-    <div class="logo">
-      ⚡ <span>CIBERCODE</span> 2.0
-      <span class="badge badge-replit">Replit Agent Soberano ($0.00)</span>
+    <div class="header-left">
+      <div class="logo">
+        ⚡ <span>CIBERCODE</span> 2.0
+      </div>
+      <div class="menu-bar">
+        <span class="menu-item" onclick="cargarArbol()">📁 Archivo</span>
+        <span class="menu-item" onclick="guardarArchivoActual()">💾 Guardar</span>
+        <span class="menu-item" onclick="dispararSelfHealing()">⚡ Ejecutar</span>
+        <span class="menu-item" onclick="limpiarTerminal()">📋 Terminal</span>
+        <span class="menu-item" onclick="alert('CIBERCODE 2.0 Soberano\nMini PC i9 (24 Cores / 32 Hilos)\nMotor: Qwen 1.5B / 7B')">ℹ️ Info</span>
+      </div>
     </div>
 
-    <!-- Conmutador de 3 Vías -->
+    <!-- Conmutador Visual de 3 Vías -->
     <div class="connection-selector">
-      <span style="font-size:0.73rem; color:var(--text-muted); font-weight:600;">VÍA:</span>
+      <span style="font-size:0.7rem; color:var(--text-muted); font-weight:600;">VÍA:</span>
       <button id="btnViaLocal" class="btn-via active" onclick="cambiarVia('local')">🏎️ Local LAN (0ms)</button>
       <button id="btnViaCloud" class="btn-via" onclick="cambiarVia('cloud')">☁️ Nube Railway</button>
       <button id="btnViaCf" class="btn-via" onclick="cambiarVia('cloudflare')" disabled title="Próximamente">🛡️ Cloudflare</button>
     </div>
 
-    <!-- Estado de PC4 -->
-    <div class="status-pill">
-      <span class="dot"></span>
-      <span id="target-label">Supernodo PC4 i9 (192.168.1.7:8888)</span>
+    <!-- Estado y Telemetría PC4 -->
+    <div class="header-right">
+      <div class="status-pill">
+        <span class="dot"></span>
+        <span id="target-label">Supernodo PC4 i9 (192.168.1.7:8888)</span>
+      </div>
       <span class="badge" style="background:#131c31; color:#38bdf8; border:1px solid #1e293b;">RAM PC4: 61% (Óptimo)</span>
     </div>
   </header>
 
-  <!-- ESPACIO DE TRABAJO ESTILO ANTIGRAVITY -->
-  <div class="workspace" id="workspaceContainer">
+  <!-- 2. WORKSPACE DE 3 DIVISIONES ESTILO ANTIGRAVITY -->
+  <div class="workspace-3col" id="workspaceContainer">
 
-    <!-- 1. PANEL LATERAL IZQUIERDO (CHATS Y EXPLORADOR) -->
-    <aside class="panel-left" id="panel-left">
-      
-      <!-- Pestañas Superiores -->
-      <nav class="left-tabs">
-        <button class="tab-btn active" id="tabBtnChat" onclick="switchLeftTab('chat')">💬 Chat Qwen</button>
-        <button class="tab-btn" id="tabBtnFiles" onclick="switchLeftTab('files')">📁 Archivos PC4</button>
-      </nav>
+    <!-- COLUMNA 1 (IZQUIERDA: ACTIVITY BAR + EXPLORADOR DE PROYECTOS) -->
+    <aside class="col-left" id="col-left">
+      <!-- Activity Bar Delgada -->
+      <div class="activity-bar">
+        <div class="activity-icon active" id="actIconFiles" onclick="switchLeftView('files')" title="Explorador de Archivos">📁</div>
+        <div class="activity-icon" id="actIconChats" onclick="switchLeftView('chats')" title="Historial de Sesiones">💬</div>
+        <div class="activity-icon" id="actIconSettings" onclick="switchLeftView('settings')" title="Configuración">⚙️</div>
+      </div>
 
-      <!-- Pestaña 1: CHAT QWEN -->
-      <div class="tab-content" id="tabContentChat">
-        <div class="chat-view">
-          
-          <!-- Selector Dual de Velocidad -->
-          <div class="speed-selector">
-            <button class="btn-speed active-green" id="btnSpeedUltra" onclick="setSpeed('ultraligero')">
-              <strong>🟢 1.5B Ultraligero</strong>
-              1-2s • &lt;1GB RAM • 85% Tareas
-            </button>
-            <button class="btn-speed" id="btnSpeedDeep" onclick="setSpeed('profundo')">
-              <strong>🔵 7B Deducción</strong>
-              Profundo • Arquitectura • 4.7GB
-            </button>
-          </div>
-
-          <!-- Transcripción Vertical de Mensajes con Scroll Suave -->
-          <div class="chat-messages" id="chatOutput">
-            <div class="chat-msg system">
-              ⚡ Qwen-SGN: Listo en los 24 núcleos de PC4. Selecciona un archivo o escribe tu requerimiento.
-            </div>
-          </div>
-
-          <!-- Caja de Entrada de Prompts -->
-          <div class="chat-input-area">
-            <textarea id="promptText" placeholder="Pregunta a Qwen o pide una modificación del archivo actual..."></textarea>
-            <div class="chat-actions">
-              <span style="font-size:0.68rem; color:var(--text-muted);">Liberación de RAM en 15s</span>
-              <button class="btn-send" onclick="enviarConsultaIA()">🚀 Enviar a Qwen ($0.00)</button>
-            </div>
-          </div>
-
+      <!-- Contenido Explorador -->
+      <div class="left-body" id="leftBodyFiles">
+        <div class="left-title-bar">
+          <span>EXPLORADOR PC4</span>
+          <button class="btn btn-save" style="padding: 2px 7px; font-size: 0.68rem;" onclick="cargarArbol()">Refrescar</button>
+        </div>
+        <div class="file-tree" id="fileTree">
+          <div style="color: var(--text-muted); padding: 10px;">Consultando archivos de PC4...</div>
         </div>
       </div>
 
-      <!-- Pestaña 2: ARCHIVOS PC4 -->
-      <div class="tab-content" id="tabContentFiles" style="display: none;">
-        <div class="files-view">
-          <div class="files-header">
-            <span>📁 PROYECTOS EN PC4</span>
-            <button class="btn btn-save" style="padding: 3px 8px; font-size: 0.68rem;" onclick="cargarArbol()">Refrescar</button>
+      <!-- Contenido Historial / Chats Guardados (Oculto por defecto) -->
+      <div class="left-body" id="leftBodyChats" style="display:none;">
+        <div class="left-title-bar">
+          <span>SESIONES & PROYECTOS</span>
+        </div>
+        <div style="padding: 10px; font-size: 0.75rem; color: var(--text-muted);">
+          <div style="padding:6px 8px; background:rgba(255,255,255,0.03); border-radius:4px; margin-bottom:6px; cursor:pointer;" onclick="cargarProyectoDemo('despacho_flores')">
+            🌸 Despacho Flores Miami
           </div>
-          <div class="file-tree" id="fileTree">
-            <div style="color: var(--text-muted); padding: 10px;">Cargando archivos de PC4...</div>
+          <div style="padding:6px 8px; background:rgba(255,255,255,0.03); border-radius:4px; margin-bottom:6px; cursor:pointer;" onclick="cargarProyectoDemo('calculo_fletes')">
+            ✈️ Calculador de Fletes Aéreos
           </div>
         </div>
       </div>
 
+      <!-- Contenido Settings (Oculto por defecto) -->
+      <div class="left-body" id="leftBodySettings" style="display:none;">
+        <div class="left-title-bar">
+          <span>CONFIGURACIÓN SGN</span>
+        </div>
+        <div style="padding: 12px; font-size: 0.74rem; color: var(--text-muted); line-height: 1.6;">
+          <div><strong>Nodo Anfitrión:</strong> Mini PC i9 Minisforum</div>
+          <div><strong>IP LAN:</strong> 192.168.1.7:8888</div>
+          <div><strong>Ollama Engine:</strong> Puerto 11434</div>
+          <div><strong>RAM Guardarraíl:</strong> 61% (Liberación 15s)</div>
+          <div><strong>Costo Computacional:</strong> $0.00 USD</div>
+        </div>
+      </div>
     </aside>
 
-    <!-- DIVISOR VERTICAL RESIZABLE (IZQUIERDA / CENTRO) -->
-    <div class="resizer-col" id="resizer-left" title="Arrastra para redimensionar el panel lateral"></div>
+    <!-- DIVISOR RESIZABLE 1 (IZQUIERDA / CENTRO) -->
+    <div class="resizer-col" id="resizer-left" title="Arrastra para redimensionar el panel izquierdo"></div>
 
-    <!-- 2. ÁREA CENTRAL-DERECHA (EDITOR MONACO & TERMINAL REPLIT) -->
-    <main class="panel-main" id="panel-main">
+    <!-- COLUMNA 2 (CENTRO: MONACO CODE EDITOR) -->
+    <main class="col-center" id="col-center">
+      <!-- Pestañas de Archivos -->
+      <div class="editor-tabs" id="editorTabs">
+        <div class="editor-tab active" id="tabActiveFile">
+          <span>📄</span>
+          <span id="tabFileName">hola_soberano.py</span>
+        </div>
+      </div>
 
-      <!-- Editor Monaco Superior -->
-      <section class="editor-section" id="editor-section">
-        <div class="editor-toolbar">
-          <div class="file-info">
-            <span class="file-name" id="currentFileName">Selecciona un archivo</span>
-            <span class="sha-tag" id="currentFileSha">SHA-256: ---</span>
+      <!-- Toolbar del Editor -->
+      <div class="editor-toolbar">
+        <div class="file-meta">
+          <span id="currentFileName" style="font-weight:600; font-family:'Fira Code', monospace; color:#f8fafc;">hola_soberano.py</span>
+          <span class="sha-tag" id="currentFileSha">SHA-256: 76064d7c</span>
+        </div>
+        <button class="btn btn-save" id="btnGuardar" onclick="guardarArchivoActual()">
+          💾 Guardar en PC4
+        </button>
+      </div>
+
+      <!-- Monaco Container -->
+      <div id="monaco-container"></div>
+    </main>
+
+    <!-- DIVISOR RESIZABLE 2 (CENTRO / DERECHA) -->
+    <div class="resizer-col" id="resizer-right" title="Arrastra para redimensionar el panel del agente"></div>
+
+    <!-- COLUMNA 3 (DERECHA: AGENTE QWEN + TERMINAL REPLIT SOBERANO) -->
+    <aside class="col-right" id="col-right">
+
+      <!-- Parte Superior: Chat con el Agente Qwen -->
+      <section class="agent-chat-section" id="agent-chat-section">
+        <div class="agent-header">
+          <div class="agent-title">
+            <span>🧠</span>
+            <span>AGENTE QWEN SOBERANO</span>
           </div>
-          <button class="btn btn-save" id="btnGuardar" onclick="guardarArchivoActual()">
-            💾 Guardar en PC4
+          <span style="font-size:0.68rem; color:var(--text-muted);">24 Cores i9</span>
+        </div>
+
+        <!-- Selector de Velocidad -->
+        <div class="speed-selector">
+          <button class="btn-speed active-green" id="btnSpeedUltra" onclick="setSpeed('ultraligero')">
+            <strong>🟢 1.5B Ultraligero</strong>
+            1-2s • &lt;1GB RAM • 85% Tareas
+          </button>
+          <button class="btn-speed" id="btnSpeedDeep" onclick="setSpeed('profundo')">
+            <strong>🔵 7B Pensamiento Profundo</strong>
+            Razonamiento • Arquitectura • 4.7GB
           </button>
         </div>
-        <div id="monaco-container"></div>
+
+        <!-- Mensajes del Chat con Scroll Suave -->
+        <div class="chat-messages" id="chatOutput">
+          <div class="chat-msg system">
+            ⚡ Qwen-SGN: Listo en los 24 núcleos de PC4. Escribe tus requerimientos para generar o modificar código.
+          </div>
+        </div>
+
+        <!-- Input Box del Chat -->
+        <div class="chat-input-box">
+          <textarea id="promptText" placeholder="Pregunta a Qwen o pide modificar el código activo... (Ctrl+Enter para enviar)"></textarea>
+          <div class="chat-btn-row">
+            <span style="font-size:0.66rem; color:var(--text-muted);">Auto-liberado en 15s</span>
+            <button class="btn-send" onclick="enviarConsultaIA()">🚀 Enviar a Qwen ($0.00)</button>
+          </div>
+        </div>
       </section>
 
-      <!-- DIVISOR HORIZONTAL RESIZABLE (EDITOR / TERMINAL) -->
-      <div class="resizer-row" id="resizer-bottom" title="Arrastra para redimensionar la terminal"></div>
+      <!-- DIVISOR HORIZONTAL ENTRE CHAT Y TERMINAL -->
+      <div class="resizer-row" id="resizer-terminal" title="Arrastra para redimensionar la terminal"></div>
 
-      <!-- Terminal y Bucle Replit Agent Inferior -->
+      <!-- Parte Inferior: Terminal & Auto-Corrección Replit -->
       <section class="terminal-section" id="terminal-section">
         <div class="terminal-header">
           <div class="terminal-title">
-            <span>🔥</span>
-            <span>Bucle Replit Agent (Auto-Corrección) — Terminal PC4</span>
+            <span>⚡</span>
+            <span>TERMINAL & REPLIT AGENT PC4</span>
           </div>
-          <div class="terminal-controls">
-            <span style="font-size: 0.7rem; color: var(--text-muted);">Max 3 intentos</span>
-            <button class="btn-exec" onclick="dispararSelfHealing()">
-              <span>⚡</span> EJECUTAR Y AUTO-CORREGIR EN PC4
-            </button>
-          </div>
+          <button class="btn-exec" onclick="dispararSelfHealing()">
+            <span>▶</span> AUTO-CORREGIR EN PC4
+          </button>
         </div>
         <div class="terminal-body" id="replitLog">
-          <div class="log-line">Esperando ejecución del script activo...</div>
+          <div class="log-line">Consola lista. Pulsa 'AUTO-CORREGIR EN PC4' para ejecutar el script activo en los 24 núcleos.</div>
         </div>
       </section>
 
-    </main>
+    </aside>
 
   </div>
 

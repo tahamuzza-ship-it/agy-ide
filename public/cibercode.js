@@ -1,34 +1,33 @@
 /**
  * cibercode.js
  * ============
- * Controlador del Frontend de CIBERCODE 2.0 (Clon Antigravity IDE Soberano).
- * Orquesta Monaco Editor, File Explorer, Inferencia Dual Qwen, Divisores Resizables y Bucle Self-Healing.
+ * Controlador de CIBERCODE 2.0 (Clon Antigravity IDE Soberano de 3 Divisiones).
+ * Soporta Splitters Resizables duales, Activity Bar, Monaco Editor, Inferencia Qwen y Terminal Replit.
  */
 
 let editor = null;
-let currentFilePath = '';
+let currentFilePath = 'hola_soberano.py';
 let currentSpeed = 'ultraligero'; // 'ultraligero' (1.5B) o 'profundo' (7B)
 let currentVia = 'local';
 let API_BASE = 'http://192.168.1.7:8888';
 
-// ── 1. NAVEGACIÓN Y PESTAÑAS LATERALES (ESTILO ANTIGRAVITY) ──
-function switchLeftTab(tab) {
-  const btnChat = document.getElementById('tabBtnChat');
-  const btnFiles = document.getElementById('tabBtnFiles');
-  const contentChat = document.getElementById('tabContentChat');
-  const contentFiles = document.getElementById('tabContentFiles');
+// ── 1. VISTAS DEL PANEL IZQUIERDO (ACTIVITY BAR) ──
+function switchLeftView(view) {
+  document.querySelectorAll('.activity-icon').forEach(icon => icon.classList.remove('active'));
+  document.getElementById('leftBodyFiles').style.display = 'none';
+  document.getElementById('leftBodyChats').style.display = 'none';
+  document.getElementById('leftBodySettings').style.display = 'none';
 
-  if (tab === 'chat') {
-    btnChat.classList.add('active');
-    btnFiles.classList.remove('active');
-    contentChat.style.display = 'flex';
-    contentFiles.style.display = 'none';
-  } else {
-    btnChat.classList.remove('active');
-    btnFiles.classList.add('active');
-    contentChat.style.display = 'none';
-    contentFiles.style.display = 'flex';
+  if (view === 'files') {
+    document.getElementById('actIconFiles').classList.add('active');
+    document.getElementById('leftBodyFiles').style.display = 'flex';
     cargarArbol();
+  } else if (view === 'chats') {
+    document.getElementById('actIconChats').classList.add('active');
+    document.getElementById('leftBodyChats').style.display = 'flex';
+  } else if (view === 'settings') {
+    document.getElementById('actIconSettings').classList.add('active');
+    document.getElementById('leftBodySettings').style.display = 'flex';
   }
 }
 
@@ -58,7 +57,7 @@ function cambiarVia(via) {
 require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.43.0/min/vs' } });
 require(['vs/editor/editor.main'], function () {
   editor = monaco.editor.create(document.getElementById('monaco-container'), {
-    value: '# CIBERCODE 2.0 Soberano — Clon Antigravity IDE\n# Todo cambio se guarda con verificación criptográfica SHA-256 en PC4.\n\ndef hola_soberano():\n    print("CIBERCODE 2.0 activo en los 24 núcleos de PC4 i9")\n',
+    value: '# CIBERCODE 2.0 Soberano — Clon Antigravity IDE (3 Divisiones)\n# Todo cambio se guarda con verificación criptográfica SHA-256 en PC4 i9.\n\ndef hola_soberano():\n    print("CIBERCODE 2.0 activo en los 24 núcleos de PC4")\n    print("Panel Izq: Explorador | Centro: Editor | Der: Agente Qwen & Terminal")\n',
     language: 'python',
     theme: 'vs-dark',
     fontSize: 13,
@@ -76,66 +75,84 @@ require(['vs/editor/editor.main'], function () {
   });
 });
 
-// ── 4. CONTROLADORES DE DIVISORES REDIMENSIONABLES (SPLITTERS) ──
+// ── 4. SISTEMA DE RESIZE EN LAS 3 DIVISIONES ──
 function initSplitters() {
-  const panelLeft = document.getElementById('panel-left');
+  const colLeft = document.getElementById('col-left');
   const resizerLeft = document.getElementById('resizer-left');
+  const colRight = document.getElementById('col-right');
+  const resizerRight = document.getElementById('resizer-right');
   const terminalSection = document.getElementById('terminal-section');
-  const resizerBottom = document.getElementById('resizer-bottom');
+  const resizerTerminal = document.getElementById('resizer-terminal');
 
-  // Divisor Vertical (Panel Izquierdo)
-  let isDraggingLeft = false;
+  // Estado de arrastre
+  let dragMode = null; // 'left', 'right', 'terminal'
   let startX = 0;
-  let startWidth = 0;
+  let startY = 0;
+  let startW = 0;
+  let startH = 0;
 
+  // Splitter 1: Izquierda / Centro
   resizerLeft.addEventListener('mousedown', function (e) {
-    isDraggingLeft = true;
+    dragMode = 'left';
     startX = e.clientX;
-    startWidth = panelLeft.getBoundingClientRect().width;
+    startW = colLeft.getBoundingClientRect().width;
     resizerLeft.classList.add('dragging');
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   });
 
-  // Divisor Horizontal (Terminal Inferior)
-  let isDraggingBottom = false;
-  let startY = 0;
-  let startHeight = 0;
+  // Splitter 2: Centro / Derecha
+  resizerRight.addEventListener('mousedown', function (e) {
+    dragMode = 'right';
+    startX = e.clientX;
+    startW = colRight.getBoundingClientRect().width;
+    resizerRight.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
 
-  resizerBottom.addEventListener('mousedown', function (e) {
-    isDraggingBottom = true;
+  // Splitter 3: Chat / Terminal (Horizontal en Columna Derecha)
+  resizerTerminal.addEventListener('mousedown', function (e) {
+    dragMode = 'terminal';
     startY = e.clientY;
-    startHeight = terminalSection.getBoundingClientRect().height;
-    resizerBottom.classList.add('dragging');
+    startH = terminalSection.getBoundingClientRect().height;
+    resizerTerminal.classList.add('dragging');
     document.body.style.cursor = 'row-resize';
     document.body.style.userSelect = 'none';
   });
 
   window.addEventListener('mousemove', function (e) {
-    if (isDraggingLeft) {
+    if (!dragMode) return;
+
+    if (dragMode === 'left') {
       const dx = e.clientX - startX;
-      let newWidth = startWidth + dx;
-      if (newWidth < 280) newWidth = 280;
-      if (newWidth > 650) newWidth = 650;
-      panelLeft.style.width = newWidth + 'px';
-      if (editor) editor.layout();
+      let newW = startW + dx;
+      if (newW < 180) newW = 180;
+      if (newW > 500) newW = 500;
+      colLeft.style.width = newW + 'px';
+    } else if (dragMode === 'right') {
+      const dx = startX - e.clientX;
+      let newW = startW + dx;
+      if (newW < 280) newW = 280;
+      if (newW > 700) newW = 700;
+      colRight.style.width = newW + 'px';
+    } else if (dragMode === 'terminal') {
+      const dy = startY - e.clientY;
+      let newH = startH + dy;
+      if (newH < 90) newH = 90;
+      if (newH > 500) newH = 500;
+      terminalSection.style.height = newH + 'px';
     }
-    if (isDraggingBottom) {
-      const dy = e.clientY - startY;
-      let newHeight = startHeight - dy;
-      if (newHeight < 110) newHeight = 110;
-      if (newHeight > 550) newHeight = 550;
-      terminalSection.style.height = newHeight + 'px';
-      if (editor) editor.layout();
-    }
+
+    if (editor) editor.layout();
   });
 
   window.addEventListener('mouseup', function () {
-    if (isDraggingLeft || isDraggingBottom) {
-      isDraggingLeft = false;
-      isDraggingBottom = false;
+    if (dragMode) {
+      dragMode = null;
       resizerLeft.classList.remove('dragging');
-      resizerBottom.classList.remove('dragging');
+      resizerRight.classList.remove('dragging');
+      resizerTerminal.classList.remove('dragging');
       document.body.style.cursor = 'default';
       document.body.style.userSelect = 'auto';
       if (editor) editor.layout();
@@ -147,7 +164,7 @@ function initSplitters() {
   });
 }
 
-// ── 5. SELECTOR DE VELOCIDAD DE QWEN ──
+// ── 5. VELOCIDAD QWEN BIMODAL ──
 function setSpeed(speed) {
   currentSpeed = speed;
   const btnUltra = document.getElementById('btnSpeedUltra');
@@ -162,11 +179,11 @@ function setSpeed(speed) {
   }
 }
 
-// ── 6. EXPLORADOR DE ARCHIVOS (PANEL ARCHIVOS) ──
+// ── 6. EXPLORADOR DE ARCHIVOS ──
 async function cargarArbol() {
   const container = document.getElementById('fileTree');
   if (!container) return;
-  container.innerHTML = '<div style="color:var(--text-muted); padding:10px;">Consultando PC4...</div>';
+  container.innerHTML = '<div style="color:var(--text-muted); padding:8px;">Consultando PC4...</div>';
 
   try {
     const res = await fetch(`${API_BASE}/api/fs/tree`, { cache: 'no-store' });
@@ -176,13 +193,13 @@ async function cargarArbol() {
       container.innerHTML = '';
       renderTreeItems(data.tree, container);
     } else {
-      container.innerHTML = `<div style="color:var(--red); padding:10px;">Error: ${data.error || 'No se pudo leer el árbol'}</div>`;
+      container.innerHTML = `<div style="color:var(--red); padding:8px;">Error: ${data.error || 'No se pudo leer el árbol'}</div>`;
     }
   } catch (err) {
     container.innerHTML = `
-      <div style="color:var(--amber); padding:10px; font-size:0.75rem;">
-        ⚠️ Modo Standby: Conectando con PC4 bridge (8888)...<br>
-        <button class="btn btn-save" style="margin-top:8px; font-size:0.7rem;" onclick="cargarArbol()">Reintentar</button>
+      <div style="color:var(--amber); padding:8px; font-size:0.73rem;">
+        ⚠️ Standby PC4 (8888)...<br>
+        <button class="btn btn-save" style="margin-top:6px; font-size:0.68rem; padding:2px 6px;" onclick="cargarArbol()">Reintentar</button>
       </div>`;
   }
 }
@@ -191,7 +208,7 @@ function renderTreeItems(items, parentElement, depth = 0) {
   items.forEach(item => {
     const el = document.createElement('div');
     el.className = `tree-item ${item.type === 'directory' ? 'folder' : ''}`;
-    el.style.paddingLeft = `${depth * 14 + 8}px`;
+    el.style.paddingLeft = `${depth * 12 + 6}px`;
 
     const icon = item.type === 'directory' ? '📁' : '📄';
     el.innerHTML = `<span>${icon}</span> <span>${item.name}</span>`;
@@ -212,9 +229,14 @@ async function abrirArchivo(filePath, clickedEl) {
   if (clickedEl) clickedEl.classList.add('active');
 
   currentFilePath = filePath;
+  const fileName = filePath.split(/[/\\]/).pop();
+
   const fileNameEl = document.getElementById('currentFileName');
+  const tabFileNameEl = document.getElementById('tabFileName');
   const fileShaEl = document.getElementById('currentFileSha');
-  if (fileNameEl) fileNameEl.textContent = filePath.split(/[/\\]/).pop();
+
+  if (fileNameEl) fileNameEl.textContent = fileName;
+  if (tabFileNameEl) tabFileNameEl.textContent = fileName;
   if (fileShaEl) fileShaEl.textContent = 'Cargando SHA...';
 
   try {
@@ -223,7 +245,7 @@ async function abrirArchivo(filePath, clickedEl) {
 
     if (data.status === 'success') {
       if (editor) editor.setValue(data.content || '');
-      if (fileShaEl) fileShaEl.textContent = `SHA: ${data.sha256 ? data.sha256.substring(0, 10) : 'OK'}`;
+      if (fileShaEl) fileShaEl.textContent = `SHA: ${data.sha256 ? data.sha256.substring(0, 8) : 'OK'}`;
 
       const ext = filePath.split('.').pop().toLowerCase();
       const langMap = { py: 'python', js: 'javascript', html: 'html', css: 'css', json: 'json', md: 'markdown', ts: 'typescript' };
@@ -238,7 +260,7 @@ async function abrirArchivo(filePath, clickedEl) {
 
 async function guardarArchivoActual() {
   if (!currentFilePath) {
-    alert('Primero selecciona o abre un archivo en el explorador.');
+    alert('Primero selecciona o abre un archivo.');
     return;
   }
 
@@ -257,9 +279,9 @@ async function guardarArchivoActual() {
 
     if (data.status === 'success') {
       const fileShaEl = document.getElementById('currentFileSha');
-      if (fileShaEl) fileShaEl.textContent = `SHA: ${data.sha256 ? data.sha256.substring(0, 10) : 'OK'}`;
+      if (fileShaEl) fileShaEl.textContent = `SHA: ${data.sha256 ? data.sha256.substring(0, 8) : 'OK'}`;
       btn.textContent = '✅ Guardado';
-      setTimeout(() => { btn.textContent = '💾 Guardar en PC4'; btn.disabled = false; }, 1500);
+      setTimeout(() => { btn.textContent = '💾 Guardar en PC4'; btn.disabled = false; }, 1400);
     } else {
       alert(`Error al guardar: ${data.error}`);
       btn.textContent = '💾 Guardar en PC4';
@@ -272,7 +294,7 @@ async function guardarArchivoActual() {
   }
 }
 
-// ── 7. CONSULTA AGÉNTICA A QWEN (PESTAÑA CHAT) ──
+// ── 7. CONSULTA AL AGENTE QWEN ──
 async function enviarConsultaIA() {
   const promptInput = document.getElementById('promptText');
   const prompt = promptInput.value.trim();
@@ -280,7 +302,7 @@ async function enviarConsultaIA() {
 
   const chatContainer = document.getElementById('chatOutput');
 
-  // Agregar mensaje del usuario
+  // Mensaje de usuario
   const userMsg = document.createElement('div');
   userMsg.className = 'chat-msg user';
   userMsg.innerHTML = `<strong>Tú:</strong> ${escapeHtml(prompt)}`;
@@ -313,42 +335,28 @@ async function enviarConsultaIA() {
       waitMsg.innerHTML = `
         <strong>Qwen (${data.model || currentSpeed}):</strong><br>
         ${formatCodeBlocks(responseText)}
-        <div style="margin-top:8px; font-size:0.68rem; color:var(--text-muted); border-top:1px solid #1e293b; padding-top:4px;">
+        <div style="margin-top:6px; font-size:0.66rem; color:var(--text-muted); border-top:1px solid #1e293b; padding-top:4px;">
           ⚡ ${data.tokens_evaluated || data.tokens || 0} tokens en ${data.latency_seconds || data.elapsed_seconds || 0}s | Auto-liberado en 15s
         </div>`;
     } else {
-      waitMsg.innerHTML = `<strong>Qwen:</strong> <span style="color:var(--red);">Error: ${escapeHtml(data.error || 'Fallo desconocido')}</span>`;
+      waitMsg.innerHTML = `<strong>Qwen:</strong> <span style="color:var(--red);">Error: ${escapeHtml(data.error || 'Fallo')}</span>`;
     }
   } catch (err) {
-    waitMsg.innerHTML = `<strong>Qwen:</strong> <span style="color:var(--red);">Error de conexión con PC4 (${escapeHtml(err.message)})</span>`;
+    waitMsg.innerHTML = `<strong>Qwen:</strong> <span style="color:var(--red);">Error de conexión (${escapeHtml(err.message)})</span>`;
   }
   chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
-// Atajo Enter / Ctrl+Enter en el área de texto de prompts
-document.addEventListener('DOMContentLoaded', function () {
-  const promptInput = document.getElementById('promptText');
-  if (promptInput) {
-    promptInput.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' && (e.ctrlKey || !e.shiftKey)) {
-        e.preventDefault();
-        enviarConsultaIA();
-      }
-    });
-  }
-});
-
-// ── 8. BUCLE REPLIT AGENT (AUTO-CORRECCIÓN EN TERMINAL INFERIOR) ──
+// ── 8. BUCLE REPLIT AGENT (TERMINAL INFERIOR) ──
 async function dispararSelfHealing() {
   if (!currentFilePath) {
-    alert('Primero selecciona o abre un script en el editor.');
+    alert('Primero selecciona o abre un script.');
     return;
   }
 
   const logBox = document.getElementById('replitLog');
   logBox.innerHTML = `
-    <div class="log-line log-heal">⚡ [REPLIT SOBERANO] Iniciando ejecución de: ${escapeHtml(currentFilePath)}...</div>
-    <div class="log-line">Modo: Auto-reparación determinista (Qwen 1.5B Ultraligero / 24 núcleos i9)</div>
+    <div class="log-line log-heal">⚡ [PC4 EXEC] Ejecutando: ${escapeHtml(currentFilePath)} en los 24 núcleos...</div>
   `;
 
   try {
@@ -361,28 +369,54 @@ async function dispararSelfHealing() {
 
     if (data.status === 'success') {
       logBox.innerHTML += `
-        <div class="log-line log-success">✅ [EXIT CODE 0] Script ejecutado con éxito.</div>
-        <div class="log-line">Reparaciones requeridas: ${data.iterations || 1} iteraciones</div>
-        <div class="log-line log-heal">Salida de terminal:\n${escapeHtml(data.logs || data.stdout || 'Ejecución exitosa sin errores.')}</div>
+        <div class="log-line log-success">✅ [EXIT CODE 0] Script verificado exitosamente.</div>
+        <div class="log-line">Iteraciones: ${data.iterations || 1}</div>
+        <div class="log-line log-heal">${escapeHtml(data.logs || data.stdout || 'Ejecución completada.')}</div>
       `;
-      // Recargar archivo si fue modificado por el self-healing
-      if (data.repaired) {
-        abrirArchivo(currentFilePath);
-      }
+      if (data.repaired) abrirArchivo(currentFilePath);
     } else {
       logBox.innerHTML += `
-        <div class="log-line log-error">❌ [FALLO DE EJECUCIÓN]: ${escapeHtml(data.error || 'No se pudo resolver')}</div>
+        <div class="log-line log-error">❌ [FALLO]: ${escapeHtml(data.error || 'Error al ejecutar')}</div>
       `;
     }
   } catch (err) {
     logBox.innerHTML += `
-      <div class="log-line log-error">❌ Error de conexión al ejecutar: ${escapeHtml(err.message)}</div>
+      <div class="log-line log-error">❌ Error: ${escapeHtml(err.message)}</div>
     `;
   }
   logBox.scrollTop = logBox.scrollHeight;
 }
 
-// ── UTILIDADES DE FORMATO Y ESCAPADO ──
+function limpiarTerminal() {
+  const logBox = document.getElementById('replitLog');
+  if (logBox) logBox.innerHTML = '<div class="log-line">Consola reiniciada.</div>';
+}
+
+function cargarProyectoDemo(tipo) {
+  if (tipo === 'despacho_flores') {
+    if (editor) {
+      editor.setValue(`# Despacho Flores Miami — Cálculo Logístico
+cajas = 150
+precio_unitario = 18.50
+subtotal = cajas * precio_unitario
+flete_aereo = subtotal * 0.12
+seguro = 45.00
+total = subtotal + flete_aereo + seguro
+
+print(f"Subtotal Cajas: \${subtotal:.2f}")
+print(f"Flete Aéreo (12%): \${flete_aereo:.2f}")
+print(f"Seguro: \${seguro:.2f}")
+print(f"TOTAL DESPACHO: \${total:.2f}")
+`);
+    }
+    const fn = document.getElementById('currentFileName');
+    const tfn = document.getElementById('tabFileName');
+    if (fn) fn.textContent = 'despacho_flores_miami.py';
+    if (tfn) tfn.textContent = 'despacho_flores_miami.py';
+  }
+}
+
+// ── UTILIDADES DE ESCAPADO Y FORMATO ──
 function escapeHtml(text) {
   if (!text) return '';
   return String(text)
@@ -396,17 +430,26 @@ function escapeHtml(text) {
 function formatCodeBlocks(text) {
   if (!text) return '';
   const escaped = escapeHtml(text);
-  // Reemplazar bloques de código ```...```
   return escaped.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, function (match, lang, code) {
     return `<pre><code>${code.trim()}</code></pre>`;
   });
 }
 
-// ── 9. INICIALIZACIÓN AL CARGAR EL DOM (FUERA DE cambiarVia) ──
+// ── 9. INICIALIZACIÓN AL CARGAR EL DOM ──
 document.addEventListener('DOMContentLoaded', function () {
   initSplitters();
 
-  // Autodetección del entorno (Railway Cloud vs Red Local LAN)
+  const promptInput = document.getElementById('promptText');
+  if (promptInput) {
+    promptInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && (e.ctrlKey || !e.shiftKey)) {
+        e.preventDefault();
+        enviarConsultaIA();
+      }
+    });
+  }
+
+  // Autodetección de entorno
   if (window.location.hostname.includes('railway.app')) {
     cambiarVia('cloud');
   } else {
