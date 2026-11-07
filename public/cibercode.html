@@ -871,6 +871,166 @@
       }
     }
 
+  /* =======================================================
+       OPTIMIZACIONES RESPONSIVAS PARA MÓVILES (CIBERCODE IDE)
+       ======================================================= */
+    .mobile-top-nav {
+      display: none;
+    }
+    .mobile-bottom-bar {
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      body {
+        height: 100vh;
+        height: 100dvh;
+        overflow: hidden !important;
+      }
+      
+      /* Header en Móvil: compacto y sin desbordes */
+      header {
+        padding: 0 8px !important;
+        gap: 6px !important;
+      }
+      .header-left {
+        gap: 6px !important;
+      }
+      .menu-bar, .connection-selector, .header-right .badge {
+        display: none !important;
+      }
+      .header-right {
+        gap: 6px !important;
+      }
+      #target-label {
+        font-size: 0.68rem !important;
+        max-width: 105px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+      .logo {
+        font-size: 0.86rem !important;
+      }
+      header a[href="/cibercode-manual.html"],
+      header a[href="/cibercode-zips.html"] {
+        padding: 4px 8px !important;
+        font-size: 0.68rem !important;
+      }
+
+      /* Barra de Pestañas Móviles Superiores (SIEMPRE VISIBLE) */
+      .mobile-top-nav {
+        display: flex !important;
+        height: 38px !important;
+        background: #080d1a !important;
+        border-bottom: 1px solid var(--border) !important;
+        padding: 3px 6px !important;
+        gap: 6px !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        flex-shrink: 0 !important;
+        z-index: 50 !important;
+      }
+      .m-pill {
+        flex: 1 !important;
+        height: 30px !important;
+        border-radius: 6px !important;
+        border: 1px solid #1e293b !important;
+        background: #0b1120 !important;
+        color: #94a3b8 !important;
+        font-size: 0.72rem !important;
+        font-weight: 700 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 4px !important;
+        cursor: pointer !important;
+        transition: all 0.15s ease !important;
+      }
+      .m-pill:hover {
+        color: #fff !important;
+      }
+      .m-pill.active {
+        background: rgba(0, 243, 255, 0.15) !important;
+        border-color: var(--cyan) !important;
+        color: var(--cyan) !important;
+        box-shadow: 0 0 8px rgba(0, 243, 255, 0.3) !important;
+      }
+
+      /* Workspace en Móvil: Se ajusta al 100dvh restando header y barra superior */
+      .workspace-3col {
+        height: calc(100vh - 44px - 38px) !important;
+        height: calc(100dvh - 44px - 38px) !important;
+        flex-direction: column !important;
+        position: relative !important;
+      }
+
+      /* Divisores ocultos en móvil */
+      .resizer-col, .resizer-row {
+        display: none !important;
+      }
+
+      /* Las 3 Columnas ocupan el 100% a pantalla completa */
+      .col-left, .col-center, .col-right {
+        width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+        height: 100% !important;
+        flex: 1 !important;
+        border: none !important;
+      }
+
+      /* Activity bar en col-left oculta en móvil para dar 100% al explorador */
+      .activity-bar {
+        display: none !important;
+      }
+
+      /* Gestión de Vistas Móviles (Tabs) */
+      body:not([class*="mobile-view-"]) .col-left,
+      body:not([class*="mobile-view-"]) .col-right,
+      body.mobile-view-editor .col-left,
+      body.mobile-view-editor .col-right {
+        display: none !important;
+      }
+      body:not([class*="mobile-view-"]) .col-center,
+      body.mobile-view-editor .col-center {
+        display: flex !important;
+      }
+
+      body.mobile-view-files .col-left {
+        display: flex !important;
+      }
+      body.mobile-view-files .col-center,
+      body.mobile-view-files .col-right {
+        display: none !important;
+      }
+
+      body.mobile-view-chat .col-right {
+        display: flex !important;
+      }
+      body.mobile-view-chat .chat-section {
+        display: flex !important;
+        height: 100% !important;
+      }
+      body.mobile-view-chat .terminal-section,
+      body.mobile-view-chat .col-left,
+      body.mobile-view-chat .col-center {
+        display: none !important;
+      }
+
+      body.mobile-view-terminal .col-right {
+        display: flex !important;
+      }
+      body.mobile-view-terminal .terminal-section {
+        display: flex !important;
+        height: 100% !important;
+      }
+      body.mobile-view-terminal .chat-section,
+      body.mobile-view-terminal .col-left,
+      body.mobile-view-terminal .col-center {
+        display: none !important;
+      }
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.43.0/min/vs/loader.js"></script>
@@ -915,6 +1075,22 @@
       <span class="badge" style="background:#131c31; color:#38bdf8; border:1px solid #1e293b;">RAM PC4: 61% (Óptimo)</span>
     </div>
   </header>
+
+  <!-- BARRA DE PESTAÑAS MÓVILES SUPERIORES (SGN MOBILE TOP NAV) -->
+  <nav class="mobile-top-nav" id="mobileTopNav">
+    <button class="m-pill" onclick="setMobileView('files')" id="mTopFiles">
+      <span>📁</span> Archivos
+    </button>
+    <button class="m-pill active" onclick="setMobileView('editor')" id="mTopEditor">
+      <span>💻</span> Editor
+    </button>
+    <button class="m-pill" onclick="setMobileView('chat')" id="mTopChat">
+      <span>💬</span> Qwen IA
+    </button>
+    <button class="m-pill" onclick="setMobileView('terminal')" id="mTopTerminal">
+      <span>⚡</span> Terminal
+    </button>
+  </nav>
 
   <!-- 2. WORKSPACE DE 3 DIVISIONES ESTILO ANTIGRAVITY -->
   <div class="workspace-3col" id="workspaceContainer">

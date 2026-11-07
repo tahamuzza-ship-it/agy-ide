@@ -708,3 +708,21 @@ function setMobileView(viewName) {
     setTimeout(() => editor.layout(), 120);
   }
 }
+
+// ── GESTIÓN DE VISTAS EN DISPOSITIVOS MÓVILES (SGN MOBILE) ──
+function setMobileView(viewName) {
+  document.body.classList.remove('mobile-view-files', 'mobile-view-editor', 'mobile-view-chat', 'mobile-view-terminal');
+  document.body.classList.add('mobile-view-' + viewName);
+
+  document.querySelectorAll('.mobile-tab-btn, .m-pill').forEach(btn => btn.classList.remove('active'));
+
+  const capName = viewName.charAt(0).toUpperCase() + viewName.slice(1);
+  const activeTab = document.getElementById('mTab' + capName);
+  const activeTop = document.getElementById('mTop' + capName);
+  if (activeTab) activeTab.classList.add('active');
+  if (activeTop) activeTop.classList.add('active');
+
+  if (viewName === 'editor' && typeof editor !== 'undefined' && editor) {
+    setTimeout(() => editor.layout(), 120);
+  }
+}
