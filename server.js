@@ -666,6 +666,8 @@ app.get(['/', '/index.html'], (_req, res, next) => {
 app.get('/cibercode', (_req, res) => {
   res.set('Cache-Control', 'no-store').sendFile(path.join(__dirname, 'public', 'cibercode.html'));
 });
+// Relay agéntico CIBERCODE 2.0 hacia PC4
+require('./cibercode-relay.cjs').registerCibercodeRoutes(app);
 app.use(express.static(path.join(__dirname, 'public'), {
   setHeaders(res, filePath) {
     if (filePath.endsWith('.html')) {
