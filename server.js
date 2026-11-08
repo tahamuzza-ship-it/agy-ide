@@ -648,7 +648,9 @@ const TG_CHAT_ID          = process.env.TELEGRAM_LEAD_ARCHITECT_CHAT_ID;
 const TG_BACKUP_CHAT_ID   = '1678588283';
 const TG_WEBHOOK_SECRET   = process.env.TELEGRAM_WEBHOOK_SECRET; // optional but recommended
 
-app.use(express.json({ limit: '8mb' }));
+// Las rutas de subida de ZIP usan su propio parser de 50 MB (cibercode-relay.cjs); con el de 8 MB responderian 413 en HTML.
+const _agyJson8mb = express.json({ limit: '8mb' });
+app.use((req, res, next) => (req.path === '/api/cibercode/upload-zip' || req.path === '/api/upload-zip') ? next() : _agyJson8mb(req, res, next));
 require('./operator-invitation.cjs').registerInvitationRoutes(app);
 // One canonical authority for login and the separately gated native provider.
 const agyOperatorAuthority = require('./operator-auth.cjs').createOperatorAuthority();

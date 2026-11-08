@@ -1110,6 +1110,8 @@ async function ejecutarSubidaArchivo() {
                 base64: currentUploadBase64
             })
         });
+        if (resp.status === 413) throw new Error('El archivo es demasiado grande para el servidor (limite 50 MB).');
+        if (!(resp.headers.get('content-type') || '').includes('json')) throw new Error('El servidor respondio con error HTTP ' + resp.status + ' (no es JSON).');
         const data = await resp.json();
         if (data.status === 'success') {
             lastServerUploadSha256 = data.sha256;
