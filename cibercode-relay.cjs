@@ -962,7 +962,7 @@ function registerCibercodeRoutes(app, options = {}) {
 
   };
 
-  app.post(['/api/cibercode/upload-zip', '/api/upload-zip'], expressMod.json({ limit: '100mb' }), uploadZipHandler);
+  app.post(['/api/cibercode/upload-zip', '/api/upload-zip'], expressMod.json({ limit: '50mb' }), uploadZipHandler);
 
 
 

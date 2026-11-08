@@ -648,9 +648,7 @@ const TG_CHAT_ID          = process.env.TELEGRAM_LEAD_ARCHITECT_CHAT_ID;
 const TG_BACKUP_CHAT_ID   = '1678588283';
 const TG_WEBHOOK_SECRET   = process.env.TELEGRAM_WEBHOOK_SECRET; // optional but recommended
 
-// Las rutas de subida de ZIP usan su propio parser de 50 MB (cibercode-relay.cjs); con el de 8 MB responderian 413 en HTML.
-const _agyJson8mb = express.json({ limit: '8mb' });
-app.use((req, res, next) => (req.path === '/api/cibercode/upload-zip' || req.path === '/api/upload-zip') ? next() : _agyJson8mb(req, res, next));
+app.use(express.json({ limit: '8mb' }));
 require('./operator-invitation.cjs').registerInvitationRoutes(app);
 // One canonical authority for login and the separately gated native provider.
 const agyOperatorAuthority = require('./operator-auth.cjs').createOperatorAuthority();
@@ -2380,7 +2378,7 @@ app.post('/api/equipos/report', async (req, res) => {
     if (!isPng && !isJpg) return res.status(400).json({ error: 'la captura debe ser PNG o JPEG' });
     if (id === 'PC4') {
       try { await pc4EyeStore.save(buf, isPng ? 'image/png' : 'image/jpeg'); }
-      catch (_e) { /* Si Supabase 3 no esta disponible, retiene en memoria para servir al Dashboard */ }
+      catch { return res.status(503).json({ error: 'PC4: almacenamiento no disponible' }); }
     }
     entry.mime = isPng ? 'image/png' : 'image/jpeg';
     entry.shot = buf;
@@ -2685,7 +2683,7 @@ app.post('/api/equipos/pause', requirePwd, (req, res) => {
 
 app.get('/api/equipos/screens', requirePwd, (_req, res) => {
   const out = {};
-  ['PC1', 'PC2', 'PC3', 'PC4'].forEach((id) => {
+  ['PC1', 'PC2', 'PC4'].forEach((id) => {
     const e = _eyeFresh(id);
     out[id] = e
       ? { ts: e.ts, seconds_ago: Math.round((Date.now() - e.ts) / 1000), has_shot: !!e.shot, terminal: e.terminal || '', paused: !!_eyePaused[id] }
