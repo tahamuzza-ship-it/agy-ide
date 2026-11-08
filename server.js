@@ -2349,11 +2349,15 @@ async function _peliculaUpload(pc, buf, mime) {
 }
 
 function _checkDiskAlert(id, pct) {
-  try {
-    if (typeof pct === 'number' && pct >= 90) {
-      console.warn('[ALERTA DISCO] ' + id + ' tiene el disco al ' + pct + '%');
-    }
-  } catch {}
+  if (typeof pct !== "number" || !Number.isFinite(pct)) return;
+  if (pct < 0 || pct > 100) return;
+
+  if (pct >= 90) {
+    console.warn("[ALERTA DISCO]", {
+      nodo: String(id),
+      porcentaje: pct
+    });
+  }
 }
 
 function _eyeFresh(id) {
