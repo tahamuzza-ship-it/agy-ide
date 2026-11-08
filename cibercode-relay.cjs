@@ -75,14 +75,16 @@ function registerCibercodeRoutes(app, options = {}) {
       signal: AbortSignal.timeout(10000)
     }).catch(() => {});
 
-    // 3. Polling hasta completar (máx 60 segundos)
-    const deadline = Date.now() + 60000;
+    // 3. Polling hasta completar (5 minutos para Pensamiento Profundo 7B, 3 minutos para 1.5B)
+    const isDeepThinking = (model === 'qwen-sgn:latest' || mode === 'profundo');
+    const maxWaitMs = isDeepThinking ? 300000 : 180000;
+    const deadline = Date.now() + maxWaitMs;
     while (Date.now() < deadline) {
       await new Promise(r => setTimeout(r, 1500));
       const resPoll = await fetchImpl(`${BASE}/api/missions/${encodeURIComponent(missionId)}`, {
         method: 'GET',
         headers,
-        signal: AbortSignal.timeout(10000)
+        signal: AbortSignal.timeout(15000)
       });
       if (resPoll.ok) {
         const pollData = await resPoll.json();
@@ -106,11 +108,19 @@ function registerCibercodeRoutes(app, options = {}) {
         }
       }
     }
-    throw new Error('TIMEOUT_ESPERANDO_RESPUESTA_PC4');
+    const timeoutMsg = isDeepThinking
+      ? 'TIMEOUT_PENSAMIENTO_PROFUNDO_300S (El modelo 7B tardó más de 5 minutos)'
+      : 'TIMEOUT_ESPERANDO_RESPUESTA_PC4_180S';
+    throw new Error(timeoutMsg);
   }
 
   // Rutas de Inferencia
   const aiHandler = async (req, res) => {
+    // Extender socket timeout de Express a 6 minutos para Pensamiento Profundo
+    if (req.socket && typeof req.socket.setTimeout === 'function') {
+      req.socket.setTimeout(360000);
+    }
+    if (res.setTimeout) res.setTimeout(360000);
     res.set('Cache-Control', 'no-store');
     try {
       const { prompt, mode, context } = req.body || {};

@@ -310,10 +310,15 @@ async function enviarConsultaIA() {
   chatContainer.appendChild(userMsg);
   promptInput.value = '';
 
-  // Mensaje de espera
+  // Mensaje de espera con indicación de Pensamiento Profundo
   const waitMsg = document.createElement('div');
   waitMsg.className = 'chat-msg qwen';
-  waitMsg.innerHTML = `<strong>Qwen (${currentSpeed}):</strong> ⏳ Pensando en los 24 núcleos de PC4...`;
+  const isDeep = (currentSpeed === 'profundo' || currentSpeed === 'qwen-sgn:latest');
+  const speedLabel = isDeep ? '🔵 7B Pensamiento Profundo' : '⚡ 1.5B Rápido';
+  const speedHint = isDeep
+    ? '⏳ Razonando en los 24 núcleos de PC4 (análisis profundo de código, espera unos momentos)...'
+    : '⚡ Pensando en los 24 núcleos de PC4...';
+  waitMsg.innerHTML = `<strong>Qwen (${speedLabel}):</strong> ${speedHint}`;
   chatContainer.appendChild(waitMsg);
   chatContainer.scrollTop = chatContainer.scrollHeight;
 
