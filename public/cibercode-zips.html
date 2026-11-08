@@ -816,7 +816,7 @@ def prueba_soberana():
             <input type="file" id="fileInputEl" accept=".zip,.tar.gz,.py,.json,.html,.txt" style="display:none;" onchange="handleFileChange(event)">
             <div class="dropzone-icon">📁</div>
             <div style="font-size:0.85rem; font-weight:700; color:var(--text-white);">Arrastra tu archivo aquí o haz clic para seleccionar</div>
-            <div style="font-size:0.72rem; color:var(--text-dim); margin-top:4px;">Formatos soportados: .zip, .tar.gz, .py, .json, .html, .txt (Hasta 50 MB)</div>
+            <div style="font-size:0.72rem; color:var(--text-dim); margin-top:4px;">Formatos soportados: .zip, .tar.gz, .py, .json, .html, .txt (Hasta ~75 MB)</div>
         </div>
         <div id="selectedFileInfo" style="display:none; background:#020617; border:1px solid #1e293b; border-radius:6px; padding:10px; margin-bottom:12px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -1110,7 +1110,7 @@ async function ejecutarSubidaArchivo() {
                 base64: currentUploadBase64
             })
         });
-        if (resp.status === 413) throw new Error('El archivo es demasiado grande para el servidor (limite 50 MB).');
+        if (resp.status === 413) throw new Error('El archivo es demasiado grande para el servidor (limite ~75 MB).');
         if (!(resp.headers.get('content-type') || '').includes('json')) throw new Error('El servidor respondio con error HTTP ' + resp.status + ' (no es JSON).');
         const data = await resp.json();
         if (data.status === 'success') {
