@@ -2380,7 +2380,7 @@ app.post('/api/equipos/report', async (req, res) => {
     if (!isPng && !isJpg) return res.status(400).json({ error: 'la captura debe ser PNG o JPEG' });
     if (id === 'PC4') {
       try { await pc4EyeStore.save(buf, isPng ? 'image/png' : 'image/jpeg'); }
-      catch { return res.status(503).json({ error: 'PC4: almacenamiento no disponible' }); }
+      catch (_e) { /* Si Supabase 3 no esta disponible, retiene en memoria para servir al Dashboard */ }
     }
     entry.mime = isPng ? 'image/png' : 'image/jpeg';
     entry.shot = buf;
@@ -2685,7 +2685,7 @@ app.post('/api/equipos/pause', requirePwd, (req, res) => {
 
 app.get('/api/equipos/screens', requirePwd, (_req, res) => {
   const out = {};
-  ['PC1', 'PC2', 'PC4'].forEach((id) => {
+  ['PC1', 'PC2', 'PC3', 'PC4'].forEach((id) => {
     const e = _eyeFresh(id);
     out[id] = e
       ? { ts: e.ts, seconds_ago: Math.round((Date.now() - e.ts) / 1000), has_shot: !!e.shot, terminal: e.terminal || '', paused: !!_eyePaused[id] }
