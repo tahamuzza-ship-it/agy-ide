@@ -14,6 +14,80 @@ const BASE = 'https://yarbis-autonomous-control-production.up.railway.app';
 
 const PREFIX = 'AGY_INFERENCE_V1:';
 
+function buildSafeMissionPayload({ prompt, mode, context, randomUUID: genUUID }) {
+  const model = (mode === 'profundo' || mode === 'qwen-sgn:latest') ? 'qwen-sgn:latest' : 'qwen2.5-coder:1.5b';
+  const PREFIX = 'AGY_INFERENCE_V1:';
+  const reqId = typeof genUUID === 'function' ? genUUID() : 'req-' + Date.now();
+
+  // Límite estricto de Railway / Zod: 2000 caracteres.
+  // Dejamos un margen de seguridad amplio: máximo 1900 caracteres.
+  const MAX_INSTRUCTION_LEN = 1900;
+
+  const rawPrompt = (prompt || '').trim();
+  let fullText = rawPrompt;
+
+  if (context && context.trim()) {
+    const trimmedContext = context.trim();
+    fullText = `[Contexto de archivo]:\n${trimmedContext}\n\n[Instrucción]:\n${rawPrompt}`;
+  }
+
+  // Objeto base
+  const payloadObj = {
+    type: 'inference',
+    model,
+    text: fullText,
+    requestId: reqId
+  };
+
+  let instruction = PREFIX + JSON.stringify(payloadObj);
+
+  // Garantía matemática determinista: si serializado con JSON excede el límite (por escapes como \n, \", etc.),
+  // recortamos fullText de forma iterativa y determinista hasta que instruction.length <= MAX_INSTRUCTION_LEN
+  if (instruction.length > MAX_INSTRUCTION_LEN) {
+    // Si tenemos contexto, intentamos recortar preferentemente el contexto preservando el prompt
+    if (context && context.trim()) {
+      const promptHeader = `\n\n[Instrucción]:\n${rawPrompt}`;
+      const contextPrefix = `[Contexto de archivo]:\n`;
+      let currentContext = context.trim();
+
+      while (instruction.length > MAX_INSTRUCTION_LEN && currentContext.length > 50) {
+        const excess = instruction.length - MAX_INSTRUCTION_LEN;
+        const cut = Math.max(excess + 20, Math.floor(currentContext.length * 0.2));
+        currentContext = currentContext.slice(0, Math.max(0, currentContext.length - cut));
+        payloadObj.text = `${contextPrefix}${currentContext}${promptHeader}`;
+        instruction = PREFIX + JSON.stringify(payloadObj);
+      }
+
+      // Si aún excede porque el prompt en sí es muy grande
+      while (instruction.length > MAX_INSTRUCTION_LEN && payloadObj.text.length > 10) {
+        const excess = instruction.length - MAX_INSTRUCTION_LEN;
+        payloadObj.text = payloadObj.text.slice(0, Math.max(0, payloadObj.text.length - (excess + 10)));
+        instruction = PREFIX + JSON.stringify(payloadObj);
+      }
+    } else {
+      // Sin contexto, recortamos el prompt directamente
+      while (instruction.length > MAX_INSTRUCTION_LEN && payloadObj.text.length > 10) {
+        const excess = instruction.length - MAX_INSTRUCTION_LEN;
+        payloadObj.text = payloadObj.text.slice(0, Math.max(0, payloadObj.text.length - (excess + 10)));
+        instruction = PREFIX + JSON.stringify(payloadObj);
+      }
+    }
+  }
+
+  return {
+    target: 'PC4',
+    source: 'text',
+    execution_mode: 'foreground',
+    instruction,
+    steps: [{
+      narration: `Inferencia CIBERCODE (${model})`,
+      command: model,
+      timeoutSeconds: 300
+    }]
+  };
+}
+
+
 
 
 function registerCibercodeRoutes(app, options = {}) {
@@ -57,40 +131,8 @@ function registerCibercodeRoutes(app, options = {}) {
 
 
   async function createInferenceMission({ prompt, mode, context }) {
-
     const model = (mode === 'profundo' || mode === 'qwen-sgn:latest') ? 'qwen-sgn:latest' : 'qwen2.5-coder:1.5b';
-
-    const fullText = context && context.trim()
-
-      ? `[Contexto de archivo]:\n${context.trim().slice(0, 10000)}\n\n[Instrucción]:\n${prompt}`
-
-      : prompt;
-
-
-
-    const missionPayload = {
-
-      target: 'PC4',
-
-      source: 'text',
-
-      execution_mode: 'foreground',
-
-      instruction: PREFIX + JSON.stringify({
-
-        type: 'inference',
-
-        model,
-
-        text: fullText,
-
-        requestId: randomUUID()
-
-      }),
-
-      steps: [{ step_index: 1, narration: `Inferencia CIBERCODE (${model})`, command: model }]
-
-    };
+    const missionPayload = buildSafeMissionPayload({ prompt, mode, context, randomUUID });
 
 
 
@@ -157,42 +199,9 @@ function registerCibercodeRoutes(app, options = {}) {
 
 
   async function dispatchInference({ prompt, mode, context }) {
-
     const startTime = Date.now();
-
     const model = (mode === 'profundo' || mode === 'qwen-sgn:latest') ? 'qwen-sgn:latest' : 'qwen2.5-coder:1.5b';
-
-    const fullText = context && context.trim()
-
-      ? `[Contexto de archivo]:\n${context.trim().slice(0, 10000)}\n\n[Instrucción]:\n${prompt}`
-
-      : prompt;
-
-
-
-    const missionPayload = {
-
-      target: 'PC4',
-
-      source: 'text',
-
-      execution_mode: 'foreground',
-
-      instruction: PREFIX + JSON.stringify({
-
-        type: 'inference',
-
-        model,
-
-        text: fullText,
-
-        requestId: randomUUID()
-
-      }),
-
-      steps: [{ step_index: 1, narration: `Inferencia CIBERCODE (${model})`, command: model }]
-
-    };
+    const missionPayload = buildSafeMissionPayload({ prompt, mode, context, randomUUID });
 
 
 
