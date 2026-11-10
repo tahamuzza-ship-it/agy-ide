@@ -877,17 +877,25 @@ function registerCibercodeRoutes(app, options = {}) {
 
     try {
 
-      const buf = fs.readFileSync(target);
-
-      const hash = crypto.createHash('sha256').update(buf).digest('hex');
+      const stat = fs.statSync(target);
 
       res.setHeader('Content-Type', 'application/zip');
 
-      res.setHeader('Content-Disposition', `attachment; filename="${safeFile}"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(safeFile)}"`);
 
-      res.setHeader('X-SHA256', hash);
+      res.setHeader('Content-Length', stat.size);
 
-      res.download(target, safeFile);
+      const readStream = fs.createReadStream(target);
+
+      readStream.pipe(res);
+
+      readStream.on('error', (err) => {
+
+        console.error('[CIBERCODE STREAM DOWNLOAD ERROR]:', err);
+
+        if (!res.headersSent) res.status(500).send('Error leyendo archivo para descarga.');
+
+      });
 
     } catch (err) {
 
@@ -972,6 +980,72 @@ function registerCibercodeRoutes(app, options = {}) {
   };
 
   app.post(['/api/cibercode/upload-zip', '/api/upload-zip'], expressMod.json({ limit: '50mb' }), uploadZipHandler);
+
+  // 4. Subida masiva por Streaming directo a disco (soporta Gigabytes enteros)
+  const uploadZipStreamHandler = (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const rawFilename = req.query.filename || req.headers['x-filename'] || '';
+    const safeFilename = path.basename(rawFilename);
+
+    if (!safeFilename) {
+      return res.status(400).json({ status: 'error', error: 'Se requiere nombre de archivo (?filename=... o header x-filename)' });
+    }
+
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const destPath = path.join(uploadsDir, safeFilename);
+    const writeStream = fs.createWriteStream(destPath);
+    const hash = crypto.createHash('sha256');
+
+    let totalBytes = 0;
+
+    req.on('data', (chunk) => {
+      totalBytes += chunk.length;
+      hash.update(chunk);
+    });
+
+    req.pipe(writeStream);
+
+    writeStream.on('finish', () => {
+      if (totalBytes === 0) {
+        try { if (fs.existsSync(destPath)) fs.unlinkSync(destPath); } catch (e) {}
+        return res.status(400).json({ status: 'error', error: 'Archivo vacío recibido (0 bytes).' });
+      }
+
+      const sha256 = hash.digest('hex');
+      console.log(`[CIBERCODE STREAM UPLOAD] Archivo guardado: ${safeFilename} (${totalBytes} bytes, SHA-256: ${sha256})`);
+
+      return res.json({
+        status: 'success',
+        filename: safeFilename,
+        size: totalBytes,
+        sha256: sha256,
+        downloadUrl: `/descargar-zip?file=${encodeURIComponent(safeFilename)}`,
+        message: 'Archivo subido y certificado con éxito en CIBERCODE 2.0 por Streaming'
+      });
+    });
+
+    writeStream.on('error', (err) => {
+      console.error('[CIBERCODE STREAM UPLOAD ERROR]:', err);
+      try { if (fs.existsSync(destPath)) fs.unlinkSync(destPath); } catch (e) {}
+      if (!res.headersSent) {
+        res.status(500).json({ status: 'error', error: err.message });
+      }
+    });
+
+    req.on('error', (err) => {
+      console.error('[CIBERCODE STREAM REQ ERROR]:', err);
+      writeStream.destroy();
+      try { if (fs.existsSync(destPath)) fs.unlinkSync(destPath); } catch (e) {}
+      if (!res.headersSent) {
+        res.status(500).json({ status: 'error', error: err.message });
+      }
+    });
+  };
+
+  app.post(['/api/cibercode/upload-zip-stream', '/api/upload-zip-stream'], uploadZipStreamHandler);
 
 
 

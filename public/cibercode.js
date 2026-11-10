@@ -1248,192 +1248,114 @@ function handleZipFileSelected(e) {
 
 
 
-async function procesarArchivoSeleccionado(file) {
+/**
+ * Parche para public/cibercode.js en CIBERCODE 2.0
+ * Reemplaza la subida en Base64 por transmisión binaria de alta velocidad con barra de progreso en vivo.
+ */
 
+// 1. Selector de archivo sin bloqueo de memoria
+function procesarArchivoSeleccionado(file) {
   selectedZipFile = file;
 
   const preview = document.getElementById('zipUploadPreview');
-
   const nameEl = document.getElementById('uploadFileName');
-
   const sizeEl = document.getElementById('uploadFileSize');
-
   const hashEl = document.getElementById('uploadFileHash');
-
   const statusMsg = document.getElementById('uploadStatusMsg');
-
   const btn = document.getElementById('btnConfirmUpload');
-
-
 
   if (preview) preview.style.display = 'block';
-
   if (statusMsg) statusMsg.style.display = 'none';
 
-  if (btn) { btn.disabled = true; btn.textContent = 'Calculando SHA-256...'; }
-
-
-
   if (nameEl) nameEl.textContent = file.name;
-
   if (sizeEl) {
-
-    const kb = (file.size / 1024).toFixed(1);
-
+    const gb = (file.size / (1024 * 1024 * 1024)).toFixed(2);
     const mb = (file.size / (1024 * 1024)).toFixed(2);
-
-    sizeEl.textContent = file.size > 1048576 ? `${mb} MB` : `${kb} KB`;
-
+    const kb = (file.size / 1024).toFixed(1);
+    if (file.size >= 1073741824) {
+      sizeEl.textContent = `${gb} GB`;
+    } else if (file.size >= 1048576) {
+      sizeEl.textContent = `${mb} MB`;
+    } else {
+      sizeEl.textContent = `${kb} KB`;
+    }
   }
 
-  if (hashEl) hashEl.textContent = 'Calculando hash SHA-256 en cliente...';
-
-
-
-  // Leer y calcular SHA-256 en cliente
-
-  const reader = new FileReader();
-
-  reader.onload = async function (evt) {
-
-    const arrayBuffer = evt.target.result;
-
-    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
-
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-
-    selectedZipSha256 = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-    
-
-    // Convertir a base64
-
-    let binary = '';
-
-    const bytes = new Uint8Array(arrayBuffer);
-
-    const len = bytes.byteLength;
-
-    for (let i = 0; i < len; i++) {
-
-      binary += String.fromCharCode(bytes[i]);
-
-    }
-
-    selectedZipBase64 = btoa(binary);
-
-
-
-    if (hashEl) hashEl.textContent = `SHA-256 (Local): ${selectedZipSha256}`;
-
-    if (btn) { btn.disabled = false; btn.textContent = '🚀 Subir y Certificar'; }
-
-  };
-
-  reader.readAsArrayBuffer(file);
-
+  if (hashEl) hashEl.textContent = 'Certificación SHA-256 se calculará al vuelo durante la transmisión.';
+  if (btn) {
+    btn.disabled = false;
+    btn.textContent = '🚀 Subir y Certificar por Stream';
+  }
 }
 
-
-
+// 2. Subida por Streaming con barra de progreso real (Soporta Gigabytes)
 async function ejecutarSubidaZip() {
-
-  if (!selectedZipFile || !selectedZipBase64) {
-
+  if (!selectedZipFile) {
     alert('Primero selecciona un archivo válido.');
-
     return;
-
   }
 
-
-
   const btn = document.getElementById('btnConfirmUpload');
-
   const statusMsg = document.getElementById('uploadStatusMsg');
 
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Transfiriendo...'; }
-
   if (statusMsg) {
-
     statusMsg.style.display = 'block';
-
     statusMsg.style.color = '#38bdf8';
-
-    statusMsg.textContent = 'Subiendo paquete a CIBERCODE...';
-
+    statusMsg.textContent = 'Iniciando transmisión por streaming de alta velocidad...';
   }
 
+  const xhr = new XMLHttpRequest();
+  const url = `/api/cibercode/upload-zip-stream?filename=${encodeURIComponent(selectedZipFile.name)}`;
 
+  xhr.upload.onprogress = (evt) => {
+    if (evt.lengthComputable && statusMsg) {
+      const pct = Math.round((evt.loaded / evt.total) * 100);
+      const isGB = evt.total >= 1073741824;
+      const loadedStr = isGB ? (evt.loaded / (1024 * 1024 * 1024)).toFixed(2) + ' GB' : (evt.loaded / (1024 * 1024)).toFixed(1) + ' MB';
+      const totalStr = isGB ? (evt.total / (1024 * 1024 * 1024)).toFixed(2) + ' GB' : (evt.total / (1024 * 1024)).toFixed(1) + ' MB';
+      statusMsg.innerHTML = `⏳ Transfiriendo por Stream: <strong>${pct}%</strong> (${loadedStr} de ${totalStr})...`;
+    }
+  };
 
-  try {
-
-    const res = await fetch('/api/cibercode/upload-zip', {
-
-      method: 'POST',
-
-      headers: { 'Content-Type': 'application/json' },
-
-      body: JSON.stringify({
-
-        filename: selectedZipFile.name,
-
-        base64: selectedZipBase64
-
-      })
-
-    });
-
-
-
-    const data = await res.json();
-
-    if (data.status === 'success') {
-
-      if (statusMsg) {
-
-        statusMsg.style.color = '#4ade80';
-
-        statusMsg.innerHTML = `✅ <strong>${escapeHtml(data.filename)}</strong> subido y certificado exitosamente.<br>
-
-          <span style="font-family:'Fira Code', monospace; font-size:0.67rem; color:#a7f3d0;">SHA-256 Servidor: ${data.sha256}</span> • 
-
+  xhr.onload = () => {
+    if (btn) { btn.disabled = false; btn.textContent = '🚀 Subir y Certificar por Stream'; }
+    try {
+      const data = JSON.parse(xhr.responseText);
+      if (xhr.status === 200 && data.status === 'success') {
+        if (statusMsg) {
+          statusMsg.style.color = '#4ade80';
+          statusMsg.innerHTML = `✅ <strong>${escapeHtml(data.filename)}</strong> subido y certificado exitosamente.<br>
+          <span style="font-family:'Fira Code', monospace; font-size:0.67rem; color:#a7f3d0;">SHA-256 Servidor: ${data.sha256}</span> •
           <a href="${data.downloadUrl}" download style="color:#00f3ff; text-decoration:underline;">Descargar directo</a>`;
-
+        }
+        cargarListaZipsServidor();
+      } else {
+        if (statusMsg) {
+          statusMsg.style.color = '#f87171';
+          statusMsg.textContent = `❌ Error del servidor: ${data.error || 'Fallo desconocido'}`;
+        }
       }
-
-      cargarListaZipsServidor();
-
-    } else {
-
+    } catch (e) {
       if (statusMsg) {
-
         statusMsg.style.color = '#f87171';
-
-        statusMsg.textContent = `❌ Error del servidor: ${data.error || 'Fallo desconocido'}`;
-
+        statusMsg.textContent = `❌ Error procesando respuesta: ${xhr.statusText}`;
       }
-
     }
+  };
 
-  } catch (err) {
-
+  xhr.onerror = () => {
+    if (btn) { btn.disabled = false; btn.textContent = '🚀 Subir y Certificar por Stream'; }
     if (statusMsg) {
-
       statusMsg.style.color = '#f87171';
-
-      statusMsg.textContent = `❌ Error de red: ${err.message}`;
-
+      statusMsg.textContent = '❌ Error de red durante la transmisión.';
     }
+  };
 
-  } finally {
-
-    if (btn) { btn.disabled = false; btn.textContent = '🚀 Subir y Certificar'; }
-
-  }
-
+  xhr.open('POST', url, true);
+  xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+  xhr.send(selectedZipFile);
 }
-
 
 
 async function cargarListaZipsServidor() {
