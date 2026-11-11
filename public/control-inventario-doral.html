@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🌸 TABLERO DE CONTROL DE INVENTARIO VIVO - DORAL 34°F</title>
+  <title>🌸 TABLERO DE CONTROL DE INVENTARIO VIVO Y MULTICANAL - DORAL 34°F</title>
   <style>
     :root {
       --bg: #0f172a;
@@ -15,6 +15,10 @@
       --text: #f8fafc;
       --text-muted: #94a3b8;
       --border: #334155;
+      --wa-color: #25d366;
+      --email-color: #38bdf8;
+      --tiktok-color: #ec4899;
+      --manychat-color: #f59e0b;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
     body { background-color: var(--bg); color: var(--text); padding: 24px; }
@@ -28,37 +32,47 @@
     .stat-label { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
     .stat-value { font-size: 28px; font-weight: 700; margin-top: 6px; color: #38bdf8; }
 
-    .main-grid { display: grid; grid-template-columns: 2fr 1.2fr; gap: 24px; }
-    @media (max-width: 1024px) { .main-grid { grid-template-columns: 1fr; } }
+    .main-grid { display: grid; grid-template-columns: 1.4fr 1.6fr; gap: 24px; }
+    @media (max-width: 1100px) { .main-grid { grid-template-columns: 1fr; } }
 
     .inventory-section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
     .section-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
 
-    .table-container { overflow-x: auto; }
+    .table-container { overflow-x: auto; max-height: 580px; }
     table { width: 100%; border-collapse: collapse; text-align: left; }
-    th { background: #0f172a; padding: 12px; font-size: 12px; color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--border); }
-    td { padding: 12px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    th { background: #0f172a; padding: 12px; font-size: 12px; color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
     tr:hover { background: rgba(255,255,255,0.02); }
 
-    .qty-controls { display: flex; align-items: center; gap: 8px; }
-    .btn-qty { background: var(--border); color: white; border: none; width: 26px; height: 26px; border-radius: 6px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+    .qty-controls { display: flex; align-items: center; gap: 6px; }
+    .btn-qty { background: var(--border); color: white; border: none; width: 24px; height: 24px; border-radius: 6px; font-weight: 700; cursor: pointer; transition: 0.2s; font-size: 12px; }
     .btn-qty:hover { background: var(--accent); }
-    .qty-display { font-weight: 700; min-width: 28px; text-align: center; }
+    .qty-display { font-weight: 700; min-width: 24px; text-align: center; }
     
-    .status-pill { font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: 600; }
+    .status-pill { font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: 600; white-space: nowrap; }
     .status-ok { background: #064e3b; color: #34d399; }
     .status-low { background: #78350f; color: #fbbf24; }
     .status-out { background: #7f1d1d; color: #f87171; }
 
-    .dispatch-section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
-    .profile-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
-    .tab-btn { background: #0f172a; border: 1px solid var(--border); color: var(--text-muted); padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+    .dispatch-section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    
+    /* Canales principales */
+    .channel-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; }
+    @media (max-width: 600px) { .channel-tabs { grid-template-columns: repeat(2, 1fr); } }
+    .channel-btn { background: #0f172a; border: 2px solid var(--border); color: var(--text-muted); padding: 10px 12px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+    .channel-btn.active-wa { background: #064e3b; color: #34d399; border-color: #10b981; }
+    .channel-btn.active-email { background: #0c4a6e; color: #7dd3fc; border-color: #38bdf8; }
+    .channel-btn.active-tiktok { background: #831843; color: #f472b6; border-color: #ec4899; }
+    .channel-btn.active-manychat { background: #78350f; color: #fcd34d; border-color: #f59e0b; }
+
+    .subprofile-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tab-btn { background: #0f172a; border: 1px solid var(--border); color: var(--text-muted); padding: 6px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: 0.2s; }
     .tab-btn.active { background: #38bdf8; color: #0f172a; border-color: #38bdf8; }
 
-    .msg-preview { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: monospace; font-size: 13px; line-height: 1.5; color: #cbd5e1; white-space: pre-wrap; flex-grow: 1; min-height: 200px; }
+    .msg-preview { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12.5px; line-height: 1.55; color: #cbd5e1; white-space: pre-wrap; flex-grow: 1; min-height: 320px; max-height: 480px; overflow-y: auto; }
     
     .btn-action { background: var(--accent); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; width: 100%; }
-    .btn-action:hover { background: var(--accent-hover); }
+    .btn-action:hover { filter: brightness(1.1); transform: translateY(-1px); }
     
     .alert-banner { background: #1e293b; border-left: 4px solid var(--warning); padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 13px; color: #fde68a; margin-bottom: 20px; }
   </style>
@@ -67,8 +81,8 @@
 
   <div class="header">
     <div class="title-box">
-      <h1>🌸 TABLERO DE CONTROL DE INVENTARIO VIVO</h1>
-      <span style="font-size: 14px; color: var(--text-muted);">Tropical Blooms Miami · SGN FloralTrack</span>
+      <h1>🌸 TABLERO DE CONTROL DE INVENTARIO VIVO Y MULTICANAL</h1>
+      <span style="font-size: 14px; color: var(--text-muted);">Tropical Blooms Miami · SGN FloralTrack 24/7</span>
     </div>
     <div style="display: flex; gap: 10px;">
       <span class="badge cold-badge">❄️ CUARTO FRÍO: 34°F (1.1°C)</span>
@@ -77,7 +91,7 @@
   </div>
 
   <div class="alert-banner">
-    ⚠️ <strong>REGLA OPERATIVA DE ORO:</strong> No se dispara ningún mensaje sin verificar primero que la variedad tenga cajas disponibles en verde. Las cantidades aquí reflejan el stock físico en muelle con Camilo.
+    ⚠️ <strong>REGLA OPERATIVA DE ORO:</strong> No se dispara ninguna campaña sin verificar primero el stock en verde. Al modificar las cajas disponibles con (+ / -), el texto para WhatsApp, Email B2B, TikTok/Reels o ManyChat se recalcula en tiempo real.
   </div>
 
   <div class="stats-grid">
@@ -95,7 +109,7 @@
     </div>
     <div class="stat-card">
       <div class="stat-label">Entrega Rápida Doral / MIA</div>
-      <div class="stat-value" style="font-size: 20px; margin-top: 12px; color: #a78bfa;">Muelle Will-Call 6:30 AM</div>
+      <div class="stat-value" style="font-size: 18px; margin-top: 12px; color: #a78bfa;">Muelle Will-Call 6:30 AM</div>
     </div>
   </div>
 
@@ -103,7 +117,7 @@
     <!-- SECCIÓN INVENTARIO -->
     <div class="inventory-section">
       <div class="section-title">
-        <span>📦 Stock Físico en Doral (Ajuste Rápido)</span>
+        <span>📦 Stock Físico en Cuarto Frío (Doral)</span>
         <button class="btn-qty" style="width: auto; padding: 4px 10px;" onclick="resetStock()">Restaurar</button>
       </div>
 
@@ -113,7 +127,7 @@
             <tr>
               <th>Variedad</th>
               <th>Grado</th>
-              <th>Caja (Tallos)</th>
+              <th>Empaque</th>
               <th>Precio Ref.</th>
               <th>Disponibles</th>
               <th>Estado</th>
@@ -126,30 +140,43 @@
       </div>
     </div>
 
-    <!-- SECCIÓN GENERADOR DE MENSAJE INTELIGENTE -->
+    <!-- SECCIÓN GENERADOR MULTICANAL -->
     <div class="dispatch-section">
       <div class="section-title">
-        <span>💬 Generador de Ataque Comercial</span>
+        <span>🚀 Generador de Ataque Comercial Multicanal</span>
       </div>
-      <p style="font-size: 13px; color: var(--text-muted);">
-        Seleccione el perfil de cliente. El mensaje se redacta <strong>automáticamente con las cajas reales que SÍ tenemos</strong> hoy en cuarto frío:
-      </p>
-
-      <div class="profile-tabs">
-        <button class="tab-btn active" onclick="selectProfile('bodas')">💍 1. Bodas de Lujo</button>
-        <button class="tab-btn" onclick="selectProfile('retail')">🏪 2. Floristerías Retail</button>
-        <button class="tab-btn" onclick="selectProfile('mayorista')">🚚 3. Muelle Will-Call</button>
+      
+      <!-- SELECTOR DE CANALES PRINCIPALES -->
+      <div class="channel-tabs">
+        <button id="btn-chan-wa" class="channel-btn active-wa" onclick="selectChannel('whatsapp')">
+          <span>🟢 WhatsApp</span>
+        </button>
+        <button id="btn-chan-email" class="channel-btn" onclick="selectChannel('email')">
+          <span>📧 Email B2B</span>
+        </button>
+        <button id="btn-chan-tiktok" class="channel-btn" onclick="selectChannel('tiktok')">
+          <span>🎵 TikTok / Reels</span>
+        </button>
+        <button id="btn-chan-manychat" class="channel-btn" onclick="selectChannel('manychat')">
+          <span>🤖 ManyChat / DMs</span>
+        </button>
       </div>
 
+      <!-- SUB-PERFILES SEGÚN CANAL -->
+      <div id="subprofile-container" class="subprofile-tabs">
+        <!-- Renderizado según canal seleccionado -->
+      </div>
+
+      <!-- VISTA PREVIA DEL MENSAJE / GUIÓN / FLUJO -->
       <div class="msg-preview" id="msg-box">
-        <!-- Mensaje dinámico -->
+        <!-- Contenido generado dinámicamente -->
       </div>
 
-      <button class="btn-action" onclick="copyMessage()">
+      <button id="btn-copy-action" class="btn-action" onclick="copyMessage()">
         📋 Copiar Mensaje para WhatsApp
       </button>
       <div id="copy-feedback" style="font-size: 12px; color: #34d399; text-align: center; display: none;">
-        ✅ ¡Mensaje copiado al portapapeles! Listo para pegar en WhatsApp.
+        ✅ ¡Copiado al portapapeles! Listo para enviar.
       </div>
     </div>
   </div>
@@ -168,7 +195,8 @@
       { id: 10, name: "Eucalipto Silver Dollar", cat: "Follajes", grade: "Fresco", pack: "Bunch importado", price: "$10.00/b", qty: 14, reserved: 6 }
     ];
 
-    let currentProfile = 'bodas';
+    let currentChannel = 'whatsapp';
+    let currentSubProfile = 'bodas';
 
     function renderTable() {
       const tbody = document.getElementById('inventory-tbody');
@@ -188,8 +216,8 @@
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td><strong>${item.name}</strong></td>
-          <td style="color: var(--text-muted); font-size: 13px;">${item.grade}</td>
-          <td style="font-size: 13px;">${item.pack}</td>
+          <td style="color: var(--text-muted); font-size: 12.5px;">${item.grade}</td>
+          <td style="font-size: 12.5px;">${item.pack}</td>
           <td style="color: #38bdf8; font-weight: 600;">${item.price}</td>
           <td>
             <div class="qty-controls">
@@ -219,15 +247,78 @@
 
     function resetStock() {
       inventory[0].qty = 18;
+      inventory[1].qty = 10;
       inventory[2].qty = 14;
+      inventory[3].qty = 12;
+      inventory[4].qty = 6;
       inventory[5].qty = 22;
+      inventory[6].qty = 15;
+      inventory[7].qty = 19;
+      inventory[8].qty = 30;
+      inventory[9].qty = 14;
       renderTable();
     }
 
-    function selectProfile(profile) {
-      currentProfile = profile;
-      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-      event.target.classList.add('active');
+    function selectChannel(channel) {
+      currentChannel = channel;
+      
+      // Update channel tabs styling
+      document.getElementById('btn-chan-wa').className = 'channel-btn' + (channel === 'whatsapp' ? ' active-wa' : '');
+      document.getElementById('btn-chan-email').className = 'channel-btn' + (channel === 'email' ? ' active-email' : '');
+      document.getElementById('btn-chan-tiktok').className = 'channel-btn' + (channel === 'tiktok' ? ' active-tiktok' : '');
+      document.getElementById('btn-chan-manychat').className = 'channel-btn' + (channel === 'manychat' ? ' active-manychat' : '');
+
+      renderSubProfiles();
+      updateMessage();
+    }
+
+    function renderSubProfiles() {
+      const container = document.getElementById('subprofile-container');
+      container.innerHTML = '';
+
+      if (currentChannel === 'whatsapp') {
+        currentSubProfile = 'bodas';
+        container.innerHTML = `
+          <button class="tab-btn active" onclick="selectSubProfile(this, 'bodas')">💍 1. Bodas de Lujo</button>
+          <button class="tab-btn" onclick="selectSubProfile(this, 'retail')">🏪 2. Floristerías Retail</button>
+          <button class="tab-btn" onclick="selectSubProfile(this, 'mayorista')">🚚 3. Muelle Will-Call</button>
+        `;
+        document.getElementById('btn-copy-action').innerText = '📋 Copiar Mensaje para WhatsApp';
+        document.getElementById('btn-copy-action').style.background = 'var(--wa-color)';
+      } 
+      else if (currentChannel === 'email') {
+        currentSubProfile = 'email_mayorista';
+        container.innerHTML = `
+          <button class="tab-btn active" onclick="selectSubProfile(this, 'email_mayorista')">📑 Oferta B2B Formal</button>
+          <button class="tab-btn" onclick="selectSubProfile(this, 'email_urgente')">⚡ Flash Sale (Cuarto Frío)</button>
+        `;
+        document.getElementById('btn-copy-action').innerText = '📋 Copiar Email B2B Completo';
+        document.getElementById('btn-copy-action').style.background = 'var(--email-color)';
+      } 
+      else if (currentChannel === 'tiktok') {
+        currentSubProfile = 'tiktok_inspeccion';
+        container.innerHTML = `
+          <button class="tab-btn active" onclick="selectSubProfile(this, 'tiktok_inspeccion')">🎬 1. Inspección 34°F (Gancho)</button>
+          <button class="tab-btn" onclick="selectSubProfile(this, 'tiktok_willcall')">📦 2. Retiro Will-Call en Doral</button>
+        `;
+        document.getElementById('btn-copy-action').innerText = '📋 Copiar Guión de TikTok / Reels';
+        document.getElementById('btn-copy-action').style.background = 'var(--tiktok-color)';
+      } 
+      else if (currentChannel === 'manychat') {
+        currentSubProfile = 'manychat_flow';
+        container.innerHTML = `
+          <button class="tab-btn active" onclick="selectSubProfile(this, 'manychat_flow')">🤖 Flujo de Automatización DM</button>
+          <button class="tab-btn" onclick="selectSubProfile(this, 'manychat_keywords')">🔑 Palabras Clave y Triggers</button>
+        `;
+        document.getElementById('btn-copy-action').innerText = '📋 Copiar Estructura ManyChat';
+        document.getElementById('btn-copy-action').style.background = 'var(--manychat-color)';
+      }
+    }
+
+    function selectSubProfile(btn, subprofile) {
+      currentSubProfile = subprofile;
+      document.querySelectorAll('#subprofile-container .tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
       updateMessage();
     }
 
@@ -236,54 +327,227 @@
       const pb = inventory.find(i => i.name.includes("Playa Blanca"));
       const mon = inventory.find(i => i.name.includes("Mondial"));
       const fre = inventory.find(i => i.name.includes("Freedom"));
-      const hort = inventory.find(i => i.name.includes("Hortensia White"));
+      const exp = inventory.find(i => i.name.includes("Explorer"));
+      const shi = inventory.find(i => i.name.includes("Shimmer"));
+      const hortW = inventory.find(i => i.name.includes("Hortensia White"));
+      const hortB = inventory.find(i => i.name.includes("Hortensia Blue"));
       const gyp = inventory.find(i => i.name.includes("Gypsophila"));
+      const rusc = inventory.find(i => i.name.includes("Ruscus"));
+      const euca = inventory.find(i => i.name.includes("Eucalipto"));
 
-      if (currentProfile === 'bodas') {
-        box.innerText = 
-`Hola [Nombre Florista/Diseñador], buen día.
+      // 1. CANAL WHATSAPP
+      if (currentChannel === 'whatsapp') {
+        if (currentSubProfile === 'bodas') {
+          box.innerText = 
+`Hola [Nombre Diseñador/Florista], buen día.
 
-Le escribo de Tropical Blooms Miami (Hub Doral). Tenemos disponibilidad fresca en cuarto frío a 34°F para sus eventos de este fin de semana:
+Le escribo de Tropical Blooms Miami (Hub Doral). Tenemos disponibilidad fresca en cuarto frío a 34°F para sus montajes de eventos:
 
-💍 DISPONIBLE HOY EN DORAL:
+💍 DISPONIBLE HOY EN DORAL (RETIRO INMEDIATO):
 • Playa Blanca 60cm: ${pb.qty} cajas QB (${pb.price}) - Botón cerrado nupcial
 • Mondial 60cm: ${mon.qty} cajas QB (${mon.price})
-• Hortensias Jumbo White: ${hort.qty} cajas (${hort.price})
+• Shimmer Nude 60cm: ${shi.qty} cajas QB (${shi.price})
+• Hortensias Jumbo White: ${hortW.qty} cajas (${hortW.price})
+• Eucalipto Silver Dollar: ${euca.qty} bunches (${euca.price})
 
-❄️ Cadena de frío ininterrumpida y entrega directa en camión refrigerado en su taller, o retiro inmediato en muelle Doral.
+❄️ Cadena de frío ininterrumpida desde avión a cuarto frío 34°F. Entrega en camión refrigerado o retiro en muelle Doral.
 
-¿Desea que le reserve alguna caja antes de las 10:00 AM?
-Quedo atento, Camilo Bueno / Tropical Blooms.`;
-      } 
-      else if (currentProfile === 'retail') {
-        box.innerText = 
+¿Desea que le reserve cajas para despacho hoy antes de las 10:00 AM?
+Quedo atento, Camilo Bueno / Tropical Blooms Miami.`;
+        } 
+        else if (currentSubProfile === 'retail') {
+          box.innerText = 
 `Hola [Nombre Floristería], un saludo cordial.
 
 Reporte de stock diario en cuarto frío Doral (Tropical Blooms):
 
-🏪 PARA ROTACIÓN DE HOY:
+🏪 PARA ROTACIÓN INMEDIATA EN TIENDA:
 • Freedom Ecuatoriana 60cm: ${fre.qty} cajas QB (${fre.price})
+• Explorer 70cm: ${exp.qty} cajas QB (${exp.price})
 • Gypsophila Million Stars: ${gyp.qty} cajas QB (${gyp.price})
-• Hortensias Jumbo: ${hort.qty} cajas (${hort.price})
+• Hortensias Jumbo White: ${hortW.qty} cajas (${hortW.price})
+• Ruscus Italiano: ${rusc.qty} bunches (${rusc.price})
 
 🚚 Entrega en Miami-Dade y Broward el mismo día si confirma antes de las 10:00 AM. Pago contra entrega o Zelle. Cero marchitamiento garantizado.
 
 ¿Le agrego algo a la ruta de despacho de hoy?`;
-      } 
-      else {
-        box.innerText = 
-`Atención Mayoristas y Decoradores de Miami:
+        } 
+        else {
+          box.innerText = 
+`Atención Mayoristas y Distribuidores de Miami:
 
 📦 MUELLE ABIERTO DORAL (WILL-CALL DISPONIBLE DESDE 6:30 AM):
-• Freedom 60cm: ${fre.qty} Cajas
-• Playa Blanca 60cm: ${pb.qty} Cajas
-• Gypsophila Million Stars: ${gyp.qty} Cajas
-• Hortensias Jumbo: ${hort.qty} Cajas
+• Freedom 60cm: ${fre.qty} Cajas QB
+• Explorer 70cm: ${exp.qty} Cajas QB
+• Playa Blanca 60cm: ${pb.qty} Cajas QB
+• Gypsophila Million Stars: ${gyp.qty} Cajas QB
+• Hortensias Jumbo White: ${hortW.qty} Cajas
 
 📍 Dirección: Doral Cold Storage Hub (a 8 min del Aeropuerto MIA).
 Retiro directo sin flete, inspección física en muelle y pago Zelle inmediato.
 
-Escriba para separar su lote antes de carga.`;
+Escriba o llame para separar su lote antes de carga.`;
+        }
+      }
+
+      // 2. CANAL EMAIL B2B
+      else if (currentChannel === 'email') {
+        if (currentSubProfile === 'email_mayorista') {
+          box.innerText = 
+`ASUNTO: [Disponibilidad Diaria 34°F] Flores Frescas Ecuatorianas & Colombianas - Will-Call Doral / Tropical Blooms
+
+Estimado Equipo de Compras,
+
+Reciban un cordial saludo de parte de Tropical Blooms Miami.
+
+Ponemos a su disposición nuestro inventario físico disponible para entrega inmediata hoy desde nuestro cuarto frío en Doral (34°F constante):
+
+RESUMEN DE DISPONIBILIDAD INMEDIATA (WILL-CALL O DESPACHO LOCAL):
+---------------------------------------------------------------------------------
+Variedad / Producto             | Grado / Empaque        | Stock Disponible | Precio Ref.
+---------------------------------------------------------------------------------
+• Rosa Freedom (Rojo)          | 60cm - QB (150 tallos) | ${fre.qty} Cajas          | ${fre.price}
+• Rosa Explorer (Rojo Oscuro)  | 70cm - QB (150 tallos) | ${exp.qty} Cajas          | ${exp.price}
+• Rosa Playa Blanca (Nupcial)  | 60cm - QB (150 tallos) | ${pb.qty} Cajas          | ${pb.price}
+• Rosa Mondial (Blanco Crema)  | 60cm - QB (150 tallos) | ${mon.qty} Cajas          | ${mon.price}
+• Hortensia Jumbo White Select | 22cm - Caja 30 tallos  | ${hortW.qty} Cajas          | ${hortW.price}
+• Gypsophila Million Stars     | 1000g - QB 10 bunches  | ${gyp.qty} Cajas          | ${gyp.price}
+• Ruscus Italiano Fresco       | 60-70cm - Bunch 10 t.  | ${rusc.qty} Bunches        | ${rusc.price}
+---------------------------------------------------------------------------------
+
+CONDICIONES COMERCIALES:
+1. Retiro en Muelle (Will-Call): Disponible desde las 6:30 AM en Doral Cold Hub.
+2. Despacho Local Refrigerado: Miami-Dade y Broward (pedidos antes de las 10:00 AM).
+3. Pagos Aceptados: Zelle, Wire Transfer, Tarjeta de Crédito, Net 7 (previa aprobación).
+
+Para apartar producto o solicitar cotización por pallets completos, responda directamente a este correo o comuníquese a nuestra línea de atención:
+
+Atentamente,
+Camilo Bueno
+Operaciones & Distribución B2B | Tropical Blooms Miami
+Doral Cold Storage Facility, FL`;
+        } 
+        else {
+          box.innerText = 
+`ASUNTO: ⚡ FLASH SALE DORAL: Lote Fresco en Muelle (Rosas 60cm & Hortensias) - Cupos Limitados
+
+Equipo Floral de Miami:
+
+Acabamos de recibir inspección de carga en cuarto frío a 34°F en Doral con excedente para rotación inmediata hoy:
+
+🔥 PRECIOS ESPECIALES DE LIQUIDACIÓN DE MUELLE:
+• Rosa Freedom 60cm: ${fre.qty} Cajas disponibles a precio preferencial
+• Rosa Playa Blanca 60cm: ${pb.qty} Cajas nupciales listas
+• Hortensias Jumbo White: ${hortW.qty} Cajas
+• Gypsophila Million Stars: ${gyp.qty} Cajas
+
+⏰ VÁLIDO ÚNICAMENTE HOY HASTA LAS 2:00 PM.
+Retiro inmediato en muelle Will-Call Doral o despacho refrigerado express.
+
+Responda "SEPARAR LOTE" o llame a Camilo Bueno para confirmar antes de agotar existencia.`;
+        }
+      }
+
+      // 3. CANAL TIKTOK / REELS
+      else if (currentChannel === 'tiktok') {
+        if (currentSubProfile === 'tiktok_inspeccion') {
+          box.innerText = 
+`🎬 GUIÓN DE TIKTOK / REELS: "INSPECCIÓN DE CUARTO FRÍO A 34°F EN DORAL"
+⏱️ Duración: 30 a 45 segundos | Formato: Vertical 9:16
+🎵 Audio recomendado: Sonido Trending empresarial / Beat frío moderno
+
+[00:00 - 00:03] 💥 GANCHO VISUAL (HOOK):
+(Camilo empuja la pesada puerta del cuarto frío en Doral; sale vapor denso de condensación).
+Texto en pantalla: "Así se ven 5,400 tallos recién bajados del avión en Miami ✈️❄️"
+Voz de Camilo: "¿Te dedicas a eventos o tienes floristería en Miami? Mira esto."
+
+[00:03 - 00:15] 🔍 INSPECCIÓN DE CALIDAD:
+(Cámara en macro sobre una caja abierta de Playa Blanca y Freedom).
+Camilo abre el capuchón de cartón: "34 grados Fahrenheit clavados. Cero hongo, cero deshidratación. Miren este botón de Playa Blanca: tenemos ${pb.qty} cajas disponibles hoy en Doral."
+
+[00:15 - 00:25] 📦 DISPONIBILIDAD REAL EN MUELLE:
+(Paneo rápido de las cajas apiladas con etiquetas de temperatura):
+"Tenemos ${fre.qty} cajas de Freedom 60cm, ${hortW.qty} cajas de Hortensia Jumbo y ${gyp.qty} de Gypso Million Stars listas para salir."
+
+[00:25 - 00:35] 🚀 LLAMADA A LA ACCIÓN (CTA):
+(Camilo mirando a cámara en el muelle de carga):
+"Si necesitas surtir tu evento este fin de semana sin pagar fletes caros, ven a Will-Call en Doral desde las 6:30 AM o pide entrega en camión refrigerado. Comenta 'FLOR' o toca el link en la bio para pasarte el inventario en vivo."
+
+📲 HASHTAGS: #MiamiFlorist #DoralFlowers #FloresMiami #BodasMiami #MiamiEventPlanner #TropicalBlooms`;
+        } 
+        else {
+          box.innerText = 
+`🎬 GUIÓN DE TIKTOK / REELS: "WILL-CALL 6:30 AM EN DORAL: CERO INTERMEDIARIOS"
+⏱️ Duración: 25 segundos | Formato: Vertical 9:16
+
+[00:00 - 00:04] 💥 GANCHO:
+(Camilo subiendo una caja en montacargas en muelle Doral).
+Texto en pantalla: "Por qué los mejores floristas de Miami compran directo en Doral 🤫"
+
+[00:04 - 00:15] 📦 CUERPO:
+"En lugar de esperar 3 días o comprar flor marchita, vienes directo a nuestro muelle a 8 min del aeropuerto MIA.
+Hoy tenemos:
+• ${fre.qty} cajas de Rosa Freedom
+• ${pb.qty} cajas de Rosa Playa Blanca
+• ${hortW.qty} cajas de Hortensia Jumbo
+Frío ininterrumpido a 34°F."
+
+[00:15 - 00:25] 🚀 CTA:
+"Pagas con Zelle, cargas en tu van y tienes flor perfecta para tus clientes.
+Escribe 'WILLCALL' por mensaje directo y te enviamos la ubicación exacta y precios de hoy."`;
+        }
+      }
+
+      // 4. CANAL MANYCHAT / DMs
+      else if (currentChannel === 'manychat') {
+        if (currentSubProfile === 'manychat_flow') {
+          box.innerText = 
+`🤖 ESTRUCTURA DE FLUJO MANYCHAT (INSTAGRAM DM / FACEBOOK MESSENGER):
+
+1. DISPARADOR (TRIGGER):
+   • El usuario comenta en cualquier Reel o envía DM con las palabras: "FLOR", "PRECIO", "INVENTARIO", "DORAL".
+
+2. RESPUESTA AUTOMÁTICA INSTANTÁNEA (0.5s):
+   "¡Hola! 👋 Gracias por contactar a Tropical Blooms Miami (Hub Doral). 
+   Actualmente tenemos stock vivo disponible en cuarto frío a 34°F con retiro en muelle o entrega refrigerada.
+
+   ¿Qué tipo de flores buscas para hoy o este fin de semana?"
+
+   [BOTÓN 1: 🌹 Rosas Rojas (Freedom / Explorer)]
+   [BOTÓN 2: 💍 Bodas & Blancas (Playa Blanca / Mondial)]
+   [BOTÓN 3: 🌸 Hortensias & Follajes (Gypso / Ruscus)]
+
+3. RAMA CONDICIONAL - SI PULSA BOTÓN 1 (Rosas Rojas):
+   "Excelente elección. Tenemos disponible hoy en Doral:
+   • Freedom 60cm: ${fre.qty} Cajas (${fre.price})
+   • Explorer 70cm: ${exp.qty} Cajas (${exp.price})
+   
+   ¿A qué número de WhatsApp podemos enviarte la ubicación exacta de muelle o coordinar entrega en tu taller?"
+   [CAMPO DE ENTRADA DE USUARIO: Teléfono]
+
+4. ACCIÓN DE DERIVACIÓN INMEDIATA (HANDOFF A CAMILO):
+   • Etiquetar Lead: "Interesado_Rosas_Doral"
+   • Notificar a Camilo por WhatsApp/Telegram: "Nuevo Lead de Instagram: [Nombre], Teléfono: [Número], Producto: Rosas Rojas".`;
+        } 
+        else {
+          box.innerText = 
+`🔑 CONFIGURACIÓN DE PALABRAS CLAVE Y REGLAS DE RESPUESTA EN MANYCHAT:
+
+PALABRAS CLAVE PRINCIPALES:
+• "FLOR", "FLORES", "INVENTARIO", "PRECIOS", "DORAL", "WILLCALL", "BODAS"
+
+RESPUESTAS RÁPIDAS AUTOMATIZADAS:
+---------------------------------------------------------------------------------
+Keyword: "DORAL" o "UBICACION"
+Respuesta: "📍 Nuestro cuarto frío está ubicado en Doral, FL, a 8 minutos del Aeropuerto MIA. Muelle abierto para retiro Will-Call desde las 6:30 AM. ¿Quieres agendar retiro hoy?"
+Botón: [Hablar con Camilo por WhatsApp] -> https://wa.me/1XXXXXXXXXX?text=Hola%20quiero%20retirar%20en%20Doral
+
+Keyword: "CATALOGO" o "STOCK"
+Respuesta: "🌸 Puedes ver nuestro inventario en tiempo real en nuestra pantalla en vivo:
+https://agy-ide-production.up.railway.app/control-inventario-doral.html
+Tenemos ${fre.qty} cajas de Rosas y ${hortW.qty} cajas de Hortensias disponibles hoy."
+---------------------------------------------------------------------------------`;
+        }
       }
     }
 
@@ -296,6 +560,8 @@ Escriba para separar su lote antes de carga.`;
       });
     }
 
+    // Inicialización
+    renderSubProfiles();
     renderTable();
   </script>
 </body>
