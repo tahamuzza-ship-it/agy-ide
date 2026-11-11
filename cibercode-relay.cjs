@@ -1044,8 +1044,64 @@ function registerCibercodeRoutes(app, options = {}) {
       }
     });
   };
-
   app.post(['/api/cibercode/upload-zip-stream', '/api/upload-zip-stream'], uploadZipStreamHandler);
+
+  // 5. Eliminar archivo individual subido (Protección oficial SGN)
+  const deleteZipHandler = (req, res) => {
+    try {
+      const filename = req.query.file || (req.body && req.body.file);
+      if (!filename) {
+        return res.status(400).json({ status: 'error', ok: false, error: 'Parámetro file requerido' });
+      }
+
+      const safeFilename = path.basename(filename);
+      const nombresOficiales = ['MANUAL_CIBERCODE_2_SGN.zip', 'SKILL_GESTION_ENLACES_DESCARGABLES_Y_WEB.zip'];
+      if (nombresOficiales.includes(safeFilename) || nombresOficiales.includes(filename)) {
+        return res.status(403).json({ status: 'error', ok: false, error: 'Protegido: Los paquetes oficiales SGN son inmutables' });
+      }
+
+      const targetPath = path.join(uploadsDir, safeFilename);
+      if (!targetPath.startsWith(uploadsDir)) {
+        return res.status(403).json({ status: 'error', ok: false, error: 'Acceso no autorizado' });
+      }
+
+      if (!fs.existsSync(targetPath)) {
+        return res.status(404).json({ status: 'error', ok: false, error: 'Archivo no encontrado' });
+      }
+
+      fs.unlinkSync(targetPath);
+      console.log(`[CIBERCODE ZIP] Archivo eliminado: ${safeFilename}`);
+      return res.json({ status: 'success', ok: true, mensaje: `Archivo ${safeFilename} eliminado exitosamente`, archivo: safeFilename });
+    } catch (err) {
+      console.error('[CIBERCODE DELETE ZIP ERROR]:', err);
+      return res.status(500).json({ status: 'error', ok: false, error: err.message });
+    }
+  };
+  app.delete(['/api/cibercode/zips', '/api/zips'], deleteZipHandler);
+
+  // 6. Purgar todos los archivos temporales subidos (Protección de oficiales)
+  const purgeZipsHandler = (_req, res) => {
+    try {
+      if (!fs.existsSync(uploadsDir)) {
+        return res.json({ status: 'success', ok: true, mensaje: 'Nada que purgar', eliminados: 0 });
+      }
+      const files = fs.readdirSync(uploadsDir);
+      let eliminados = 0;
+      for (const f of files) {
+        const fp = path.join(uploadsDir, f);
+        if (fs.statSync(fp).isFile()) {
+          fs.unlinkSync(fp);
+          eliminados++;
+        }
+      }
+      console.log(`[CIBERCODE ZIP] Purgados ${eliminados} archivos temporales.`);
+      return res.json({ status: 'success', ok: true, mensaje: `Se purgaron ${eliminados} archivos temporales`, eliminados });
+    } catch (err) {
+      console.error('[CIBERCODE PURGE ZIPS ERROR]:', err);
+      return res.status(500).json({ status: 'error', ok: false, error: err.message });
+    }
+  };
+  app.post(['/api/cibercode/zips/purge', '/api/zips/purge'], purgeZipsHandler);
 
 
 

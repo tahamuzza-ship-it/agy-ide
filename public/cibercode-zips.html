@@ -869,8 +869,9 @@ def prueba_soberana():
         <div style="background:#020617; border-left:3px solid #38bdf8; border-radius:4px; padding:8px 12px; margin-bottom:12px; font-size:0.75rem; color:#cbd5e1; line-height:1.45;">
             👉 <strong>¿Cómo se prueba?</strong> Haz clic en <strong>[ 🔄 Consultar Inventario en Vivo ]</strong>. Aparecerá la tabla con todos los archivos guardados en el servidor y un botón individual para descargarlos.
         </div>
-        <div class="action-row">
+        <div class="action-row" style="display:flex; gap:10px; flex-wrap:wrap;">
             <button class="btn-action" onclick="cargarCatalogoServidor()">🔄 Consultar Inventario en Vivo</button>
+            <button class="btn-action" onclick="purgarTemporalesServidor()" style="background:#ef4444; border-color:#dc2626; color:#ffffff;">🧹 Purgar Temporales</button>
         </div>
         <div class="table-responsive" id="tableContainer">
             <div style="font-size:0.75rem; color:var(--text-dim); padding:10px; text-align:center;">Pulsa el botón para consultar el inventario...</div>
@@ -1212,10 +1213,17 @@ async function cargarCatalogoServidor() {
                     <td><span style="${badgeColor}">${escapeHtml(z.tipo)}</span></td>
                     <td>${kb} KB</td>
                     <td style="font-family:'Fira Code', monospace; font-size:0.65rem;">${z.sha256.substring(0, 16)}...</td>
-                    <td>
+                    <td style="display:flex; gap:6px; align-items:center;">
                         <a href="${z.downloadUrl}" download="${escapeHtml(z.filename)}" class="btn-action" style="padding:3px 8px; font-size:0.68rem;">
                             ⬇️ Descargar
                         </a>
+                        ${!isOficial ? `
+                            <button onclick="eliminarArchivoIndividual('${escapeHtml(z.filename)}')" class="btn-action" style="padding:3px 8px; font-size:0.68rem; background:#dc2626; border-color:#b91c1c; color:#fff;" title="Eliminar este archivo">
+                                🗑️
+                            </button>
+                        ` : `
+                            <span style="font-size:0.68rem; color:#64748b; padding:3px 4px;">🔒 Protegido</span>
+                        `}
                     </td>
                 </tr>`;
             });
@@ -1230,6 +1238,51 @@ async function cargarCatalogoServidor() {
         }
     } catch (err) {
         tableBox.innerHTML = `<div style="color:var(--red); padding:8px;">Error conectando con el servidor: ${err.message}</div>`;
+    }
+}
+
+// ── FUNCIONES DE LIMPIEZA DE ARCHIVOS CIBERCODE ──
+async function eliminarArchivoIndividual(filename) {
+    if (!confirm(`¿Estás seguro de que deseas eliminar permanentemente el archivo "${filename}" del servidor?`)) {
+        return;
+    }
+    const resBox = document.getElementById('resZ7');
+    resBox.className = 'result-box active';
+    resBox.textContent = `🗑️ Eliminando "${filename}"...`;
+
+    try {
+        const resp = await fetch(`/api/cibercode/zips?file=${encodeURIComponent(filename)}`, { method: 'DELETE' });
+        const data = await resp.json();
+        if (data.ok || data.status === 'success') {
+            resBox.textContent = `✅ Archivo "${filename}" eliminado con éxito. Refrescando inventario...`;
+            setTimeout(() => cargarCatalogoServidor(), 600);
+        } else {
+            resBox.textContent = `❌ Error eliminando archivo: ${data.error || 'Operación rechazada'}`;
+        }
+    } catch (err) {
+        resBox.textContent = `❌ Error de red: ${err.message}`;
+    }
+}
+
+async function purgarTemporalesServidor() {
+    if (!confirm('⚠️ ¿Deseas purgar TODOS los archivos temporales subidos?\n\nLos paquetes oficiales SGN permanecerán intactos.')) {
+        return;
+    }
+    const resBox = document.getElementById('resZ7');
+    resBox.className = 'result-box active';
+    resBox.textContent = '🧹 Purgando archivos temporales del servidor...';
+
+    try {
+        const resp = await fetch('/api/cibercode/zips/purge', { method: 'POST' });
+        const data = await resp.json();
+        if (data.ok || data.status === 'success') {
+            resBox.textContent = `✅ Limpieza completada: ${data.mensaje || 'Archivos purgados exitosamente'}. Refrescando inventario...`;
+            setTimeout(() => cargarCatalogoServidor(), 600);
+        } else {
+            resBox.textContent = `❌ Error purgando archivos: ${data.error || 'Operación rechazada'}`;
+        }
+    } catch (err) {
+        resBox.textContent = `❌ Error de red: ${err.message}`;
     }
 }
 
