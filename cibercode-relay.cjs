@@ -1103,7 +1103,87 @@ function registerCibercodeRoutes(app, options = {}) {
   };
   app.post(['/api/cibercode/zips/purge', '/api/zips/purge'], purgeZipsHandler);
 
+  // 7. Cloudflare Workers Soberano: Listado de Workers y Automatizaciones
+  const cfWorkersListHandler = async (_req, res) => {
+    try {
+      const configPath = path.join(process.env.APPDATA || '', 'xdg.config', '.wrangler', 'config', 'default.toml');
+      let token = process.env.CLOUDFLARE_API_TOKEN;
+      if (!token && fs.existsSync(configPath)) {
+        const content = fs.readFileSync(configPath, 'utf8');
+        const m = content.match(/oauth_token\s*=\s*"([^"]+)"/);
+        if (m) token = m[1];
+      }
 
+      if (!token) {
+        return res.status(401).json({ status: 'error', ok: false, error: 'Cloudflare no autenticado en PC4' });
+      }
+
+      const accountId = '0f88b26e842688ed48f709e70659af85';
+      const subdominio = 'tahamuzza';
+      const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await r.json();
+
+      if (!data.success) {
+        return res.status(502).json({ status: 'error', ok: false, error: data.errors });
+      }
+
+      const list = (data.result || []).map(w => ({
+        id: w.id,
+        url: `https://${w.id}.${subdominio}.workers.dev`,
+        created_on: w.created_on,
+        modified_on: w.modified_on
+      }));
+
+      return res.json({ status: 'success', ok: true, total: list.length, subdominio, workers: list });
+    } catch (err) {
+      console.error('[CIBERCODE CF LIST ERROR]:', err);
+      return res.status(500).json({ status: 'error', ok: false, error: err.message });
+    }
+  };
+  app.get(['/api/cibercode/cloudflare/workers', '/api/cloudflare/workers'], cfWorkersListHandler);
+
+  // 8. Cloudflare Workers: Desplegar Worker / Mini-App directamente desde CIBERCODE
+  const cfDeployWorkerHandler = async (req, res) => {
+    try {
+      const { name, code } = req.body || {};
+      if (!name || !code) {
+        return res.status(400).json({ status: 'error', ok: false, error: 'name y code son obligatorios' });
+      }
+
+      const safeName = name.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+      const tempDir = path.join(__dirname, 'temp_deployments', safeName);
+      if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
+      const scriptPath = path.join(tempDir, 'index.js');
+      fs.writeFileSync(scriptPath, code, 'utf8');
+
+      const { exec } = require('child_process');
+      const cmd = `npx --yes wrangler deploy "${scriptPath}" --name "${safeName}" --compatibility-date 2026-11-10`;
+
+      exec(cmd, { timeout: 30000 }, (error, stdout, stderr) => {
+        try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch (e) {}
+        if (error) {
+          console.error('[CF DEPLOY ERROR]:', stderr || error.message);
+          return res.status(500).json({ status: 'error', ok: false, error: stderr || error.message });
+        }
+        const url = `https://${safeName}.tahamuzza.workers.dev`;
+        console.log(`[CF DEPLOY SUCCESS] Worker desplegado: ${url}`);
+        return res.json({
+          status: 'success',
+          ok: true,
+          worker: safeName,
+          url,
+          mensaje: 'Worker desplegado en Cloudflare Edge con éxito'
+        });
+      });
+    } catch (err) {
+      console.error('[CF DEPLOY HANDLER ERROR]:', err);
+      return res.status(500).json({ status: 'error', ok: false, error: err.message });
+    }
+  };
+  app.post(['/api/cibercode/cloudflare/deploy', '/api/cloudflare/deploy'], cfDeployWorkerHandler);
 
   console.log('[CIBERCODE 2.0] Rutas de relay agéntico hacia PC4 registradas con éxito.');
 

@@ -1063,7 +1063,10 @@
       <span style="font-size:0.7rem; color:var(--text-muted); font-weight:600;">VÍA:</span>
       <button id="btnViaLocal" class="btn-via active" onclick="cambiarVia('local')">🏎️ Local LAN (0ms)</button>
       <button id="btnViaCloud" class="btn-via" onclick="cambiarVia('cloud')">☁️ Nube Railway</button>
-      <button id="btnViaCf" class="btn-via" onclick="cambiarVia('cloudflare')" disabled title="Próximamente">🛡️ Cloudflare</button>
+      <button id="btnViaCf" class="btn-via" onclick="cambiarVia('cloudflare')" title="Fábrica Edge de Workers y URLs Soberanas">🛡️ Cloudflare Workers</button>
+      <a href="/cibercode-cloudflare-manual.html" target="_blank" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px; background:linear-gradient(135deg, #f38020 0%, #d97014 100%); color:#fff; padding:4px 10px; border-radius:6px; font-size:0.75rem; font-weight:700; border:1px solid #faad3f; box-shadow:0 0 10px rgba(243,128,32,0.3); cursor:pointer;" title="Manual y Consola de Mini-Apps Edge">
+        📖 Manual Edge
+      </a>
     </div>
 
     <!-- Estado y Telemetría PC4 -->
@@ -1263,6 +1266,53 @@
       <span class="m-label">Terminal</span>
     </button>
   </nav>
+
+  <!-- MODAL / CENTRO DE MANDO CLOUDFLARE WORKERS SGN -->
+  <div class="modal-overlay" id="cfModalOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:9999; backdrop-filter:blur(4px); align-items:center; justify-content:center;">
+    <div class="modal-box" style="background:#111622; border:1px solid #f38020; border-radius:12px; width:92%; max-width:850px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 0 30px rgba(243,128,32,0.3); overflow:hidden;">
+      <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid #1e293b; background:#161f30;">
+        <div class="modal-title" style="display:flex; align-items:center; gap:10px; font-weight:700; color:#ff9d42; font-size:1.1rem;">
+          <span>🛡️</span> Fábrica de Workers y Mini-Apps Edge (Cloudflare)
+        </div>
+        <button class="modal-close" onclick="cerrarCfModal()" style="background:transparent; border:none; color:#94a3b8; font-size:1.3rem; cursor:pointer;">×</button>
+      </div>
+
+      <div class="modal-body" style="padding:20px; overflow-y:auto; flex:1;">
+        <!-- Panel 1: Desplegar Código Activo -->
+        <div style="background:#090d16; border:1px solid #1e293b; border-radius:8px; padding:16px; margin-bottom:20px;">
+          <h3 style="color:#f0f6fc; font-size:0.95rem; margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+            <span>🚀</span> Publicar el Código Activo del Editor en Cloudflare Edge ($0.00)
+          </h3>
+          <p style="color:#8b949e; font-size:0.8rem; margin-bottom:12px;">
+            Convierte el código JavaScript/HTML que tienes en el editor en una URL pública mundial inmediata (<code>https://[nombre].tahamuzza.workers.dev</code>).
+          </p>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <input type="text" id="cfWorkerNameInput" placeholder="nombre-del-worker (ej: mi-webhook, api-ventas)" style="flex:1; min-width:220px; background:#161b22; border:1px solid #30363d; border-radius:6px; padding:8px 12px; color:#fff; font-size:0.85rem;" />
+            <button onclick="desplegarCodigoEnCloudflare()" style="background:linear-gradient(135deg, #f38020 0%, #d97014 100%); color:#fff; font-weight:700; border:none; border-radius:6px; padding:8px 18px; cursor:pointer; font-size:0.85rem; display:inline-flex; align-items:center; gap:6px;">
+              <span>⚡</span> DESPLEGAR AHORA
+            </button>
+            <a href="/cibercode-cloudflare-manual.html" target="_blank" style="text-decoration:none; background:#1e293b; color:#38bdf8; padding:8px 14px; border-radius:6px; font-size:0.85rem; font-weight:600; display:inline-flex; align-items:center; gap:6px;">
+              📖 Ver Manual & Plantillas
+            </a>
+          </div>
+          <div id="cfDeployStatus" style="margin-top:10px; font-size:0.82rem;"></div>
+        </div>
+
+        <!-- Panel 2: Catálogo de Workers Vivos -->
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="color:#f0f6fc; font-size:0.95rem; display:flex; align-items:center; gap:8px;">
+              <span>📋</span> Workers Vivos en la Cuenta (<span id="cfTotalWorkers">...</span>)
+            </h3>
+            <button onclick="cargarListaCloudflareWorkers()" style="background:transparent; border:1px solid #30363d; color:#8b949e; border-radius:4px; padding:4px 8px; font-size:0.75rem; cursor:pointer;">⟳ Recargar</button>
+          </div>
+          <div id="cfWorkersListContainer" style="display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto;">
+            <div style="color:#8b949e; font-size:0.8rem; text-align:center; padding:20px;">Cargando catálogo de workers...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="/cibercode.js"></script>
 </body>

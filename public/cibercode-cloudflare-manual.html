@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual y Consola Edge — Cloudflare Workers SGN</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --border: #30363d;
+            --primary: #f38020; /* Cloudflare Orange */
+            --primary-hover: #faad3f;
+            --blue: #58a6ff;
+            --purple: #bc8cff;
+            --yellow: #d29922;
+            --red: #f85149;
+            --green: #3fb950;
+            --text: #c9d1d9;
+            --text-white: #f0f6fc;
+            --text-dim: #8b949e;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            line-height: 1.5;
+            padding: 24px 16px 100px 16px;
+        }
+        .container {
+            max-width: 980px;
+            margin: 0 auto;
+        }
+        .header {
+            background: linear-gradient(135deg, #2a1b12 0%, #161b22 100%);
+            border: 1px solid rgba(243, 128, 32, 0.4);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 20px rgba(243, 128, 32, 0.15);
+        }
+        .title {
+            color: #ff9d42;
+            font-size: 1.6rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: var(--text-dim);
+            font-size: 0.95rem;
+        }
+        .card {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .card h2 {
+            font-size: 1.25rem;
+            color: var(--text-white);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: 20px;
+            background: rgba(243, 128, 32, 0.2);
+            color: #ff9d42;
+            border: 1px solid rgba(243, 128, 32, 0.4);
+        }
+        .badge-green {
+            background: rgba(63, 185, 80, 0.15);
+            color: var(--green);
+            border: 1px solid rgba(63, 185, 80, 0.3);
+        }
+        p { margin-bottom: 12px; }
+        ul, ol { padding-left: 20px; margin-bottom: 14px; }
+        li { margin-bottom: 6px; }
+        pre, code {
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+            background: #090d13;
+            border: 1px solid #21262d;
+            border-radius: 6px;
+        }
+        code { padding: 2px 6px; font-size: 0.85rem; color: #ff9d42; }
+        pre {
+            padding: 14px;
+            overflow-x: auto;
+            font-size: 0.88rem;
+            color: #e6edf3;
+            margin-bottom: 14px;
+        }
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-top: 14px;
+        }
+        .template-box {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 16px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        .template-box:hover {
+            border-color: #f38020;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(243, 128, 32, 0.2);
+        }
+        .template-title {
+            color: var(--text-white);
+            font-weight: 600;
+            font-size: 0.95rem;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .template-desc {
+            font-size: 0.82rem;
+            color: var(--text-dim);
+            line-height: 1.4;
+        }
+        .btn-copy {
+            background: rgba(243, 128, 32, 0.15);
+            color: #ff9d42;
+            border: 1px solid rgba(243, 128, 32, 0.4);
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 10px;
+        }
+        .btn-copy:hover {
+            background: rgba(243, 128, 32, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="title">
+                <span>🛡️</span> Manual de Fábrica Edge: Cloudflare Workers SGN
+                <span class="badge">Costo $0.00</span>
+                <span class="badge-green">Subdominio: tahamuzza.workers.dev</span>
+            </div>
+            <div class="subtitle">
+                Guía Canónica para crear Mini-Aplicaciones Web, compartir HTMLs en vivo con URLs públicas, montar Webhooks y puentes serverless desde <strong>CIBERCODE 2.0</strong>.
+            </div>
+        </header>
+
+        <!-- SECCIÓN 1: SKILL ASOCIADA Y DOCTRINA -->
+        <section class="card">
+            <h2><span>🧠</span> 1. Skill Asociada en el Ecosistema SGN</h2>
+            <p>Esta capacidad pertenece formalmente a la skill maestra:</p>
+            <p><code>cloudflare-workers-sgn</code> (Ubicada en <code>SGN-Arsenal-Agentico/SKILLS_MAESTRAS/paquete-3-infraestructura-red/subskills/cloudflare-workers-sgn/</code> y replicada en <code>.agents/skills/</code>).</p>
+            <ul>
+                <li><strong>Cero Servidores que Mantener:</strong> Los Workers corren en los 330+ centros de datos de Cloudflare en todo el mundo con latencia de 10-30 ms.</li>
+                <li><strong>Cero Costo ($0.00):**</strong> Plan estándar gratuito con 100.000 peticiones diarias por cuenta.</li>
+                <li><strong>Permanente y Autónomo:</strong> Autenticado vía Wrangler CLI en PC4 (inmune a reinicios).</li>
+            </ul>
+        </section>
+
+        <!-- SECCIÓN 2: ¿PARA QUÉ SIRVE? -->
+        <section class="card">
+            <h2><span>🚀</span> 2. Casos de Uso Clave (¿Para qué sirve?)</h2>
+            <ol>
+                <li><strong>Compartir Archivos HTML / Mini-Apps en Vivo:</strong> En lugar de enviar un archivo por chat o correo, lo publicas en un Worker y tienes una URL pública limpia (ej. <code>https://mi-panel.tahamuzza.workers.dev</code>) que cualquiera puede abrir en su celular o PC.</li>
+                <li><strong>Webhooks y Receptores de Automatizaciones:</strong> Endpoints ultrarrápidos que reciben eventos de Telegram, Make, WhatsApp o Railway y procesan datos al instante.</li>
+                <li><strong>Proxies y Puentes API:</strong> Reenviar peticiones entre servicios o consultar APIs con CORS desbloqueado.</li>
+                <li><strong>Generadores Dinámicos:</strong> Páginas que devuelven JSON, texto formateado, informes o cálculos matemáticos en microsegundos.</li>
+            </ol>
+        </section>
+
+        <!-- SECCIÓN 3: PLANTILLAS CANÓNICAS LISTAS PARA USAR -->
+        <section class="card">
+            <h2><span>📦</span> 3. Plantillas Listas para CIBERCODE</h2>
+            <p>Puedes copiar cualquiera de estas plantillas en el editor de CIBERCODE, ponerle nombre y pulsar <strong>[ 🚀 Desplegar Worker ]</strong>:</p>
+
+            <div class="template-grid">
+                <!-- Template 1: Servir HTML Completo -->
+                <div class="template-box" onclick="copiarPlantilla('html')">
+                    <div class="template-title">
+                        <span>📄 Servidor HTML / Mini-App</span>
+                        <span class="badge">Web Interactiva</span>
+                    </div>
+                    <div class="template-desc">Sirve una página web completa con CSS interactivo, botones y lógica JavaScript ejecutable en el navegador.</div>
+                    <button class="btn-copy">📋 Copiar Código</button>
+                </div>
+
+                <!-- Template 2: API REST JSON -->
+                <div class="template-box" onclick="copiarPlantilla('json')">
+                    <div class="template-title">
+                        <span>⚡ API REST / JSON Edge</span>
+                        <span class="badge">Endpoint</span>
+                    </div>
+                    <div class="template-desc">Endpoint serverless que responde JSON con headers CORS para conectar tus bots, Make o frontend.</div>
+                    <button class="btn-copy">📋 Copiar Código</button>
+                </div>
+
+                <!-- Template 3: Webhook Relay -->
+                <div class="template-box" onclick="copiarPlantilla('webhook')">
+                    <div class="template-title">
+                        <span>🔀 Webhook Relay & Router</span>
+                        <span class="badge">Automatización</span>
+                    </div>
+                    <div class="template-desc">Recibe datos POST de servicios externos y los procesa o reenvía a Telegram o Railway.</div>
+                    <button class="btn-copy">📋 Copiar Código</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        const plantillas = {
+            html: `export default {
+  async fetch(request, env, ctx) {
+    const html = \`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Mini-App SGN Edge</title>
+  <style>
+    body { background: #0b0f19; color: #fff; font-family: system-ui; text-align: center; padding: 50px 20px; }
+    .card { background: #161f30; max-width: 500px; margin: 0 auto; padding: 30px; border-radius: 12px; border: 1px solid #38bdf8; box-shadow: 0 0 20px rgba(56,189,248,0.2); }
+    h1 { color: #38bdf8; margin-bottom: 10px; }
+    p { color: #94a3b8; }
+    button { background: #0284c7; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 700; cursor: pointer; margin-top: 20px; }
+    button:hover { background: #0369a1; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>⚡ Mini-App SGN en Vivo</h1>
+    <p>Servida directamente desde Cloudflare Edge a costo $0.00.</p>
+    <button onclick="alert('¡Mini-App funcionando en vivo!')">Probar Botón</button>
+  </div>
+</body>
+</html>\`;
+
+    return new Response(html, {
+      headers: { "content-type": "text/html;charset=UTF-8" }
+    });
+  }
+};`,
+            json: `export default {
+  async fetch(request, env, ctx) {
+    const data = {
+      status: "online",
+      servicio: "api-edge-sgn",
+      nodo_origen: "PC4 Mini PC i9",
+      timestamp: new Date().toISOString()
+    };
+
+    return new Response(JSON.stringify(data, null, 2), {
+      headers: {
+        "content-type": "application/json;charset=UTF-8",
+        "access-control-allow-origin": "*"
+      }
+    });
+  }
+};`,
+            webhook: `export default {
+  async fetch(request, env, ctx) {
+    if (request.method !== "POST") {
+      return new Response("Envía peticiones POST a este endpoint.", { status: 405 });
+    }
+
+    try {
+      const payload = await request.json();
+      // Procesar payload de automatización
+      return new Response(JSON.stringify({ ok: true, recibido: payload }), {
+        headers: { "content-type": "application/json;charset=UTF-8" }
+      });
+    } catch (err) {
+      return new Response(JSON.stringify({ ok: false, error: err.message }), {
+        status: 400,
+        headers: { "content-type": "application/json;charset=UTF-8" }
+      });
+    }
+  }
+};`
+        };
+
+        function copiarPlantilla(tipo) {
+            const codigo = plantillas[tipo];
+            if (!codigo) return;
+            navigator.clipboard.writeText(codigo).then(() => {
+                alert("✅ Plantilla copiada al portapapeles. Pégala en el editor de CIBERCODE y dale a [ 🚀 Desplegar Worker ].");
+            });
+        }
+    </script>
+</body>
+</html>

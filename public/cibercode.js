@@ -98,12 +98,161 @@ function cambiarVia(via) {
 
     if (targetLabel) targetLabel.textContent = 'Conectado: Nube Railway (Relay PC4)';
 
+  } else if (via === 'cloudflare') {
+
+    const b = document.getElementById('btnViaCf');
+
+    if (b) b.classList.add('active');
+
+    if (targetLabel) targetLabel.textContent = 'Conectado: Cloudflare Edge (Fábrica de Workers)';
+
+    abrirCfModal();
+
   }
 
 
 
   cargarArbol();
 
+}
+
+// ── 2.1 MÓDULO CLOUDFLARE WORKERS SGN ──
+function abrirCfModal() {
+  const m = document.getElementById('cfModalOverlay');
+  if (m) {
+    m.style.display = 'flex';
+    cargarListaCloudflareWorkers();
+  }
+}
+
+function cerrarCfModal() {
+  const m = document.getElementById('cfModalOverlay');
+  if (m) m.style.display = 'none';
+}
+
+async function cargarListaCloudflareWorkers() {
+  const container = document.getElementById('cfWorkersListContainer');
+  const countLabel = document.getElementById('cfTotalWorkers');
+  if (!container) return;
+
+  container.innerHTML = '<div style="color:#8b949e; font-size:0.8rem; text-align:center; padding:15px;">Consultando API Edge de Cloudflare...</div>';
+
+  try {
+    const res = await fetch('/api/cibercode/cloudflare/workers');
+    const data = await res.json();
+
+    if (!data.ok) {
+      container.innerHTML = `<div style="color:#f85149; font-size:0.8rem; padding:10px;">Error: ${data.error || 'No se pudo conectar con Cloudflare'}</div>`;
+      return;
+    }
+
+    if (countLabel) countLabel.textContent = `${data.total} activos`;
+
+    if (!data.workers || data.workers.length === 0) {
+      container.innerHTML = '<div style="color:#8b949e; font-size:0.8rem; padding:10px;">No hay workers registrados.</div>';
+      return;
+    }
+
+    let html = '';
+    data.workers.forEach(w => {
+      html += `
+        <div style="background:#161b22; border:1px solid #30363d; border-radius:6px; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+          <div style="overflow:hidden;">
+            <div style="color:#f0f6fc; font-weight:600; font-size:0.85rem; font-family:monospace;">${w.id}</div>
+            <a href="${w.url}" target="_blank" style="color:#38bdf8; font-size:0.75rem; text-decoration:none; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${w.url}</a>
+          </div>
+          <div style="display:flex; gap:6px; flex-shrink:0;">
+            <button onclick="copiarAlPortapapeles('${w.url}')" style="background:#21262d; border:1px solid #30363d; color:#c9d1d9; border-radius:4px; padding:4px 8px; font-size:0.72rem; cursor:pointer;" title="Copiar URL">📋 Copiar</button>
+            <button onclick="testPingWorker('${w.id}', '${w.url}', this)" style="background:rgba(243,128,32,0.15); border:1px solid rgba(243,128,32,0.4); color:#ff9d42; border-radius:4px; padding:4px 8px; font-size:0.72rem; cursor:pointer; font-weight:600;">⚡ Ping</button>
+          </div>
+        </div>
+      `;
+    });
+
+    container.innerHTML = html;
+  } catch (err) {
+    container.innerHTML = `<div style="color:#f85149; font-size:0.8rem; padding:10px;">Error de red: ${err.message}</div>`;
+  }
+}
+
+async function testPingWorker(name, url, btn) {
+  const originalText = btn.textContent;
+  btn.textContent = '⏳ ...';
+  btn.disabled = true;
+
+  const t0 = performance.now();
+  try {
+    const res = await fetch(url, { method: 'GET', mode: 'no-cors' });
+    const lat = Math.round(performance.now() - t0);
+    btn.textContent = `🟢 ${lat}ms`;
+    btn.style.color = '#3fb950';
+    btn.style.borderColor = '#3fb950';
+  } catch (e) {
+    const lat = Math.round(performance.now() - t0);
+    btn.textContent = `🟡 ${lat}ms`;
+    btn.style.color = '#d29922';
+  } finally {
+    setTimeout(() => {
+      btn.textContent = originalText;
+      btn.disabled = false;
+      btn.style.color = '#ff9d42';
+      btn.style.borderColor = 'rgba(243,128,32,0.4)';
+    }, 4000);
+  }
+}
+
+async function desplegarCodigoEnCloudflare() {
+  const nameInput = document.getElementById('cfWorkerNameInput');
+  const statusDiv = document.getElementById('cfDeployStatus');
+  const name = (nameInput ? nameInput.value : '').trim();
+
+  if (!name) {
+    if (statusDiv) statusDiv.innerHTML = '<span style="color:#f85149;">⚠️ Ingresa un nombre para el Worker.</span>';
+    return;
+  }
+
+  const code = editor ? editor.getValue() : '';
+  if (!code || code.trim().length === 0) {
+    if (statusDiv) statusDiv.innerHTML = '<span style="color:#f85149;">⚠️ El editor está vacío. Escribe o abre el script primero.</span>';
+    return;
+  }
+
+  if (statusDiv) statusDiv.innerHTML = '<span style="color:#ff9d42;">⏳ Desplegando en la red Edge de Cloudflare (Wrangler)...</span>';
+
+  try {
+    const res = await fetch('/api/cibercode/cloudflare/deploy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, code })
+    });
+    const data = await res.json();
+
+    if (!data.ok) {
+      if (statusDiv) statusDiv.innerHTML = `<span style="color:#f85149;">❌ Error: ${data.error || 'Fallo en despliegue'}</span>`;
+      return;
+    }
+
+    if (statusDiv) {
+      statusDiv.innerHTML = `
+        <div style="background:rgba(63,185,80,0.15); border:1px solid rgba(63,185,80,0.4); border-radius:6px; padding:10px; margin-top:8px;">
+          <div style="color:#3fb950; font-weight:700;">✅ ¡Worker desplegado y activo en Edge!</div>
+          <div style="margin-top:4px;">
+            <a href="${data.url}" target="_blank" style="color:#38bdf8; font-weight:600; text-decoration:none;">${data.url}</a>
+          </div>
+        </div>
+      `;
+    }
+
+    cargarListaCloudflareWorkers();
+  } catch (err) {
+    if (statusDiv) statusDiv.innerHTML = `<span style="color:#f85149;">❌ Error de red: ${err.message}</span>`;
+  }
+}
+
+function copiarAlPortapapeles(texto) {
+  navigator.clipboard.writeText(texto).then(() => {
+    alert(`Copiado: ${texto}`);
+  });
 }
 
 
