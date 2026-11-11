@@ -1064,9 +1064,6 @@
       <button id="btnViaLocal" class="btn-via active" onclick="cambiarVia('local')">🏎️ Local LAN (0ms)</button>
       <button id="btnViaCloud" class="btn-via" onclick="cambiarVia('cloud')">☁️ Nube Railway</button>
       <button id="btnViaCf" class="btn-via" onclick="cambiarVia('cloudflare')" title="Fábrica Edge de Workers y URLs Soberanas">🛡️ Cloudflare Workers</button>
-      <a href="/cibercode-cloudflare-manual.html" target="_blank" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px; background:linear-gradient(135deg, #f38020 0%, #d97014 100%); color:#fff; padding:4px 10px; border-radius:6px; font-size:0.75rem; font-weight:700; border:1px solid #faad3f; box-shadow:0 0 10px rgba(243,128,32,0.3); cursor:pointer;" title="Manual y Consola de Mini-Apps Edge">
-        📖 Manual Edge
-      </a>
     </div>
 
     <!-- Estado y Telemetría PC4 -->
@@ -1267,49 +1264,123 @@
     </button>
   </nav>
 
-  <!-- MODAL / CENTRO DE MANDO CLOUDFLARE WORKERS SGN -->
-  <div class="modal-overlay" id="cfModalOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:9999; backdrop-filter:blur(4px); align-items:center; justify-content:center;">
-    <div class="modal-box" style="background:#111622; border:1px solid #f38020; border-radius:12px; width:92%; max-width:850px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 0 30px rgba(243,128,32,0.3); overflow:hidden;">
-      <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid #1e293b; background:#161f30;">
-        <div class="modal-title" style="display:flex; align-items:center; gap:10px; font-weight:700; color:#ff9d42; font-size:1.1rem;">
-          <span>🛡️</span> Fábrica de Workers y Mini-Apps Edge (Cloudflare)
+    <!-- MODAL / CENTRO DE MANDO Y FÁBRICA CLOUDFLARE WORKERS SGN -->
+  <div class="modal-overlay" id="cfModalOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; backdrop-filter:blur(6px); align-items:center; justify-content:center;">
+    <div class="modal-box" style="background:#0d1117; border:1px solid #f38020; border-radius:12px; width:94%; max-width:960px; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 0 35px rgba(243,128,32,0.3); overflow:hidden;">
+      
+      <!-- Cabecera del Centro de Mando -->
+      <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; padding:16px 22px; border-bottom:1px solid #21262d; background:#161b22;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="font-size:1.4rem;">🛡️</span>
+          <div>
+            <div style="font-weight:700; color:#ff9d42; font-size:1.15rem; display:flex; align-items:center; gap:8px;">
+              Fábrica Edge: Cloudflare Workers Soberana
+              <span style="background:rgba(63,185,80,0.15); color:#3fb950; border:1px solid rgba(63,185,80,0.3); font-size:0.7rem; padding:2px 8px; border-radius:12px;">Costo $0.00</span>
+            </div>
+            <div style="color:#8b949e; font-size:0.75rem;">Skill maestra: <code>cloudflare-workers-sgn</code> • Subdominio: <strong>tahamuzza.workers.dev</strong></div>
+          </div>
         </div>
-        <button class="modal-close" onclick="cerrarCfModal()" style="background:transparent; border:none; color:#94a3b8; font-size:1.3rem; cursor:pointer;">×</button>
+        <button class="modal-close" onclick="cerrarCfModal()" style="background:transparent; border:none; color:#8b949e; font-size:1.5rem; cursor:pointer; padding:4px 10px; border-radius:6px;">×</button>
       </div>
 
-      <div class="modal-body" style="padding:20px; overflow-y:auto; flex:1;">
-        <!-- Panel 1: Desplegar Código Activo -->
-        <div style="background:#090d16; border:1px solid #1e293b; border-radius:8px; padding:16px; margin-bottom:20px;">
-          <h3 style="color:#f0f6fc; font-size:0.95rem; margin-bottom:8px; display:flex; align-items:center; gap:8px;">
-            <span>🚀</span> Publicar el Código Activo del Editor en Cloudflare Edge ($0.00)
-          </h3>
-          <p style="color:#8b949e; font-size:0.8rem; margin-bottom:12px;">
-            Convierte el código JavaScript/HTML que tienes en el editor en una URL pública mundial inmediata (<code>https://[nombre].tahamuzza.workers.dev</code>).
-          </p>
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <input type="text" id="cfWorkerNameInput" placeholder="nombre-del-worker (ej: mi-webhook, api-ventas)" style="flex:1; min-width:220px; background:#161b22; border:1px solid #30363d; border-radius:6px; padding:8px 12px; color:#fff; font-size:0.85rem;" />
-            <button onclick="desplegarCodigoEnCloudflare()" style="background:linear-gradient(135deg, #f38020 0%, #d97014 100%); color:#fff; font-weight:700; border:none; border-radius:6px; padding:8px 18px; cursor:pointer; font-size:0.85rem; display:inline-flex; align-items:center; gap:6px;">
-              <span>⚡</span> DESPLEGAR AHORA
-            </button>
-            <a href="/cibercode-cloudflare-manual.html" target="_blank" style="text-decoration:none; background:#1e293b; color:#38bdf8; padding:8px 14px; border-radius:6px; font-size:0.85rem; font-weight:600; display:inline-flex; align-items:center; gap:6px;">
-              📖 Ver Manual & Plantillas
-            </a>
+      <!-- Pestañas internas dentro del Modal para no confundir -->
+      <div style="display:flex; background:#090d13; border-bottom:1px solid #21262d; padding:0 20px;">
+        <button id="cfTabBtnFabrica" onclick="setCfTab('fabrica')" style="background:transparent; border:none; border-bottom:2px solid #f38020; color:#ff9d42; font-weight:700; padding:12px 18px; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; gap:6px;">
+          <span>🚀</span> Fábrica & Despliegue Rápido
+        </button>
+        <button id="cfTabBtnCatalogo" onclick="setCfTab('catalogo')" style="background:transparent; border:none; border-bottom:2px solid transparent; color:#8b949e; font-weight:600; padding:12px 18px; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; gap:6px;">
+          <span>📋</span> Mis 37 Workers Vivos
+        </button>
+        <button id="cfTabBtnManual" onclick="setCfTab('manual')" style="background:transparent; border:none; border-bottom:2px solid transparent; color:#8b949e; font-weight:600; padding:12px 18px; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; gap:6px;">
+          <span>📖</span> Manual Integrado & Ejemplos
+        </button>
+      </div>
+
+      <!-- Cuerpo del Modal -->
+      <div class="modal-body" style="padding:22px; overflow-y:auto; flex:1; background:#0d1117;">
+        
+        <!-- VISTA 1: FÁBRICA & DESPLIEGUE -->
+        <div id="cfViewFabrica">
+          <!-- Explicación Didáctica -->
+          <div style="background:#161b22; border-left:4px solid #f38020; border-radius:6px; padding:14px 16px; margin-bottom:18px;">
+            <div style="color:#f0f6fc; font-weight:600; font-size:0.9rem; margin-bottom:4px;">💡 ¿Qué es la Fábrica de Workers y para qué sirve?</div>
+            <div style="color:#8b949e; font-size:0.8rem; line-height:1.45;">
+              Toma cualquier código JavaScript o HTML que tengas abierto en el editor de CIBERCODE y lo publica en los servidores de Cloudflare en <strong>1.5 segundos</strong>.<br>
+              Te entrega una <strong>URL pública mundial HTTPS</strong> (ej: <code>https://mi-app.tahamuzza.workers.dev</code>) que puedes compartir con clientes, abrir en tu celular o conectar a Make, Telegram o Railway a <strong>costo $0.00</strong>.
+            </div>
           </div>
-          <div id="cfDeployStatus" style="margin-top:10px; font-size:0.82rem;"></div>
+
+          <!-- Formulario de Despliegue -->
+          <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:18px; margin-bottom:18px;">
+            <label style="display:block; color:#f0f6fc; font-weight:600; font-size:0.85rem; margin-bottom:8px;">
+              Nombre del Worker / Mini-App:
+            </label>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <input type="text" id="cfWorkerNameInput" placeholder="ej: cotizador-flores, webhook-make, visor-html" style="flex:1; min-width:240px; background:#090d13; border:1px solid #30363d; border-radius:6px; padding:10px 14px; color:#fff; font-size:0.9rem; font-family:monospace;" />
+              <button onclick="desplegarCodigoEnCloudflare()" style="background:linear-gradient(135deg, #f38020 0%, #d97014 100%); color:#fff; font-weight:700; border:none; border-radius:6px; padding:10px 22px; cursor:pointer; font-size:0.9rem; display:inline-flex; align-items:center; gap:8px; box-shadow:0 0 15px rgba(243,128,32,0.35);">
+                <span>⚡</span> PUBLICAR AHORA EN EDGE
+              </button>
+            </div>
+            <div id="cfDeployStatus" style="margin-top:12px;"></div>
+          </div>
+
+          <!-- Plantillas de 1 Clic para Pegar en el Editor -->
+          <div style="margin-top:10px;">
+            <div style="color:#8b949e; font-size:0.8rem; font-weight:600; text-transform:uppercase; margin-bottom:10px;">⚡ Plantillas listas para cargar en tu editor:</div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px;">
+              <div onclick="cargarPlantillaDirecta('html')" style="background:#161b22; border:1px solid #30363d; border-radius:6px; padding:12px; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.borderColor='#f38020'" onmouseout="this.style.borderColor='#30363d'">
+                <div style="color:#f0f6fc; font-weight:600; font-size:0.85rem; margin-bottom:4px;">📄 Mini-App / Visor HTML</div>
+                <div style="color:#8b949e; font-size:0.75rem;">Convierte un HTML interactivo en una web compartible en vivo.</div>
+              </div>
+              <div onclick="cargarPlantillaDirecta('json')" style="background:#161b22; border:1px solid #30363d; border-radius:6px; padding:12px; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.borderColor='#f38020'" onmouseout="this.style.borderColor='#30363d'">
+                <div style="color:#f0f6fc; font-weight:600; font-size:0.85rem; margin-bottom:4px;">⚡ API REST / JSON CORS</div>
+                <div style="color:#8b949e; font-size:0.75rem;">Endpoint de alta velocidad para servir datos a bots o páginas.</div>
+              </div>
+              <div onclick="cargarPlantillaDirecta('webhook')" style="background:#161b22; border:1px solid #30363d; border-radius:6px; padding:12px; cursor:pointer; transition:all 0.2s;" onmouseover="this.style.borderColor='#f38020'" onmouseout="this.style.borderColor='#30363d'">
+                <div style="color:#f0f6fc; font-weight:600; font-size:0.85rem; margin-bottom:4px;">🔀 Webhook Relay</div>
+                <div style="color:#8b949e; font-size:0.75rem;">Receptor de datos POST de Make o Telegram con respuesta en 20ms.</div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- Panel 2: Catálogo de Workers Vivos -->
-        <div>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <h3 style="color:#f0f6fc; font-size:0.95rem; display:flex; align-items:center; gap:8px;">
-              <span>📋</span> Workers Vivos en la Cuenta (<span id="cfTotalWorkers">...</span>)
-            </h3>
-            <button onclick="cargarListaCloudflareWorkers()" style="background:transparent; border:1px solid #30363d; color:#8b949e; border-radius:4px; padding:4px 8px; font-size:0.75rem; cursor:pointer;">⟳ Recargar</button>
+        <!-- VISTA 2: CATÁLOGO DE 37 WORKERS -->
+        <div id="cfViewCatalogo" style="display:none;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+            <div style="color:#f0f6fc; font-size:0.9rem; font-weight:600;">
+              Workers Registrados (<span id="cfTotalWorkers" style="color:#ff9d42;">37</span>)
+            </div>
+            <button onclick="cargarListaCloudflareWorkers()" style="background:#161b22; border:1px solid #30363d; color:#8b949e; border-radius:4px; padding:4px 10px; font-size:0.75rem; cursor:pointer;">⟳ Actualizar Lista</button>
           </div>
-          <div id="cfWorkersListContainer" style="display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto;">
-            <div style="color:#8b949e; font-size:0.8rem; text-align:center; padding:20px;">Cargando catálogo de workers...</div>
+          <div id="cfWorkersListContainer" style="display:flex; flex-direction:column; gap:8px; max-height:380px; overflow-y:auto;">
+            <div style="color:#8b949e; font-size:0.8rem; text-align:center; padding:20px;">Cargando catálogo...</div>
           </div>
         </div>
+
+        <!-- VISTA 3: MANUAL INTEGRADO -->
+        <div id="cfViewManual" style="display:none; color:#c9d1d9; font-size:0.85rem; line-height:1.6;">
+          <h3 style="color:#ff9d42; margin-bottom:8px;">📖 Guía Práctica de Uso Paso a Paso</h3>
+          <p style="margin-bottom:12px;">Para publicar una Mini-App o compartir un archivo con URL pública:</p>
+          <ol style="padding-left:20px; margin-bottom:16px;">
+            <li style="margin-bottom:6px;">En la pestaña <strong>Fábrica</strong>, haz clic en una plantilla (ej: <em>Mini-App / Visor HTML</em>). Se cargará automáticamente en tu editor.</li>
+            <li style="margin-bottom:6px;">Edita el HTML o el texto como quieras.</li>
+            <li style="margin-bottom:6px;">Ponle un nombre único en la casilla (ej: <code>mi-catalogo</code>).</li>
+            <li style="margin-bottom:6px;">Pulsa <strong>[ ⚡ PUBLICAR AHORA EN EDGE ]</strong>.</li>
+            <li style="margin-bottom:6px;">¡Listo! Se te generará la URL: <code>https://mi-catalogo.tahamuzza.workers.dev</code> que puedes abrir o enviar a quien quieras.</li>
+          </ol>
+          <div style="background:#161b22; border:1px solid #30363d; border-radius:6px; padding:12px; margin-top:10px;">
+            <div style="color:#3fb950; font-weight:600; margin-bottom:4px;">🛡️ Gobernanza SGN:</div>
+            <div style="color:#8b949e; font-size:0.78rem;">
+              • No requiere abrir puertos en tu router.<br>
+              • Inmune a caídas: corre en la infraestructura global de Cloudflare.<br>
+              • Costo: <strong>$0.00</strong> (100.000 peticiones gratis al día).
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
       </div>
     </div>
   </div>

@@ -1660,3 +1660,113 @@ function setMobileView(viewName) {
   }
 
 }
+
+// Control de Pestañas del Modal Cloudflare
+function setCfTab(tab) {
+  const vFabrica = document.getElementById('cfViewFabrica');
+  const vCatalogo = document.getElementById('cfViewCatalogo');
+  const vManual = document.getElementById('cfViewManual');
+  const bFabrica = document.getElementById('cfTabBtnFabrica');
+  const bCatalogo = document.getElementById('cfTabBtnCatalogo');
+  const bManual = document.getElementById('cfTabBtnManual');
+
+  if (vFabrica) vFabrica.style.display = (tab === 'fabrica') ? 'block' : 'none';
+  if (vCatalogo) vCatalogo.style.display = (tab === 'catalogo') ? 'block' : 'none';
+  if (vManual) vManual.style.display = (tab === 'manual') ? 'block' : 'none';
+
+  [bFabrica, bCatalogo, bManual].forEach(b => {
+    if (b) {
+      b.style.borderBottomColor = 'transparent';
+      b.style.color = '#8b949e';
+      b.style.fontWeight = '600';
+    }
+  });
+
+  const activeBtn = (tab === 'fabrica') ? bFabrica : (tab === 'catalogo') ? bCatalogo : bManual;
+  if (activeBtn) {
+    activeBtn.style.borderBottomColor = '#f38020';
+    activeBtn.style.color = '#ff9d42';
+    activeBtn.style.fontWeight = '700';
+  }
+
+  if (tab === 'catalogo') {
+    cargarListaCloudflareWorkers();
+  }
+}
+
+function cargarPlantillaDirecta(tipo) {
+  let codigo = '';
+  if (tipo === 'html') {
+    codigo = `export default {
+  async fetch(request, env, ctx) {
+    const html = \`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mi Mini-App Soberana</title>
+  <style>
+    body { background: #0b0f19; color: #fff; font-family: system-ui, sans-serif; text-align: center; padding: 40px 20px; }
+    .card { background: #161f30; max-width: 500px; margin: 0 auto; padding: 30px; border-radius: 12px; border: 1px solid #38bdf8; box-shadow: 0 0 20px rgba(56,189,248,0.2); }
+    h1 { color: #38bdf8; font-size: 1.5rem; margin-bottom: 10px; }
+    p { color: #94a3b8; font-size: 0.9rem; line-height: 1.5; }
+    button { background: #0284c7; color: #fff; border: none; padding: 10px 20px; border-radius: 6px; font-weight: 700; cursor: pointer; margin-top: 20px; }
+    button:hover { background: #0369a1; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>⚡ Mi Mini-App SGN en Vivo</h1>
+    <p>Servida desde Cloudflare Edge a costo $0.00 con latencia de 20ms.</p>
+    <button onclick="alert('¡Mini-App funcionando correctamente!')">Probar Botón</button>
+  </div>
+</body>
+</html>\`;
+
+    return new Response(html, {
+      headers: { "content-type": "text/html;charset=UTF-8" }
+    });
+  }
+};`;
+  } else if (tipo === 'json') {
+    codigo = `export default {
+  async fetch(request, env, ctx) {
+    const data = {
+      status: "online",
+      servicio: "api-edge-sgn",
+      nodo: "PC4 Mini PC i9",
+      timestamp: new Date().toISOString()
+    };
+
+    return new Response(JSON.stringify(data, null, 2), {
+      headers: {
+        "content-type": "application/json;charset=UTF-8",
+        "access-control-allow-origin": "*"
+      }
+    });
+  }
+};`;
+  } else if (tipo === 'webhook') {
+    codigo = `export default {
+  async fetch(request, env, ctx) {
+    if (request.method !== "POST") {
+      return new Response("Envía una petición POST con JSON.", { status: 405 });
+    }
+    try {
+      const payload = await request.json();
+      return new Response(JSON.stringify({ ok: true, recibido: payload, fecha: new Date() }), {
+        headers: { "content-type": "application/json;charset=UTF-8" }
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ ok: false, error: e.message }), { status: 400 });
+    }
+  }
+};`;
+  }
+
+  if (editor && codigo) {
+    editor.setValue(codigo);
+    cerrarCfModal();
+    alert("✅ Plantilla cargada en tu editor. Escribe un nombre y pulsa [ 🛡️ Cloudflare Workers ] -> [ PUBLICAR AHORA EN EDGE ].");
+  }
+}
