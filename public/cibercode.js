@@ -138,7 +138,8 @@ async function cargarListaCloudflareWorkers() {
   container.innerHTML = '<div style="color:#8b949e; font-size:0.8rem; text-align:center; padding:15px;">Consultando API Edge de Cloudflare...</div>';
 
   try {
-    const res = await fetch('/api/cibercode/cloudflare/workers');
+    const endpoint = (API_BASE && API_BASE.startsWith('http')) ? API_BASE + '/api/cloudflare/workers' : '/api/cibercode/cloudflare/workers';
+    const res = await fetch(endpoint);
     const data = await res.json();
 
     if (!data.ok) {
@@ -220,7 +221,8 @@ async function desplegarCodigoEnCloudflare() {
   if (statusDiv) statusDiv.innerHTML = '<span style="color:#ff9d42;">⏳ Desplegando en la red Edge de Cloudflare (Wrangler)...</span>';
 
   try {
-    const res = await fetch('/api/cibercode/cloudflare/deploy', {
+    const deployEndpoint = (API_BASE && API_BASE.startsWith('http')) ? API_BASE + '/api/cloudflare/deploy' : '/api/cibercode/cloudflare/deploy';
+    const res = await fetch(deployEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, code })
