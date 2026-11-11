@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🌸 TABLERO DE CONTROL DE INVENTARIO VIVO Y MULTICANAL - DORAL 34°F</title>
+  <title>🌸 TABLERO DE CONTROL DE INVENTARIO VIVO Y PROSPECCIÓN FLORIDA - DORAL 34°F</title>
   <style>
     :root {
       --bg: #0f172a;
@@ -32,16 +32,16 @@
     .stat-label { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
     .stat-value { font-size: 28px; font-weight: 700; margin-top: 6px; color: #38bdf8; }
 
-    .main-grid { display: grid; grid-template-columns: 1.4fr 1.6fr; gap: 24px; }
-    @media (max-width: 1100px) { .main-grid { grid-template-columns: 1fr; } }
+    .main-grid { display: grid; grid-template-columns: 1.35fr 1.65fr; gap: 24px; }
+    @media (max-width: 1150px) { .main-grid { grid-template-columns: 1fr; } }
 
     .inventory-section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
     .section-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
 
-    .table-container { overflow-x: auto; max-height: 580px; }
+    .table-container { overflow-x: auto; max-height: 600px; }
     table { width: 100%; border-collapse: collapse; text-align: left; }
     th { background: #0f172a; padding: 12px; font-size: 12px; color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
-    td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+    td { padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
     tr:hover { background: rgba(255,255,255,0.02); }
 
     .qty-controls { display: flex; align-items: center; gap: 6px; }
@@ -57,13 +57,16 @@
     .dispatch-section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
     
     /* Canales principales */
-    .channel-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 8px; }
+    .channel-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 4px; }
     @media (max-width: 600px) { .channel-tabs { grid-template-columns: repeat(2, 1fr); } }
     .channel-btn { background: #0f172a; border: 2px solid var(--border); color: var(--text-muted); padding: 10px 12px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
     .channel-btn.active-wa { background: #064e3b; color: #34d399; border-color: #10b981; }
     .channel-btn.active-email { background: #0c4a6e; color: #7dd3fc; border-color: #38bdf8; }
     .channel-btn.active-tiktok { background: #831843; color: #f472b6; border-color: #ec4899; }
     .channel-btn.active-manychat { background: #78350f; color: #fcd34d; border-color: #f59e0b; }
+
+    .client-selector-box { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; }
+    .client-select { background: #1e293b; color: #f8fafc; border: 1px solid var(--border); padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; width: 100%; cursor: pointer; }
 
     .subprofile-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
     .tab-btn { background: #0f172a; border: 1px solid var(--border); color: var(--text-muted); padding: 6px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: 0.2s; }
@@ -75,23 +78,24 @@
     .btn-action:hover { filter: brightness(1.1); transform: translateY(-1px); }
     
     .alert-banner { background: #1e293b; border-left: 4px solid var(--warning); padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 13px; color: #fde68a; margin-bottom: 20px; }
+    .savings-tag { background: #065f46; color: #a7f3d0; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; margin-left: 6px; }
   </style>
 </head>
 <body>
 
   <div class="header">
     <div class="title-box">
-      <h1>🌸 TABLERO DE CONTROL DE INVENTARIO VIVO Y MULTICANAL</h1>
-      <span style="font-size: 14px; color: var(--text-muted);">Tropical Blooms Miami · SGN FloralTrack 24/7</span>
+      <h1>🌸 TABLERO DE CONTROL DE INVENTARIO VIVO & PROSPECCIÓN FLORIDA</h1>
+      <span style="font-size: 14px; color: var(--text-muted);">Tropical Blooms Miami · FloralTrack SGN 24/7 · Precios Directos MIA Cold Storage</span>
     </div>
     <div style="display: flex; gap: 10px;">
       <span class="badge cold-badge">❄️ CUARTO FRÍO: 34°F (1.1°C)</span>
-      <span class="badge">📍 HUB DORAL, FL</span>
+      <span class="badge">📍 HUB DORAL, FL (AEROPUERTO MIA)</span>
     </div>
   </div>
 
   <div class="alert-banner">
-    ⚠️ <strong>REGLA OPERATIVA DE ORO:</strong> No se dispara ninguna campaña sin verificar primero el stock en verde. Al modificar las cajas disponibles con (+ / -), el texto para WhatsApp, Email B2B, TikTok/Reels o ManyChat se recalcula en tiempo real.
+    💎 <strong>VENTAJA DIRECTA DE MUELLE:</strong> Precios directos desde Aeropuerto MIA ($0.69/tallo en Rosas de Exportación) eliminando intermediarios locales. Ahorro de 45% a 55% para floristerías y diseñadores de eventos en Florida.
   </div>
 
   <div class="stats-grid">
@@ -104,11 +108,11 @@
       <div class="stat-value" style="color: var(--warning);" id="total-reservadas">63</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Variedades en Cuarto Frío</div>
-      <div class="stat-value" style="color: #34d399;" id="total-variedades">10</div>
+      <div class="stat-label">Precio Muelle Rosas MIA</div>
+      <div class="stat-value" style="color: #34d399;">$0.69 <span style="font-size: 14px; color: var(--text-muted);">/ tallo</span></div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Entrega Rápida Doral / MIA</div>
+      <div class="stat-label">Retiro Rápido Doral</div>
       <div class="stat-value" style="font-size: 18px; margin-top: 12px; color: #a78bfa;">Muelle Will-Call 6:30 AM</div>
     </div>
   </div>
@@ -117,7 +121,7 @@
     <!-- SECCIÓN INVENTARIO -->
     <div class="inventory-section">
       <div class="section-title">
-        <span>📦 Stock Físico en Cuarto Frío (Doral)</span>
+        <span>📦 Stock Físico en Cuarto Frío (Precios Oficiales FloralTrack)</span>
         <button class="btn-qty" style="width: auto; padding: 4px 10px;" onclick="resetStock()">Restaurar</button>
       </div>
 
@@ -128,7 +132,7 @@
               <th>Variedad</th>
               <th>Grado</th>
               <th>Empaque</th>
-              <th>Precio Ref.</th>
+              <th>Precio MIA</th>
               <th>Disponibles</th>
               <th>Estado</th>
             </tr>
@@ -146,6 +150,23 @@
         <span>🚀 Generador de Ataque Comercial Multicanal</span>
       </div>
       
+      <!-- SELECTOR DE CLIENTE OBJETIVO DE FLORIDA -->
+      <div class="client-selector-box">
+        <label style="font-size: 12px; font-weight: 700; color: #38bdf8;">🎯 SELECTOR DE CLIENTE OBJETIVO (BASE DE DATOS FLORIDA):</label>
+        <select id="client-select" class="client-select" onchange="onClientChange()">
+          <option value="0">⚡ Contacto Rápido Miami / Muelle Doral (Genérico)</option>
+          <option value="1">🏢 In Bloom Florist (Orlando, FL · Gran Volumen · events@inbloomflorist.com)</option>
+          <option value="2">💍 The Flower Studio (Altamonte Springs, FL · Bodas de Lujo · san@theflowerstudioonline.com)</option>
+          <option value="3">🏪 Harry's Famous Flowers (Orlando, FL · Retail Diario · Harrysflowers@aol.com)</option>
+          <option value="4">🌹 Carrollwood Florist (Tampa Bay, FL · Top Buyer Rosas · customerservice@carrollwoodflorist.com)</option>
+          <option value="5">🌿 Floral Impressions (Tampa, FL · Boutique Familiar · floralimpressions1@yahoo.com)</option>
+          <option value="6">📦 Jennie's Flowers (Tampa, FL · Retail Gran Escala · support@jennies.com)</option>
+          <option value="7">✨ Flora Fine Flowers (Tampa, FL · Estudio Lujo · orders@florafineflowers.com)</option>
+          <option value="8">🏛️ Kuhn Flowers (Jacksonville, FL · Target Masivo · 3802 Beach Blvd)</option>
+          <option value="9">🌸 Why Not Flowers (Jacksonville, FL · Rosas Premium · butterfly.flowers.usa@gmail.com)</option>
+        </select>
+      </div>
+
       <!-- SELECTOR DE CANALES PRINCIPALES -->
       <div class="channel-tabs">
         <button id="btn-chan-wa" class="channel-btn active-wa" onclick="selectChannel('whatsapp')">
@@ -182,21 +203,35 @@
   </div>
 
   <script>
+    const clients = [
+      { id: 0, name: "Florista / Diseñador de Miami", city: "Miami / Doral, FL", contact: "Equipo de Compras", email: "", phone: "", specialty: "corte fresco para entrega hoy" },
+      { id: 1, name: "In Bloom Florist", city: "Orlando, FL", contact: "Equipo de Eventos", email: "events@inbloomflorist.com", phone: "(407) 649-7771", specialty: "eventos corporativos y consumo de gran escala" },
+      { id: 2, name: "The Flower Studio", city: "Altamonte Springs, FL", contact: "San & Equipo de Diseño", email: "san@theflowerstudioonline.com", phone: "(321) 422-0823", specialty: "bodas de lujo y montajes exclusivos" },
+      { id: 3, name: "Harry's Famous Flowers", city: "Orlando, FL", contact: "Gerencia de Compras", email: "Harrysflowers@aol.com", phone: "(407) 249-0500", specialty: "arreglos diarios y rotación en tienda" },
+      { id: 4, name: "Carrollwood Florist", city: "Tampa Bay, FL", contact: "Servicio al Cliente & Compras", email: "customerservice@carrollwoodflorist.com", phone: "(813) 962-1917", specialty: "diseño contemporáneo y rosas premium" },
+      { id: 5, name: "Floral Impressions", city: "Tampa, FL", contact: "Equipo de Boutique", email: "floralimpressions1@yahoo.com", phone: "(800) 272-2115", specialty: "consumo semanal regular y corte surtido" },
+      { id: 6, name: "Jennie's Flowers", city: "Tampa, FL", contact: "Dpto. de Compras", email: "support@jennies.com", phone: "(813) 229-8521", specialty: "consumo mayorista masivo en Tampa Bay" },
+      { id: 7, name: "Flora Fine Flowers", city: "Tampa, FL", contact: "Estudio Botánico", email: "orders@florafineflowers.com", phone: "(813) 251-1799", specialty: "rosas ecuatorianas selectas y bodas de alta gama" },
+      { id: 8, name: "Kuhn Flowers", city: "Jacksonville, FL", contact: "Trade Customer Desk", email: "", phone: "(904) 398-8601", specialty: "volumen mayorista masivo" },
+      { id: 9, name: "Why Not Flowers", city: "Jacksonville, FL", contact: "Equipo Floral", email: "butterfly.flowers.usa@gmail.com", phone: "(904) 316-6716", specialty: "rosas premium de exportación e hidratación diaria" }
+    ];
+
     const inventory = [
-      { id: 1, name: "Freedom (Rojo Clásico)", cat: "Rosas", grade: "60cm", pack: "QB (150 tallos)", price: "$120.00", qty: 18, reserved: 7 },
-      { id: 2, name: "Explorer (Rojo Oscuro)", cat: "Rosas", grade: "70cm", pack: "QB (150 tallos)", price: "$130.00", qty: 10, reserved: 5 },
-      { id: 3, name: "Playa Blanca (Nupcial)", cat: "Bodas", grade: "60cm", pack: "QB (150 tallos)", price: "$135.00", qty: 14, reserved: 6 },
-      { id: 4, name: "Mondial (Blanco Crema)", cat: "Bodas", grade: "60cm", pack: "QB (150 tallos)", price: "$125.00", qty: 12, reserved: 6 },
-      { id: 5, name: "Shimmer (Nude / Durazno)", cat: "Bodas", grade: "60cm", pack: "QB (150 tallos)", price: "$140.00", qty: 6, reserved: 4 },
-      { id: 6, name: "Hortensia White Select", cat: "Hortensias", grade: "Jumbo 22cm", pack: "Caja 30 tallos", price: "$52.00", qty: 22, reserved: 8 },
-      { id: 7, name: "Hortensia Blue Premium", cat: "Hortensias", grade: "Jumbo 20cm", pack: "Caja 30 tallos", price: "$55.00", qty: 15, reserved: 5 },
-      { id: 8, name: "Gypsophila Million Stars", cat: "Follajes", grade: "1000g", pack: "QB (10 bunches)", price: "$72.00", qty: 19, reserved: 6 },
-      { id: 9, name: "Ruscus Italiano", cat: "Follajes", grade: "60-70cm", pack: "Bunch 10 tallos", price: "$9.50/b", qty: 30, reserved: 10 },
-      { id: 10, name: "Eucalipto Silver Dollar", cat: "Follajes", grade: "Fresco", pack: "Bunch importado", price: "$10.00/b", qty: 14, reserved: 6 }
+      { id: 1, name: "Freedom (Rojo Clásico)", cat: "Rosas", grade: "60cm", pack: "QB (150 tallos)", priceStem: "$0.69", priceBox: "$103.50", savePct: "48%", qty: 18, reserved: 7 },
+      { id: 2, name: "Explorer (Rojo Oscuro)", cat: "Rosas", grade: "70cm", pack: "QB (150 tallos)", priceStem: "$0.73", priceBox: "$109.50", savePct: "46%", qty: 10, reserved: 5 },
+      { id: 3, name: "Playa Blanca (Nupcial)", cat: "Bodas", grade: "60cm", pack: "QB (150 tallos)", priceStem: "$0.69", priceBox: "$103.50", savePct: "52%", qty: 14, reserved: 6 },
+      { id: 4, name: "Mondial (Blanco Crema)", cat: "Bodas", grade: "60cm", pack: "QB (150 tallos)", priceStem: "$0.63", priceBox: "$94.50", savePct: "48%", qty: 12, reserved: 6 },
+      { id: 5, name: "Shimmer (Nude / Durazno)", cat: "Bodas", grade: "60cm", pack: "QB (150 tallos)", priceStem: "$0.75", priceBox: "$112.50", savePct: "45%", qty: 6, reserved: 4 },
+      { id: 6, name: "Hortensia White Select", cat: "Hortensias", grade: "Jumbo 22cm", pack: "Caja 30 tallos", priceStem: "$1.10", priceBox: "$33.00", savePct: "58%", qty: 22, reserved: 8 },
+      { id: 7, name: "Hortensia Blue Premium", cat: "Hortensias", grade: "Jumbo 20cm", pack: "Caja 30 tallos", priceStem: "$1.15", priceBox: "$34.50", savePct: "55%", qty: 15, reserved: 5 },
+      { id: 8, name: "Gypsophila Million Stars", cat: "Follajes", grade: "1000g", pack: "QB (10 bunches)", priceStem: "$4.80/b", priceBox: "$48.00", savePct: "50%", qty: 19, reserved: 6 },
+      { id: 9, name: "Ruscus Italiano", cat: "Follajes", grade: "60-70cm", pack: "Bunch 10 tallos", priceStem: "$5.50/b", priceBox: "$5.50/b", savePct: "45%", qty: 30, reserved: 10 },
+      { id: 10, name: "Eucalipto Silver Dollar", cat: "Follajes", grade: "Fresco", pack: "Bunch importado", priceStem: "$4.80/b", priceBox: "$4.80/b", savePct: "55%", qty: 14, reserved: 6 }
     ];
 
     let currentChannel = 'whatsapp';
     let currentSubProfile = 'bodas';
+    let selectedClient = clients[0];
 
     function renderTable() {
       const tbody = document.getElementById('inventory-tbody');
@@ -218,7 +253,10 @@
           <td><strong>${item.name}</strong></td>
           <td style="color: var(--text-muted); font-size: 12.5px;">${item.grade}</td>
           <td style="font-size: 12.5px;">${item.pack}</td>
-          <td style="color: #38bdf8; font-weight: 600;">${item.price}</td>
+          <td style="color: #38bdf8; font-weight: 600;">
+            ${item.priceStem} 
+            <span class="savings-tag">-${item.savePct}</span>
+          </td>
           <td>
             <div class="qty-controls">
               <button class="btn-qty" onclick="changeQty(${index}, -1)">-</button>
@@ -233,7 +271,6 @@
 
       document.getElementById('total-disponibles').innerText = totalAvail;
       document.getElementById('total-reservadas').innerText = totalRes;
-      document.getElementById('total-variedades').innerText = inventory.length;
 
       updateMessage();
     }
@@ -259,10 +296,15 @@
       renderTable();
     }
 
+    function onClientChange() {
+      const idx = parseInt(document.getElementById('client-select').value);
+      selectedClient = clients[idx];
+      updateMessage();
+    }
+
     function selectChannel(channel) {
       currentChannel = channel;
       
-      // Update channel tabs styling
       document.getElementById('btn-chan-wa').className = 'channel-btn' + (channel === 'whatsapp' ? ' active-wa' : '');
       document.getElementById('btn-chan-email').className = 'channel-btn' + (channel === 'email' ? ' active-email' : '');
       document.getElementById('btn-chan-tiktok').className = 'channel-btn' + (channel === 'tiktok' ? ' active-tiktok' : '');
@@ -279,9 +321,9 @@
       if (currentChannel === 'whatsapp') {
         currentSubProfile = 'bodas';
         container.innerHTML = `
-          <button class="tab-btn active" onclick="selectSubProfile(this, 'bodas')">💍 1. Bodas de Lujo</button>
+          <button class="tab-btn active" onclick="selectSubProfile(this, 'bodas')">💍 1. Bodas & Lujo (Nupcial)</button>
           <button class="tab-btn" onclick="selectSubProfile(this, 'retail')">🏪 2. Floristerías Retail</button>
-          <button class="tab-btn" onclick="selectSubProfile(this, 'mayorista')">🚚 3. Muelle Will-Call</button>
+          <button class="tab-btn" onclick="selectSubProfile(this, 'mayorista')">🚚 3. Muelle Will-Call 6:30 AM</button>
         `;
         document.getElementById('btn-copy-action').innerText = '📋 Copiar Mensaje para WhatsApp';
         document.getElementById('btn-copy-action').style.background = 'var(--wa-color)';
@@ -289,8 +331,8 @@
       else if (currentChannel === 'email') {
         currentSubProfile = 'email_mayorista';
         container.innerHTML = `
-          <button class="tab-btn active" onclick="selectSubProfile(this, 'email_mayorista')">📑 Oferta B2B Formal</button>
-          <button class="tab-btn" onclick="selectSubProfile(this, 'email_urgente')">⚡ Flash Sale (Cuarto Frío)</button>
+          <button class="tab-btn active" onclick="selectSubProfile(this, 'email_mayorista')">📑 Oferta B2B Directa de Muelle</button>
+          <button class="tab-btn" onclick="selectSubProfile(this, 'email_urgente')">⚡ Flash Sale (Cuarto Frío 34°F)</button>
         `;
         document.getElementById('btn-copy-action').innerText = '📋 Copiar Email B2B Completo';
         document.getElementById('btn-copy-action').style.background = 'var(--email-color)';
@@ -330,63 +372,68 @@
       const exp = inventory.find(i => i.name.includes("Explorer"));
       const shi = inventory.find(i => i.name.includes("Shimmer"));
       const hortW = inventory.find(i => i.name.includes("Hortensia White"));
-      const hortB = inventory.find(i => i.name.includes("Hortensia Blue"));
       const gyp = inventory.find(i => i.name.includes("Gypsophila"));
       const rusc = inventory.find(i => i.name.includes("Ruscus"));
       const euca = inventory.find(i => i.name.includes("Eucalipto"));
+
+      const cName = selectedClient.name;
+      const cCity = selectedClient.city;
+      const cSpec = selectedClient.specialty;
 
       // 1. CANAL WHATSAPP
       if (currentChannel === 'whatsapp') {
         if (currentSubProfile === 'bodas') {
           box.innerText = 
-`Hola [Nombre Diseñador/Florista], buen día.
+`Hola ${cName} (${cCity}), un saludo cordial.
 
-Le escribo de Tropical Blooms Miami (Hub Doral). Tenemos disponibilidad fresca en cuarto frío a 34°F para sus montajes de eventos:
+Le escribe Camilo Bueno de Tropical Blooms Miami (Hub Refrigerado Doral / Aeropuerto MIA). 
 
-💍 DISPONIBLE HOY EN DORAL (RETIRO INMEDIATO):
-• Playa Blanca 60cm: ${pb.qty} cajas QB (${pb.price}) - Botón cerrado nupcial
-• Mondial 60cm: ${mon.qty} cajas QB (${mon.price})
-• Shimmer Nude 60cm: ${shi.qty} cajas QB (${shi.price})
-• Hortensias Jumbo White: ${hortW.qty} cajas (${hortW.price})
-• Eucalipto Silver Dollar: ${euca.qty} bunches (${euca.price})
+Sabemos de su especialidad en ${cSpec} y queremos presentarle nuestra disponibilidad física hoy en cuarto frío a 34°F, con precios directos de importación (ahorros netos del 45% al 52% frente a distribuidores locales):
 
-❄️ Cadena de frío ininterrumpida desde avión a cuarto frío 34°F. Entrega en camión refrigerado o retiro en muelle Doral.
+💍 DISPONIBLE HOY EN DORAL:
+• Playa Blanca 60cm: ${pb.qty} cajas QB (${pb.priceStem}/tallo · ${pb.priceBox}/caja) - Botón nupcial cerrado
+• Mondial 60cm: ${mon.qty} cajas QB (${mon.priceStem}/tallo · ${mon.priceBox}/caja)
+• Shimmer Nude 60cm: ${shi.qty} cajas QB (${shi.priceStem}/tallo)
+• Hortensia Jumbo White: ${hortW.qty} cajas (${hortW.priceStem}/tallo · $33.00 caja 30 tallos)
+• Eucalipto Silver Dollar: ${euca.qty} bunches (${euca.priceStem}/bunch)
+
+❄️ Cadena de frío ininterrumpida desde vuelo MIA. Retiro directo en muelle Doral o entrega refrigerada en su taller.
 
 ¿Desea que le reserve cajas para despacho hoy antes de las 10:00 AM?
-Quedo atento, Camilo Bueno / Tropical Blooms Miami.`;
+Quedo a su disposición.`;
         } 
         else if (currentSubProfile === 'retail') {
           box.innerText = 
-`Hola [Nombre Floristería], un saludo cordial.
+`Hola equipo de ${cName} (${cCity}), buen día.
 
-Reporte de stock diario en cuarto frío Doral (Tropical Blooms):
+Reporte de stock directo desde cuarto frío en Doral (Tropical Blooms Miami):
 
-🏪 PARA ROTACIÓN INMEDIATA EN TIENDA:
-• Freedom Ecuatoriana 60cm: ${fre.qty} cajas QB (${fre.price})
-• Explorer 70cm: ${exp.qty} cajas QB (${exp.price})
-• Gypsophila Million Stars: ${gyp.qty} cajas QB (${gyp.price})
-• Hortensias Jumbo White: ${hortW.qty} cajas (${hortW.price})
-• Ruscus Italiano: ${rusc.qty} bunches (${rusc.price})
+🏪 DISPONIBILIDAD INMEDIATA (AHORRO DEL 50% VS DISTRIBUIDOR LOCAL):
+• Freedom Ecuatoriana 60cm: ${fre.qty} cajas QB (${fre.priceStem}/tallo · ${fre.priceBox}/caja)
+• Explorer 70cm: ${exp.qty} cajas QB (${exp.priceStem}/tallo · ${exp.priceBox}/caja)
+• Gypsophila Million Stars: ${gyp.qty} cajas QB (${gyp.priceStem}/bunch)
+• Hortensias Jumbo White: ${hortW.qty} cajas (${hortW.priceStem}/tallo)
+• Ruscus Italiano: ${rusc.qty} bunches (${rusc.priceStem}/bunch)
 
-🚚 Entrega en Miami-Dade y Broward el mismo día si confirma antes de las 10:00 AM. Pago contra entrega o Zelle. Cero marchitamiento garantizado.
+🚚 Despacho refrigerado diario o retiro Will-Call desde las 6:30 AM en Doral. Pago con Zelle o contra entrega.
 
-¿Le agrego algo a la ruta de despacho de hoy?`;
+¿Le agregamos producto a la ruta de despacho de hoy?`;
         } 
         else {
           box.innerText = 
-`Atención Mayoristas y Distribuidores de Miami:
+`Atención ${cName} / Distribuidores Mayoristas:
 
-📦 MUELLE ABIERTO DORAL (WILL-CALL DISPONIBLE DESDE 6:30 AM):
-• Freedom 60cm: ${fre.qty} Cajas QB
-• Explorer 70cm: ${exp.qty} Cajas QB
-• Playa Blanca 60cm: ${pb.qty} Cajas QB
-• Gypsophila Million Stars: ${gyp.qty} Cajas QB
-• Hortensias Jumbo White: ${hortW.qty} Cajas
+📦 MUELLE ABIERTO DORAL (WILL-CALL DESDE 6:30 AM · PRECIOS DE IMPORTADOR):
+• Freedom 60cm: ${fre.qty} Cajas QB a ${fre.priceStem}/tallo (${fre.priceBox}/caja)
+• Explorer 70cm: ${exp.qty} Cajas QB a ${exp.priceStem}/tallo
+• Playa Blanca 60cm: ${pb.qty} Cajas QB a ${pb.priceStem}/tallo
+• Gypsophila Million Stars: ${gyp.qty} Cajas QB (${gyp.priceStem}/bunch)
+• Hortensias Jumbo White: ${hortW.qty} Cajas (${hortW.priceStem}/tallo)
 
-📍 Dirección: Doral Cold Storage Hub (a 8 min del Aeropuerto MIA).
-Retiro directo sin flete, inspección física en muelle y pago Zelle inmediato.
+📍 Ubicación: Doral Cold Storage Hub (a 8 min del Aeropuerto MIA).
+Retiro sin intermediarios, inspección física en muelle y pago Zelle inmediato.
 
-Escriba o llame para separar su lote antes de carga.`;
+Escriba o llame a Camilo Bueno para separar su lote antes de carga.`;
         }
       }
 
@@ -394,33 +441,33 @@ Escriba o llame para separar su lote antes de carga.`;
       else if (currentChannel === 'email') {
         if (currentSubProfile === 'email_mayorista') {
           box.innerText = 
-`ASUNTO: [Disponibilidad Diaria 34°F] Flores Frescas Ecuatorianas & Colombianas - Will-Call Doral / Tropical Blooms
+`ASUNTO: Disponibilidad Directa Cuarto Frío MIA (34°F) - Oferta Mayorista para ${cName}
 
-Estimado Equipo de Compras,
+Estimado Equipo de ${cName} (${cCity}),
 
 Reciban un cordial saludo de parte de Tropical Blooms Miami.
 
-Ponemos a su disposición nuestro inventario físico disponible para entrega inmediata hoy desde nuestro cuarto frío en Doral (34°F constante):
+Nos comunicamos directamente desde nuestra instalación refrigerada en Doral (a 8 minutos del Aeropuerto Internacional de Miami). Al recibir la flor recién cortada directamente de los vuelos de Colombia y Ecuador, eliminamos márgenes de distribuidores intermedios en EE.UU., ofreciendo un ahorro neto comprobable de entre el 45% y el 55%:
 
-RESUMEN DE DISPONIBILIDAD INMEDIATA (WILL-CALL O DESPACHO LOCAL):
----------------------------------------------------------------------------------
-Variedad / Producto             | Grado / Empaque        | Stock Disponible | Precio Ref.
----------------------------------------------------------------------------------
-• Rosa Freedom (Rojo)          | 60cm - QB (150 tallos) | ${fre.qty} Cajas          | ${fre.price}
-• Rosa Explorer (Rojo Oscuro)  | 70cm - QB (150 tallos) | ${exp.qty} Cajas          | ${exp.price}
-• Rosa Playa Blanca (Nupcial)  | 60cm - QB (150 tallos) | ${pb.qty} Cajas          | ${pb.price}
-• Rosa Mondial (Blanco Crema)  | 60cm - QB (150 tallos) | ${mon.qty} Cajas          | ${mon.price}
-• Hortensia Jumbo White Select | 22cm - Caja 30 tallos  | ${hortW.qty} Cajas          | ${hortW.price}
-• Gypsophila Million Stars     | 1000g - QB 10 bunches  | ${gyp.qty} Cajas          | ${gyp.price}
-• Ruscus Italiano Fresco       | 60-70cm - Bunch 10 t.  | ${rusc.qty} Bunches        | ${rusc.price}
----------------------------------------------------------------------------------
+TABLA DE DISPONIBILIDAD INMEDIATA (WILL-CALL O ENTREGA REFRIGERADA):
+-------------------------------------------------------------------------------------------------
+Variedad / Producto             | Grado / Empaque        | Precio Muelle MIA | Ahorro vs Local | Stock Disp.
+-------------------------------------------------------------------------------------------------
+• Rosa Freedom (Rojo Clásico)   | 60cm - QB (150 tallos) | $0.69 / tallo     | 48% Ahorro      | ${fre.qty} Cajas
+• Rosa Explorer (Rojo Oscuro)   | 70cm - QB (150 tallos) | $0.73 / tallo     | 46% Ahorro      | ${exp.qty} Cajas
+• Rosa Playa Blanca (Nupcial)   | 60cm - QB (150 tallos) | $0.69 / tallo     | 52% Ahorro      | ${pb.qty} Cajas
+• Rosa Mondial (Blanco Crema)   | 60cm - QB (150 tallos) | $0.63 / tallo     | 48% Ahorro      | ${mon.qty} Cajas
+• Hortensia Jumbo White Select  | 22cm - Caja 30 tallos  | $1.10 / tallo     | 58% Ahorro      | ${hortW.qty} Cajas
+• Gypsophila Million Stars      | 1000g - QB 10 bunches  | $4.80 / bunch     | 50% Ahorro      | ${gyp.qty} Cajas
+• Eucalipto Silver Dollar       | Fresco Importado       | $4.80 / bunch     | 55% Ahorro      | ${euca.qty} Bunches
+-------------------------------------------------------------------------------------------------
 
 CONDICIONES COMERCIALES:
-1. Retiro en Muelle (Will-Call): Disponible desde las 6:30 AM en Doral Cold Hub.
-2. Despacho Local Refrigerado: Miami-Dade y Broward (pedidos antes de las 10:00 AM).
+1. Retiro en Muelle (Will-Call): Disponible desde las 6:30 AM en Doral Cold Storage Hub.
+2. Despacho Refrigerado: Rutas locales y entrega puerta a puerta en Florida.
 3. Pagos Aceptados: Zelle, Wire Transfer, Tarjeta de Crédito, Net 7 (previa aprobación).
 
-Para apartar producto o solicitar cotización por pallets completos, responda directamente a este correo o comuníquese a nuestra línea de atención:
+Quedamos atentos para apartar su pedido o coordinar una muestra física en muelle.
 
 Atentamente,
 Camilo Bueno
@@ -429,22 +476,22 @@ Doral Cold Storage Facility, FL`;
         } 
         else {
           box.innerText = 
-`ASUNTO: ⚡ FLASH SALE DORAL: Lote Fresco en Muelle (Rosas 60cm & Hortensias) - Cupos Limitados
+`ASUNTO: ⚡ FLASH SALE DORAL: Lote Directo de Avión (Rosas $0.69 / Hortensias $1.10) para ${cName}
 
-Equipo Floral de Miami:
+Atención Equipo de ${cName}:
 
-Acabamos de recibir inspección de carga en cuarto frío a 34°F en Doral con excedente para rotación inmediata hoy:
+Acabamos de recibir inspección de vuelo en nuestro cuarto frío a 34°F en Doral con excedente para rotación inmediata hoy:
 
-🔥 PRECIOS ESPECIALES DE LIQUIDACIÓN DE MUELLE:
-• Rosa Freedom 60cm: ${fre.qty} Cajas disponibles a precio preferencial
-• Rosa Playa Blanca 60cm: ${pb.qty} Cajas nupciales listas
-• Hortensias Jumbo White: ${hortW.qty} Cajas
-• Gypsophila Million Stars: ${gyp.qty} Cajas
+🔥 PRECIOS DE LIQUIDACIÓN DE MUELLE:
+• Rosa Freedom 60cm: ${fre.qty} Cajas a $0.69/tallo ($103.50 QB)
+• Rosa Playa Blanca 60cm: ${pb.qty} Cajas a $0.69/tallo
+• Hortensias Jumbo White: ${hortW.qty} Cajas a $1.10/tallo ($33.00 caja)
+• Eucalipto Silver Dollar: ${euca.qty} Bunches a $4.80/bunch
 
 ⏰ VÁLIDO ÚNICAMENTE HOY HASTA LAS 2:00 PM.
 Retiro inmediato en muelle Will-Call Doral o despacho refrigerado express.
 
-Responda "SEPARAR LOTE" o llame a Camilo Bueno para confirmar antes de agotar existencia.`;
+Responda "SEPARAR LOTE" o comuníquese con Camilo Bueno para confirmar antes de agotar existencia.`;
         }
       }
 
@@ -452,28 +499,28 @@ Responda "SEPARAR LOTE" o llame a Camilo Bueno para confirmar antes de agotar ex
       else if (currentChannel === 'tiktok') {
         if (currentSubProfile === 'tiktok_inspeccion') {
           box.innerText = 
-`🎬 GUIÓN DE TIKTOK / REELS: "INSPECCIÓN DE CUARTO FRÍO A 34°F EN DORAL"
+`🎬 GUIÓN DE TIKTOK / REELS: "DEJEN DE PAGAR $1.35 POR ROSA EN MIAMI ✈️❄️"
 ⏱️ Duración: 30 a 45 segundos | Formato: Vertical 9:16
 🎵 Audio recomendado: Sonido Trending empresarial / Beat frío moderno
 
 [00:00 - 00:03] 💥 GANCHO VISUAL (HOOK):
-(Camilo empuja la pesada puerta del cuarto frío en Doral; sale vapor denso de condensación).
-Texto en pantalla: "Así se ven 5,400 tallos recién bajados del avión en Miami ✈️❄️"
-Voz de Camilo: "¿Te dedicas a eventos o tienes floristería en Miami? Mira esto."
+(Camilo empuja la puerta del cuarto frío en Doral; sale vapor denso de condensación).
+Texto en pantalla: "Floristas en Florida: dejen de pagar $1.30 por tallo a revendedores locales 🛑"
+Voz de Camilo: "Si tienes floristería o haces eventos en Miami, Orlando o Tampa, mira esto."
 
 [00:03 - 00:15] 🔍 INSPECCIÓN DE CALIDAD:
 (Cámara en macro sobre una caja abierta de Playa Blanca y Freedom).
-Camilo abre el capuchón de cartón: "34 grados Fahrenheit clavados. Cero hongo, cero deshidratación. Miren este botón de Playa Blanca: tenemos ${pb.qty} cajas disponibles hoy en Doral."
+Camilo abre el capuchón de cartón: "34 grados Fahrenheit clavados. Recién bajadas del vuelo de Bogotá. Cero deshidratación. Miren este botón de Playa Blanca a $0.69 por tallo directo de muelle: tenemos ${pb.qty} cajas disponibles hoy."
 
 [00:15 - 00:25] 📦 DISPONIBILIDAD REAL EN MUELLE:
-(Paneo rápido de las cajas apiladas con etiquetas de temperatura):
-"Tenemos ${fre.qty} cajas de Freedom 60cm, ${hortW.qty} cajas de Hortensia Jumbo y ${gyp.qty} de Gypso Million Stars listas para salir."
+(Paneo de las cajas con etiquetas de temperatura):
+"Tenemos ${fre.qty} cajas de Freedom 60cm, ${hortW.qty} cajas de Hortensia Jumbo White a $1.10 y ${gyp.qty} de Gypso a $4.80 listas para salir."
 
 [00:25 - 00:35] 🚀 LLAMADA A LA ACCIÓN (CTA):
 (Camilo mirando a cámara en el muelle de carga):
-"Si necesitas surtir tu evento este fin de semana sin pagar fletes caros, ven a Will-Call en Doral desde las 6:30 AM o pide entrega en camión refrigerado. Comenta 'FLOR' o toca el link en la bio para pasarte el inventario en vivo."
+"Vengan a Will-Call en Doral desde las 6:30 AM o pidan despacho en camión refrigerado. Comenten 'FLOR' o toquen el link en la bio para ver el inventario en vivo."
 
-📲 HASHTAGS: #MiamiFlorist #DoralFlowers #FloresMiami #BodasMiami #MiamiEventPlanner #TropicalBlooms`;
+📲 HASHTAGS: #MiamiFlorist #DoralFlowers #FloresMiami #BodasMiami #MiamiEventPlanner #TropicalBlooms #FloralTrack`;
         } 
         else {
           box.innerText = 
@@ -482,19 +529,19 @@ Camilo abre el capuchón de cartón: "34 grados Fahrenheit clavados. Cero hongo,
 
 [00:00 - 00:04] 💥 GANCHO:
 (Camilo subiendo una caja en montacargas en muelle Doral).
-Texto en pantalla: "Por qué los mejores floristas de Miami compran directo en Doral 🤫"
+Texto en pantalla: "Por qué los mejores floristas compran directo en Doral 🤫"
 
 [00:04 - 00:15] 📦 CUERPO:
-"En lugar de esperar 3 días o comprar flor marchita, vienes directo a nuestro muelle a 8 min del aeropuerto MIA.
+"En lugar de esperar 4 días flor marchita de revendedores, vienes directo a nuestro muelle a 8 min del aeropuerto MIA.
 Hoy tenemos:
-• ${fre.qty} cajas de Rosa Freedom
-• ${pb.qty} cajas de Rosa Playa Blanca
-• ${hortW.qty} cajas de Hortensia Jumbo
+• ${fre.qty} cajas de Rosa Freedom ($0.69/tallo)
+• ${pb.qty} cajas de Rosa Playa Blanca ($0.69/tallo)
+• ${hortW.qty} cajas de Hortensia Jumbo ($1.10/tallo)
 Frío ininterrumpido a 34°F."
 
 [00:15 - 00:25] 🚀 CTA:
 "Pagas con Zelle, cargas en tu van y tienes flor perfecta para tus clientes.
-Escribe 'WILLCALL' por mensaje directo y te enviamos la ubicación exacta y precios de hoy."`;
+Escribe 'WILLCALL' por DM y te enviamos la ubicación exacta y precios de hoy."`;
         }
       }
 
@@ -509,20 +556,20 @@ Escribe 'WILLCALL' por mensaje directo y te enviamos la ubicación exacta y prec
 
 2. RESPUESTA AUTOMÁTICA INSTANTÁNEA (0.5s):
    "¡Hola! 👋 Gracias por contactar a Tropical Blooms Miami (Hub Doral). 
-   Actualmente tenemos stock vivo disponible en cuarto frío a 34°F con retiro en muelle o entrega refrigerada.
+   Tenemos stock fresco recién bajado de vuelo en cuarto frío a 34°F con precios directos de muelle ($0.69/tallo en rosas).
 
-   ¿Qué tipo de flores buscas para hoy o este fin de semana?"
+   ¿Qué tipo de flores buscas para tus eventos o tienda?"
 
-   [BOTÓN 1: 🌹 Rosas Rojas (Freedom / Explorer)]
-   [BOTÓN 2: 💍 Bodas & Blancas (Playa Blanca / Mondial)]
-   [BOTÓN 3: 🌸 Hortensias & Follajes (Gypso / Ruscus)]
+   [BOTÓN 1: 🌹 Rosas Rojas ($0.69/tallo)]
+   [BOTÓN 2: 💍 Bodas & Nupcial ($0.69/tallo)]
+   [BOTÓN 3: 🌸 Hortensias & Follajes ($1.10/tallo)]
 
 3. RAMA CONDICIONAL - SI PULSA BOTÓN 1 (Rosas Rojas):
    "Excelente elección. Tenemos disponible hoy en Doral:
-   • Freedom 60cm: ${fre.qty} Cajas (${fre.price})
-   • Explorer 70cm: ${exp.qty} Cajas (${exp.price})
+   • Freedom 60cm: ${fre.qty} Cajas (${fre.priceStem}/tallo · ${fre.priceBox}/caja)
+   • Explorer 70cm: ${exp.qty} Cajas (${exp.priceStem}/tallo · ${exp.priceBox}/caja)
    
-   ¿A qué número de WhatsApp podemos enviarte la ubicación exacta de muelle o coordinar entrega en tu taller?"
+   ¿A qué número de WhatsApp podemos enviarte la ubicación exacta de muelle o coordinar entrega refrigerada?"
    [CAMPO DE ENTRADA DE USUARIO: Teléfono]
 
 4. ACCIÓN DE DERIVACIÓN INMEDIATA (HANDOFF A CAMILO):
@@ -534,7 +581,7 @@ Escribe 'WILLCALL' por mensaje directo y te enviamos la ubicación exacta y prec
 `🔑 CONFIGURACIÓN DE PALABRAS CLAVE Y REGLAS DE RESPUESTA EN MANYCHAT:
 
 PALABRAS CLAVE PRINCIPALES:
-• "FLOR", "FLORES", "INVENTARIO", "PRECIOS", "DORAL", "WILLCALL", "BODAS"
+• "FLOR", "FLORES", "INVENTARIO", "PRECIOS", "DORAL", "WILLCALL", "BODAS", "ROSAS"
 
 RESPUESTAS RÁPIDAS AUTOMATIZADAS:
 ---------------------------------------------------------------------------------
@@ -545,7 +592,7 @@ Botón: [Hablar con Camilo por WhatsApp] -> https://wa.me/1XXXXXXXXXX?text=Hola%
 Keyword: "CATALOGO" o "STOCK"
 Respuesta: "🌸 Puedes ver nuestro inventario en tiempo real en nuestra pantalla en vivo:
 https://agy-ide-production.up.railway.app/control-inventario-doral.html
-Tenemos ${fre.qty} cajas de Rosas y ${hortW.qty} cajas de Hortensias disponibles hoy."
+Tenemos ${fre.qty} cajas de Rosas ($0.69/tallo) y ${hortW.qty} cajas de Hortensias ($1.10/tallo) disponibles hoy."
 ---------------------------------------------------------------------------------`;
         }
       }
