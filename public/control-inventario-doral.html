@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🌸 TABLERO DE CONTROL DE INVENTARIO VIVO Y PROSPECCIÓN FLORIDA - DORAL 34°F</title>
+  <title>🌸 TABLERO DE CONTROL DE INVENTARIO VIVO & PROSPECCIÓN FLORIDA - DORAL 34°F</title>
   <style>
     :root {
       --bg: #0f172a;
@@ -26,6 +26,7 @@
     .title-box h1 { font-size: 24px; color: #38bdf8; display: flex; align-items: center; gap: 10px; }
     .badge { background: #065f46; color: #6ee7b7; padding: 4px 12px; border-radius: 9999px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
     .cold-badge { background: #1e3a8a; color: #93c5fd; }
+    .shield-badge { background: #450a0a; color: #fca5a5; border: 1px solid #ef4444; }
     
     .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
     .stat-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
@@ -72,10 +73,21 @@
     .tab-btn { background: #0f172a; border: 1px solid var(--border); color: var(--text-muted); padding: 6px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: 0.2s; }
     .tab-btn.active { background: #38bdf8; color: #0f172a; border-color: #38bdf8; }
 
-    .msg-preview { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12.5px; line-height: 1.55; color: #cbd5e1; white-space: pre-wrap; flex-grow: 1; min-height: 320px; max-height: 480px; overflow-y: auto; }
+    .msg-preview { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12.5px; line-height: 1.55; color: #cbd5e1; white-space: pre-wrap; flex-grow: 1; min-height: 280px; max-height: 420px; overflow-y: auto; }
     
-    .btn-action { background: var(--accent); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; width: 100%; }
-    .btn-action:hover { filter: brightness(1.1); transform: translateY(-1px); }
+    /* Guardarraíl de seguridad pre-vuelo */
+    .safety-shield-box { background: #0b1329; border: 2px solid #3b82f6; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+    .safety-header { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 700; color: #60a5fa; }
+    .safety-checklist { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; color: #cbd5e1; }
+    .safety-check-item { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .safety-check-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: #10b981; cursor: pointer; }
+
+    .action-buttons-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    @media (max-width: 600px) { .action-buttons-grid { grid-template-columns: 1fr; } }
+
+    .btn-action { background: var(--accent); color: white; border: none; padding: 12px 16px; border-radius: 8px; font-weight: 700; font-size: 13.5px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; width: 100%; text-decoration: none; }
+    .btn-action:hover:not(:disabled) { filter: brightness(1.1); transform: translateY(-1px); }
+    .btn-action:disabled { background: #334155 !important; color: #64748b !important; cursor: not-allowed !important; transform: none !important; opacity: 0.6; }
     
     .alert-banner { background: #1e293b; border-left: 4px solid var(--warning); padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 13px; color: #fde68a; margin-bottom: 20px; }
     .savings-tag { background: #065f46; color: #a7f3d0; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 700; margin-left: 6px; }
@@ -88,14 +100,15 @@
       <h1>🌸 TABLERO DE CONTROL DE INVENTARIO VIVO & PROSPECCIÓN FLORIDA</h1>
       <span style="font-size: 14px; color: var(--text-muted);">Tropical Blooms Miami · FloralTrack SGN 24/7 · Precios Directos MIA Cold Storage</span>
     </div>
-    <div style="display: flex; gap: 10px;">
+    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
       <span class="badge cold-badge">❄️ CUARTO FRÍO: 34°F (1.1°C)</span>
+      <span class="badge shield-badge">🛡️ SEGURIDAD SGN: APROBACIÓN HUMANA ESTRICTA</span>
       <span class="badge">📍 HUB DORAL, FL (AEROPUERTO MIA)</span>
     </div>
   </div>
 
   <div class="alert-banner">
-    💎 <strong>VENTAJA DIRECTA DE MUELLE:</strong> Precios directos desde Aeropuerto MIA ($0.69/tallo en Rosas de Exportación) eliminando intermediarios locales. Ahorro de 45% a 55% para floristerías y diseñadores de eventos en Florida.
+    🛑 <strong>BLINDAJE DE SEGURIDAD ESTRICTA:</strong> Prohibido terminantemente cualquier disparo automático o masivo sin intervención humana. El sistema solo redacta borradores; la lista de chequeo pre-vuelo exige verificación física antes de habilitar la copia o apertura manual.
   </div>
 
   <div class="stats-grid">
@@ -193,11 +206,40 @@
         <!-- Contenido generado dinámicamente -->
       </div>
 
-      <button id="btn-copy-action" class="btn-action" onclick="copyMessage()">
-        📋 Copiar Mensaje para WhatsApp
-      </button>
+      <!-- LISTA DE CHEQUEO PRE-VUELO (BLINDAJE DE SEGURIDAD OBLIGATORIO) -->
+      <div class="safety-shield-box">
+        <div class="safety-header">
+          <span>🛡️ LISTA DE CHEQUEO PRE-VUELO (OBLIGATORIA)</span>
+          <span id="safety-status-label" style="font-size: 11px; color: #f87171;">⚠️ BLOQUEADO HASTA VERIFICAR</span>
+        </div>
+        <div class="safety-checklist">
+          <label class="safety-check-item">
+            <input type="checkbox" id="chk-stock" onchange="validateSafetyChecklist()">
+            <span>1. Confirmo que las cajas están físicamente en cuarto frío a 34°F en Doral.</span>
+          </label>
+          <label class="safety-check-item">
+            <input type="checkbox" id="chk-precio" onchange="validateSafetyChecklist()">
+            <span>2. Confirmo que los precios de muelle ($0.69/tallo) están autorizados hoy.</span>
+          </label>
+          <label class="safety-check-item">
+            <input type="checkbox" id="chk-destinatario" onchange="validateSafetyChecklist()">
+            <span>3. Confirmo que el destinatario y propuesta coinciden con el cliente seleccionado.</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- BOTONES DE ACCIÓN (BLOQUEADOS HASTA PASAR CHECKLIST) -->
+      <div class="action-buttons-grid">
+        <button id="btn-copy-action" class="btn-action" onclick="copyMessage()" disabled>
+          📋 Copiar Borrador
+        </button>
+        <button id="btn-manual-open" class="btn-action" style="background: #2563eb;" onclick="openManualDraft()" disabled>
+          👁️ Revisar Borrador en App
+        </button>
+      </div>
+
       <div id="copy-feedback" style="font-size: 12px; color: #34d399; text-align: center; display: none;">
-        ✅ ¡Copiado al portapapeles! Listo para enviar.
+        ✅ ¡Borrador copiado al portapapeles! Ábralo y revíselo manualmente antes de enviar.
       </div>
     </div>
   </div>
@@ -205,15 +247,15 @@
   <script>
     const clients = [
       { id: 0, name: "Florista / Diseñador de Miami", city: "Miami / Doral, FL", contact: "Equipo de Compras", email: "", phone: "", specialty: "corte fresco para entrega hoy" },
-      { id: 1, name: "In Bloom Florist", city: "Orlando, FL", contact: "Equipo de Eventos", email: "events@inbloomflorist.com", phone: "(407) 649-7771", specialty: "eventos corporativos y consumo de gran escala" },
-      { id: 2, name: "The Flower Studio", city: "Altamonte Springs, FL", contact: "San & Equipo de Diseño", email: "san@theflowerstudioonline.com", phone: "(321) 422-0823", specialty: "bodas de lujo y montajes exclusivos" },
-      { id: 3, name: "Harry's Famous Flowers", city: "Orlando, FL", contact: "Gerencia de Compras", email: "Harrysflowers@aol.com", phone: "(407) 249-0500", specialty: "arreglos diarios y rotación en tienda" },
-      { id: 4, name: "Carrollwood Florist", city: "Tampa Bay, FL", contact: "Servicio al Cliente & Compras", email: "customerservice@carrollwoodflorist.com", phone: "(813) 962-1917", specialty: "diseño contemporáneo y rosas premium" },
-      { id: 5, name: "Floral Impressions", city: "Tampa, FL", contact: "Equipo de Boutique", email: "floralimpressions1@yahoo.com", phone: "(800) 272-2115", specialty: "consumo semanal regular y corte surtido" },
-      { id: 6, name: "Jennie's Flowers", city: "Tampa, FL", contact: "Dpto. de Compras", email: "support@jennies.com", phone: "(813) 229-8521", specialty: "consumo mayorista masivo en Tampa Bay" },
-      { id: 7, name: "Flora Fine Flowers", city: "Tampa, FL", contact: "Estudio Botánico", email: "orders@florafineflowers.com", phone: "(813) 251-1799", specialty: "rosas ecuatorianas selectas y bodas de alta gama" },
-      { id: 8, name: "Kuhn Flowers", city: "Jacksonville, FL", contact: "Trade Customer Desk", email: "", phone: "(904) 398-8601", specialty: "volumen mayorista masivo" },
-      { id: 9, name: "Why Not Flowers", city: "Jacksonville, FL", contact: "Equipo Floral", email: "butterfly.flowers.usa@gmail.com", phone: "(904) 316-6716", specialty: "rosas premium de exportación e hidratación diaria" }
+      { id: 1, name: "In Bloom Florist", city: "Orlando, FL", contact: "Equipo de Eventos", email: "events@inbloomflorist.com", phone: "14076497771", specialty: "eventos corporativos y consumo de gran escala" },
+      { id: 2, name: "The Flower Studio", city: "Altamonte Springs, FL", contact: "San & Equipo de Diseño", email: "san@theflowerstudioonline.com", phone: "13214220823", specialty: "bodas de lujo y montajes exclusivos" },
+      { id: 3, name: "Harry's Famous Flowers", city: "Orlando, FL", contact: "Gerencia de Compras", email: "Harrysflowers@aol.com", phone: "14072490500", specialty: "arreglos diarios y rotación en tienda" },
+      { id: 4, name: "Carrollwood Florist", city: "Tampa Bay, FL", contact: "Servicio al Cliente & Compras", email: "customerservice@carrollwoodflorist.com", phone: "18139621917", specialty: "diseño contemporáneo y rosas premium" },
+      { id: 5, name: "Floral Impressions", city: "Tampa, FL", contact: "Equipo de Boutique", email: "floralimpressions1@yahoo.com", phone: "18002722115", specialty: "consumo semanal regular y corte surtido" },
+      { id: 6, name: "Jennie's Flowers", city: "Tampa, FL", contact: "Dpto. de Compras", email: "support@jennies.com", phone: "18132298521", specialty: "consumo mayorista masivo en Tampa Bay" },
+      { id: 7, name: "Flora Fine Flowers", city: "Tampa, FL", contact: "Estudio Botánico", email: "orders@florafineflowers.com", phone: "18132511799", specialty: "rosas ecuatorianas selectas y bodas de alta gama" },
+      { id: 8, name: "Kuhn Flowers", city: "Jacksonville, FL", contact: "Trade Customer Desk", email: "", phone: "19043988601", specialty: "volumen mayorista masivo" },
+      { id: 9, name: "Why Not Flowers", city: "Jacksonville, FL", contact: "Equipo Floral", email: "butterfly.flowers.usa@gmail.com", phone: "19043166716", specialty: "rosas premium de exportación e hidratación diaria" }
     ];
 
     const inventory = [
@@ -299,6 +341,7 @@
     function onClientChange() {
       const idx = parseInt(document.getElementById('client-select').value);
       selectedClient = clients[idx];
+      resetChecklist();
       updateMessage();
     }
 
@@ -311,6 +354,7 @@
       document.getElementById('btn-chan-manychat').className = 'channel-btn' + (channel === 'manychat' ? ' active-manychat' : '');
 
       renderSubProfiles();
+      resetChecklist();
       updateMessage();
     }
 
@@ -325,8 +369,8 @@
           <button class="tab-btn" onclick="selectSubProfile(this, 'retail')">🏪 2. Floristerías Retail</button>
           <button class="tab-btn" onclick="selectSubProfile(this, 'mayorista')">🚚 3. Muelle Will-Call 6:30 AM</button>
         `;
-        document.getElementById('btn-copy-action').innerText = '📋 Copiar Mensaje para WhatsApp';
-        document.getElementById('btn-copy-action').style.background = 'var(--wa-color)';
+        document.getElementById('btn-copy-action').innerText = '📋 Copiar Borrador WhatsApp';
+        document.getElementById('btn-manual-open').innerText = '📲 Revisar en WhatsApp';
       } 
       else if (currentChannel === 'email') {
         currentSubProfile = 'email_mayorista';
@@ -334,8 +378,8 @@
           <button class="tab-btn active" onclick="selectSubProfile(this, 'email_mayorista')">📑 Oferta B2B Directa de Muelle</button>
           <button class="tab-btn" onclick="selectSubProfile(this, 'email_urgente')">⚡ Flash Sale (Cuarto Frío 34°F)</button>
         `;
-        document.getElementById('btn-copy-action').innerText = '📋 Copiar Email B2B Completo';
-        document.getElementById('btn-copy-action').style.background = 'var(--email-color)';
+        document.getElementById('btn-copy-action').innerText = '📋 Copiar Borrador Email B2B';
+        document.getElementById('btn-manual-open').innerText = '📧 Abrir Borrador de Correo';
       } 
       else if (currentChannel === 'tiktok') {
         currentSubProfile = 'tiktok_inspeccion';
@@ -343,8 +387,8 @@
           <button class="tab-btn active" onclick="selectSubProfile(this, 'tiktok_inspeccion')">🎬 1. Inspección 34°F (Gancho)</button>
           <button class="tab-btn" onclick="selectSubProfile(this, 'tiktok_willcall')">📦 2. Retiro Will-Call en Doral</button>
         `;
-        document.getElementById('btn-copy-action').innerText = '📋 Copiar Guión de TikTok / Reels';
-        document.getElementById('btn-copy-action').style.background = 'var(--tiktok-color)';
+        document.getElementById('btn-copy-action').innerText = '📋 Copiar Guión de TikTok';
+        document.getElementById('btn-manual-open').innerText = '🎬 Teleprompter / Guión';
       } 
       else if (currentChannel === 'manychat') {
         currentSubProfile = 'manychat_flow';
@@ -352,8 +396,8 @@
           <button class="tab-btn active" onclick="selectSubProfile(this, 'manychat_flow')">🤖 Flujo de Automatización DM</button>
           <button class="tab-btn" onclick="selectSubProfile(this, 'manychat_keywords')">🔑 Palabras Clave y Triggers</button>
         `;
-        document.getElementById('btn-copy-action').innerText = '📋 Copiar Estructura ManyChat';
-        document.getElementById('btn-copy-action').style.background = 'var(--manychat-color)';
+        document.getElementById('btn-copy-action').innerText = '📋 Copiar Esquema ManyChat';
+        document.getElementById('btn-manual-open').innerText = '🤖 Ver Diagrama de Flujo';
       }
     }
 
@@ -361,7 +405,47 @@
       currentSubProfile = subprofile;
       document.querySelectorAll('#subprofile-container .tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+      resetChecklist();
       updateMessage();
+    }
+
+    function resetChecklist() {
+      document.getElementById('chk-stock').checked = false;
+      document.getElementById('chk-precio').checked = false;
+      document.getElementById('chk-destinatario').checked = false;
+      validateSafetyChecklist();
+    }
+
+    function validateSafetyChecklist() {
+      const c1 = document.getElementById('chk-stock').checked;
+      const c2 = document.getElementById('chk-precio').checked;
+      const c3 = document.getElementById('chk-destinatario').checked;
+      const allPassed = c1 && c2 && c3;
+
+      const statusLabel = document.getElementById('safety-status-label');
+      const btnCopy = document.getElementById('btn-copy-action');
+      const btnOpen = document.getElementById('btn-manual-open');
+
+      if (allPassed) {
+        statusLabel.innerText = "✅ VERIFICADO POR OPERADOR: ACCESO HABILITADO";
+        statusLabel.style.color = "#34d399";
+        btnCopy.disabled = false;
+        btnOpen.disabled = false;
+        if (currentChannel === 'whatsapp') {
+          btnCopy.style.background = 'var(--wa-color)';
+        } else if (currentChannel === 'email') {
+          btnCopy.style.background = 'var(--email-color)';
+        } else if (currentChannel === 'tiktok') {
+          btnCopy.style.background = 'var(--tiktok-color)';
+        } else {
+          btnCopy.style.background = 'var(--manychat-color)';
+        }
+      } else {
+        statusLabel.innerText = "⚠️ BLOQUEADO HASTA VERIFICAR LOS 3 PUNTOS";
+        statusLabel.style.color = "#f87171";
+        btnCopy.disabled = true;
+        btnOpen.disabled = true;
+      }
     }
 
     function updateMessage() {
@@ -607,9 +691,36 @@ Tenemos ${fre.qty} cajas de Rosas ($0.69/tallo) y ${hortW.qty} cajas de Hortensi
       });
     }
 
+    function openManualDraft() {
+      const text = document.getElementById('msg-box').innerText;
+      
+      if (currentChannel === 'whatsapp') {
+        const phone = selectedClient.phone ? selectedClient.phone.replace(/[^0-9]/g, '') : '';
+        const url = phone 
+          ? `https://api.whatsapp.com/send?phone=${phone}&text=${encodeURIComponent(text)}`
+          : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+        window.open(url, '_blank');
+      } 
+      else if (currentChannel === 'email') {
+        const email = selectedClient.email || '';
+        const lines = text.split('\n');
+        let subject = "Disponibilidad Directa Cuarto Frío MIA 34°F";
+        if (lines[0] && lines[0].startsWith("ASUNTO:")) {
+          subject = lines[0].replace("ASUNTO:", "").trim();
+        }
+        const body = lines.slice(1).join('\n').trim();
+        const mailtoUrl = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        window.location.href = mailtoUrl;
+      } 
+      else {
+        copyMessage();
+      }
+    }
+
     // Inicialización
     renderSubProfiles();
     renderTable();
+    validateSafetyChecklist();
   </script>
 </body>
 </html>
