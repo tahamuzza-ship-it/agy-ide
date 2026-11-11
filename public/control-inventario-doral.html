@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🌸 TABLERO DE CONTROL DE INVENTARIO VIVO - DORAL 34°F</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --accent: #10b981;
+      --accent-hover: #059669;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 24px; }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border); padding-bottom: 16px; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
+    .title-box h1 { font-size: 24px; color: #38bdf8; display: flex; align-items: center; gap: 10px; }
+    .badge { background: #065f46; color: #6ee7b7; padding: 4px 12px; border-radius: 9999px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+    .cold-badge { background: #1e3a8a; color: #93c5fd; }
+    
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+    .stat-label { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-value { font-size: 28px; font-weight: 700; margin-top: 6px; color: #38bdf8; }
+
+    .main-grid { display: grid; grid-template-columns: 2fr 1.2fr; gap: 24px; }
+    @media (max-width: 1024px) { .main-grid { grid-template-columns: 1fr; } }
+
+    .inventory-section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+    .section-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+
+    .table-container { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    th { background: #0f172a; padding: 12px; font-size: 12px; color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--border); }
+    td { padding: 12px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    tr:hover { background: rgba(255,255,255,0.02); }
+
+    .qty-controls { display: flex; align-items: center; gap: 8px; }
+    .btn-qty { background: var(--border); color: white; border: none; width: 26px; height: 26px; border-radius: 6px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+    .btn-qty:hover { background: var(--accent); }
+    .qty-display { font-weight: 700; min-width: 28px; text-align: center; }
+    
+    .status-pill { font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: 600; }
+    .status-ok { background: #064e3b; color: #34d399; }
+    .status-low { background: #78350f; color: #fbbf24; }
+    .status-out { background: #7f1d1d; color: #f87171; }
+
+    .dispatch-section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+    .profile-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tab-btn { background: #0f172a; border: 1px solid var(--border); color: var(--text-muted); padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+    .tab-btn.active { background: #38bdf8; color: #0f172a; border-color: #38bdf8; }
+
+    .msg-preview { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: monospace; font-size: 13px; line-height: 1.5; color: #cbd5e1; white-space: pre-wrap; flex-grow: 1; min-height: 200px; }
+    
+    .btn-action { background: var(--accent); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s; width: 100%; }
+    .btn-action:hover { background: var(--accent-hover); }
+    
+    .alert-banner { background: #1e293b; border-left: 4px solid var(--warning); padding: 12px 16px; border-radius: 0 8px 8px 0; font-size: 13px; color: #fde68a; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="title-box">
+      <h1>🌸 TABLERO DE CONTROL DE INVENTARIO VIVO</h1>
+      <span style="font-size: 14px; color: var(--text-muted);">Tropical Blooms Miami · SGN FloralTrack</span>
+    </div>
+    <div style="display: flex; gap: 10px;">
+      <span class="badge cold-badge">❄️ CUARTO FRÍO: 34°F (1.1°C)</span>
+      <span class="badge">📍 HUB DORAL, FL</span>
+    </div>
+  </div>
+
+  <div class="alert-banner">
+    ⚠️ <strong>REGLA OPERATIVA DE ORO:</strong> No se dispara ningún mensaje sin verificar primero que la variedad tenga cajas disponibles en verde. Las cantidades aquí reflejan el stock físico en muelle con Camilo.
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Cajas Disponibles para Venta</div>
+      <div class="stat-value" id="total-disponibles">160</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Cajas Reservadas / Tránsito</div>
+      <div class="stat-value" style="color: var(--warning);" id="total-reservadas">63</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Variedades en Cuarto Frío</div>
+      <div class="stat-value" style="color: #34d399;" id="total-variedades">10</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Entrega Rápida Doral / MIA</div>
+      <div class="stat-value" style="font-size: 20px; margin-top: 12px; color: #a78bfa;">Muelle Will-Call 6:30 AM</div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <!-- SECCIÓN INVENTARIO -->
+    <div class="inventory-section">
+      <div class="section-title">
+        <span>📦 Stock Físico en Doral (Ajuste Rápido)</span>
+        <button class="btn-qty" style="width: auto; padding: 4px 10px;" onclick="resetStock()">Restaurar</button>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Variedad</th>
+              <th>Grado</th>
+              <th>Caja (Tallos)</th>
+              <th>Precio Ref.</th>
+              <th>Disponibles</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="inventory-tbody">
+            <!-- Renderizado dinámico -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- SECCIÓN GENERADOR DE MENSAJE INTELIGENTE -->
+    <div class="dispatch-section">
+      <div class="section-title">
+        <span>💬 Generador de Ataque Comercial</span>
+      </div>
+      <p style="font-size: 13px; color: var(--text-muted);">
+        Seleccione el perfil de cliente. El mensaje se redacta <strong>automáticamente con las cajas reales que SÍ tenemos</strong> hoy en cuarto frío:
+      </p>
+
+      <div class="profile-tabs">
+        <button class="tab-btn active" onclick="selectProfile('bodas')">💍 1. Bodas de Lujo</button>
+        <button class="tab-btn" onclick="selectProfile('retail')">🏪 2. Floristerías Retail</button>
+        <button class="tab-btn" onclick="selectProfile('mayorista')">🚚 3. Muelle Will-Call</button>
+      </div>
+
+      <div class="msg-preview" id="msg-box">
+        <!-- Mensaje dinámico -->
+      </div>
+
+      <button class="btn-action" onclick="copyMessage()">
+        📋 Copiar Mensaje para WhatsApp
+      </button>
+      <div id="copy-feedback" style="font-size: 12px; color: #34d399; text-align: center; display: none;">
+        ✅ ¡Mensaje copiado al portapapeles! Listo para pegar en WhatsApp.
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const inventory = [
+      { id: 1, name: "Freedom (Rojo Clásico)", cat: "Rosas", grade: "60cm", pack: "QB (150 tallos)", price: "$120.00", qty: 18, reserved: 7 },
+      { id: 2, name: "Explorer (Rojo Oscuro)", cat: "Rosas", grade: "70cm", pack: "QB (150 tallos)", price: "$130.00", qty: 10, reserved: 5 },
+      { id: 3, name: "Playa Blanca (Nupcial)", cat: "Bodas", grade: "60cm", pack: "QB (150 tallos)", price: "$135.00", qty: 14, reserved: 6 },
+      { id: 4, name: "Mondial (Blanco Crema)", cat: "Bodas", grade: "60cm", pack: "QB (150 tallos)", price: "$125.00", qty: 12, reserved: 6 },
+      { id: 5, name: "Shimmer (Nude / Durazno)", cat: "Bodas", grade: "60cm", pack: "QB (150 tallos)", price: "$140.00", qty: 6, reserved: 4 },
+      { id: 6, name: "Hortensia White Select", cat: "Hortensias", grade: "Jumbo 22cm", pack: "Caja 30 tallos", price: "$52.00", qty: 22, reserved: 8 },
+      { id: 7, name: "Hortensia Blue Premium", cat: "Hortensias", grade: "Jumbo 20cm", pack: "Caja 30 tallos", price: "$55.00", qty: 15, reserved: 5 },
+      { id: 8, name: "Gypsophila Million Stars", cat: "Follajes", grade: "1000g", pack: "QB (10 bunches)", price: "$72.00", qty: 19, reserved: 6 },
+      { id: 9, name: "Ruscus Italiano", cat: "Follajes", grade: "60-70cm", pack: "Bunch 10 tallos", price: "$9.50/b", qty: 30, reserved: 10 },
+      { id: 10, name: "Eucalipto Silver Dollar", cat: "Follajes", grade: "Fresco", pack: "Bunch importado", price: "$10.00/b", qty: 14, reserved: 6 }
+    ];
+
+    let currentProfile = 'bodas';
+
+    function renderTable() {
+      const tbody = document.getElementById('inventory-tbody');
+      tbody.innerHTML = '';
+      let totalAvail = 0;
+      let totalRes = 0;
+
+      inventory.forEach((item, index) => {
+        totalAvail += item.qty;
+        totalRes += item.reserved;
+
+        let statusClass = "status-ok";
+        let statusText = "En Stock";
+        if (item.qty === 0) { statusClass = "status-out"; statusText = "Agotado"; }
+        else if (item.qty <= 5) { statusClass = "status-low"; statusText = "Bajo Stock"; }
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${item.name}</strong></td>
+          <td style="color: var(--text-muted); font-size: 13px;">${item.grade}</td>
+          <td style="font-size: 13px;">${item.pack}</td>
+          <td style="color: #38bdf8; font-weight: 600;">${item.price}</td>
+          <td>
+            <div class="qty-controls">
+              <button class="btn-qty" onclick="changeQty(${index}, -1)">-</button>
+              <span class="qty-display">${item.qty}</span>
+              <button class="btn-qty" onclick="changeQty(${index}, 1)">+</button>
+            </div>
+          </td>
+          <td><span class="status-pill ${statusClass}">${statusText}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('total-disponibles').innerText = totalAvail;
+      document.getElementById('total-reservadas').innerText = totalRes;
+      document.getElementById('total-variedades').innerText = inventory.length;
+
+      updateMessage();
+    }
+
+    function changeQty(index, delta) {
+      if (inventory[index].qty + delta >= 0) {
+        inventory[index].qty += delta;
+        renderTable();
+      }
+    }
+
+    function resetStock() {
+      inventory[0].qty = 18;
+      inventory[2].qty = 14;
+      inventory[5].qty = 22;
+      renderTable();
+    }
+
+    function selectProfile(profile) {
+      currentProfile = profile;
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+      updateMessage();
+    }
+
+    function updateMessage() {
+      const box = document.getElementById('msg-box');
+      const pb = inventory.find(i => i.name.includes("Playa Blanca"));
+      const mon = inventory.find(i => i.name.includes("Mondial"));
+      const fre = inventory.find(i => i.name.includes("Freedom"));
+      const hort = inventory.find(i => i.name.includes("Hortensia White"));
+      const gyp = inventory.find(i => i.name.includes("Gypsophila"));
+
+      if (currentProfile === 'bodas') {
+        box.innerText = 
+`Hola [Nombre Florista/Diseñador], buen día.
+
+Le escribo de Tropical Blooms Miami (Hub Doral). Tenemos disponibilidad fresca en cuarto frío a 34°F para sus eventos de este fin de semana:
+
+💍 DISPONIBLE HOY EN DORAL:
+• Playa Blanca 60cm: ${pb.qty} cajas QB (${pb.price}) - Botón cerrado nupcial
+• Mondial 60cm: ${mon.qty} cajas QB (${mon.price})
+• Hortensias Jumbo White: ${hort.qty} cajas (${hort.price})
+
+❄️ Cadena de frío ininterrumpida y entrega directa en camión refrigerado en su taller, o retiro inmediato en muelle Doral.
+
+¿Desea que le reserve alguna caja antes de las 10:00 AM?
+Quedo atento, Camilo Bueno / Tropical Blooms.`;
+      } 
+      else if (currentProfile === 'retail') {
+        box.innerText = 
+`Hola [Nombre Floristería], un saludo cordial.
+
+Reporte de stock diario en cuarto frío Doral (Tropical Blooms):
+
+🏪 PARA ROTACIÓN DE HOY:
+• Freedom Ecuatoriana 60cm: ${fre.qty} cajas QB (${fre.price})
+• Gypsophila Million Stars: ${gyp.qty} cajas QB (${gyp.price})
+• Hortensias Jumbo: ${hort.qty} cajas (${hort.price})
+
+🚚 Entrega en Miami-Dade y Broward el mismo día si confirma antes de las 10:00 AM. Pago contra entrega o Zelle. Cero marchitamiento garantizado.
+
+¿Le agrego algo a la ruta de despacho de hoy?`;
+      } 
+      else {
+        box.innerText = 
+`Atención Mayoristas y Decoradores de Miami:
+
+📦 MUELLE ABIERTO DORAL (WILL-CALL DISPONIBLE DESDE 6:30 AM):
+• Freedom 60cm: ${fre.qty} Cajas
+• Playa Blanca 60cm: ${pb.qty} Cajas
+• Gypsophila Million Stars: ${gyp.qty} Cajas
+• Hortensias Jumbo: ${hort.qty} Cajas
+
+📍 Dirección: Doral Cold Storage Hub (a 8 min del Aeropuerto MIA).
+Retiro directo sin flete, inspección física en muelle y pago Zelle inmediato.
+
+Escriba para separar su lote antes de carga.`;
+      }
+    }
+
+    function copyMessage() {
+      const text = document.getElementById('msg-box').innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        const feedback = document.getElementById('copy-feedback');
+        feedback.style.display = 'block';
+        setTimeout(() => feedback.style.display = 'none', 3000);
+      });
+    }
+
+    renderTable();
+  </script>
+</body>
+</html>
