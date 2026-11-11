@@ -28,20 +28,25 @@
     .cold-badge { background: #1e3a8a; color: #93c5fd; }
     .shield-badge { background: #450a0a; color: #fca5a5; border: 1px solid #ef4444; }
     
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin-bottom: 24px; }
     .stat-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
-    .stat-label { font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-    .stat-value { font-size: 28px; font-weight: 700; margin-top: 6px; color: #38bdf8; }
+    .stat-label { font-size: 12.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-value { font-size: 26px; font-weight: 700; margin-top: 6px; color: #38bdf8; }
 
-    .main-grid { display: grid; grid-template-columns: 1.35fr 1.65fr; gap: 24px; }
-    @media (max-width: 1150px) { .main-grid { grid-template-columns: 1fr; } }
+    .main-grid { display: grid; grid-template-columns: 1.4fr 1.6fr; gap: 24px; }
+    @media (max-width: 1200px) { .main-grid { grid-template-columns: 1fr; } }
 
     .inventory-section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
-    .section-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+    .section-title { font-size: 17px; font-weight: 600; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
 
-    .table-container { overflow-x: auto; max-height: 600px; }
+    .filter-pills { display: flex; gap: 8px; margin-bottom: 14px; }
+    .pill-btn { background: #0f172a; border: 1px solid var(--border); color: var(--text-muted); padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+    .pill-btn.active { background: #38bdf8; color: #0f172a; border-color: #38bdf8; }
+    .pill-btn.risk-active { background: #ef4444; color: white; border-color: #ef4444; }
+
+    .table-container { overflow-x: auto; max-height: 620px; }
     table { width: 100%; border-collapse: collapse; text-align: left; }
-    th { background: #0f172a; padding: 12px; font-size: 12px; color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
+    th { background: #0f172a; padding: 10px 12px; font-size: 11.5px; color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
     td { padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
     tr:hover { background: rgba(255,255,255,0.02); }
 
@@ -52,12 +57,11 @@
     
     .status-pill { font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: 600; white-space: nowrap; }
     .status-ok { background: #064e3b; color: #34d399; }
-    .status-low { background: #78350f; color: #fbbf24; }
-    .status-out { background: #7f1d1d; color: #f87171; }
+    .status-mid { background: #78350f; color: #fbbf24; }
+    .status-risk { background: #7f1d1d; color: #f87171; }
 
     .dispatch-section { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
     
-    /* Canales principales */
     .channel-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 4px; }
     @media (max-width: 600px) { .channel-tabs { grid-template-columns: repeat(2, 1fr); } }
     .channel-btn { background: #0f172a; border: 2px solid var(--border); color: var(--text-muted); padding: 10px 12px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
@@ -70,12 +74,11 @@
     .client-select { background: #1e293b; color: #f8fafc; border: 1px solid var(--border); padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; width: 100%; cursor: pointer; }
 
     .subprofile-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
-    .tab-btn { background: #0f172a; border: 1px solid var(--border); color: var(--text-muted); padding: 6px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+    .tab-btn { background: #0f172a; border: 1px solid var(--border); color: var(--text-muted); padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.2s; }
     .tab-btn.active { background: #38bdf8; color: #0f172a; border-color: #38bdf8; }
 
     .msg-preview { background: #0f172a; border: 1px solid var(--border); border-radius: 8px; padding: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12.5px; line-height: 1.55; color: #cbd5e1; white-space: pre-wrap; flex-grow: 1; min-height: 280px; max-height: 420px; overflow-y: auto; }
     
-    /* Guardarraíl de seguridad pre-vuelo */
     .safety-shield-box { background: #0b1329; border: 2px solid #3b82f6; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
     .safety-header { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 700; color: #60a5fa; }
     .safety-checklist { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; color: #cbd5e1; }
@@ -108,25 +111,26 @@
   </div>
 
   <div class="alert-banner">
-    🛑 <strong>BLINDAJE DE SEGURIDAD ESTRICTA:</strong> Prohibido terminantemente cualquier disparo automático o masivo sin intervención humana. El sistema solo redacta borradores; la lista de chequeo pre-vuelo exige verificación física antes de habilitar la copia o apertura manual.
+    💎 <strong>SISTEMA DE ROTACIÓN DINÁMICA:</strong> Monitoreo de días de corte en frío a 34°F. Las cajas con más de 4 días activan alerta de rotación rápida para liquidarlas antes de perder margen. Cero disparos masivos automáticos.
   </div>
 
+  <!-- TARJETAS DE MÉTRICAS Y CALCULADORA FINANCIERA -->
   <div class="stats-grid">
     <div class="stat-card">
-      <div class="stat-label">Cajas Disponibles para Venta</div>
+      <div class="stat-label">Cajas Disponibles</div>
       <div class="stat-value" id="total-disponibles">160</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Cajas Reservadas / Tránsito</div>
-      <div class="stat-value" style="color: var(--warning);" id="total-reservadas">63</div>
+      <div class="stat-label">Valor Total Inventario Muelle</div>
+      <div class="stat-value" style="color: #34d399;" id="total-valor-inventario">$14,835</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Capital en Riesgo (Día 4+)</div>
+      <div class="stat-value" style="color: #ef4444;" id="total-capital-riesgo">$3,840</div>
     </div>
     <div class="stat-card">
       <div class="stat-label">Precio Muelle Rosas MIA</div>
-      <div class="stat-value" style="color: #34d399;">$0.69 <span style="font-size: 14px; color: var(--text-muted);">/ tallo</span></div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Retiro Rápido Doral</div>
-      <div class="stat-value" style="font-size: 18px; margin-top: 12px; color: #a78bfa;">Muelle Will-Call 6:30 AM</div>
+      <div class="stat-value" style="color: #38bdf8;">$0.69 <span style="font-size: 14px; color: var(--text-muted);">/ tallo</span></div>
     </div>
   </div>
 
@@ -134,8 +138,14 @@
     <!-- SECCIÓN INVENTARIO -->
     <div class="inventory-section">
       <div class="section-title">
-        <span>📦 Stock Físico en Cuarto Frío (Precios Oficiales FloralTrack)</span>
+        <span>📦 Stock Físico en Cuarto Frío (Doral 34°F)</span>
         <button class="btn-qty" style="width: auto; padding: 4px 10px;" onclick="resetStock()">Restaurar</button>
+      </div>
+
+      <!-- BOTONES DE FILTRO RÁPIDO DE RIESGO -->
+      <div class="filter-pills">
+        <button id="pill-all" class="pill-btn active" onclick="setFilter('all')">📋 Ver Todo el Stock (10 Variedades)</button>
+        <button id="pill-risk" class="pill-btn" onclick="setFilter('risk')">🚨 Filtrar Cajas en Riesgo (Día 4+)</button>
       </div>
 
       <div class="table-container">
@@ -143,7 +153,7 @@
           <thead>
             <tr>
               <th>Variedad</th>
-              <th>Grado</th>
+              <th>Días Frío</th>
               <th>Empaque</th>
               <th>Precio MIA</th>
               <th>Disponibles</th>
@@ -163,20 +173,46 @@
         <span>🚀 Generador de Ataque Comercial Multicanal</span>
       </div>
       
-      <!-- SELECTOR DE CLIENTE OBJETIVO DE FLORIDA -->
+      <!-- SELECTOR DE CLIENTE OBJETIVO (LOS 23 CLIENTES DE FLORIDA EN GRUPOS) -->
       <div class="client-selector-box">
-        <label style="font-size: 12px; font-weight: 700; color: #38bdf8;">🎯 SELECTOR DE CLIENTE OBJETIVO (BASE DE DATOS FLORIDA):</label>
+        <label style="font-size: 12px; font-weight: 700; color: #38bdf8;">🎯 SELECTOR DE COMPRADOR OBJETIVO (BASE DE DATOS FLORIDA):</label>
         <select id="client-select" class="client-select" onchange="onClientChange()">
-          <option value="0">⚡ Contacto Rápido Miami / Muelle Doral (Genérico)</option>
-          <option value="1">🏢 In Bloom Florist (Orlando, FL · Gran Volumen · events@inbloomflorist.com)</option>
-          <option value="2">💍 The Flower Studio (Altamonte Springs, FL · Bodas de Lujo · san@theflowerstudioonline.com)</option>
-          <option value="3">🏪 Harry's Famous Flowers (Orlando, FL · Retail Diario · Harrysflowers@aol.com)</option>
-          <option value="4">🌹 Carrollwood Florist (Tampa Bay, FL · Top Buyer Rosas · customerservice@carrollwoodflorist.com)</option>
-          <option value="5">🌿 Floral Impressions (Tampa, FL · Boutique Familiar · floralimpressions1@yahoo.com)</option>
-          <option value="6">📦 Jennie's Flowers (Tampa, FL · Retail Gran Escala · support@jennies.com)</option>
-          <option value="7">✨ Flora Fine Flowers (Tampa, FL · Estudio Lujo · orders@florafineflowers.com)</option>
-          <option value="8">🏛️ Kuhn Flowers (Jacksonville, FL · Target Masivo · 3802 Beach Blvd)</option>
-          <option value="9">🌸 Why Not Flowers (Jacksonville, FL · Rosas Premium · butterfly.flowers.usa@gmail.com)</option>
+          <optgroup label="⚡ Miami Local & Muelle Doral">
+            <option value="0">⚡ Contacto Rápido Miami / Muelle Doral (Genérico)</option>
+          </optgroup>
+          <optgroup label="📍 Orlando / Central FL (Gran Volumen & Bodas)">
+            <option value="1">🏢 In Bloom Florist (Orlando · Retail & Eventos · Top Buyer)</option>
+            <option value="2">💍 The Flower Studio (Altamonte Springs · Bodas de Lujo)</option>
+            <option value="3">🏪 Harry's Famous Flowers (Orlando · Floristería Retail)</option>
+          </optgroup>
+          <optgroup label="📍 Tampa Bay (Rosas & Follajes Premium)">
+            <option value="4">🌹 Carrollwood Florist (Tampa · Top Buyer Rosas Premium)</option>
+            <option value="5">🌿 Floral Impressions (Tampa · Boutique Familiar)</option>
+            <option value="6">📦 Jennie's Flowers (Tampa · Retail Gran Escala)</option>
+            <option value="7">✨ Flora Fine Flowers (Tampa · Estudio Botánico de Lujo)</option>
+          </optgroup>
+          <optgroup label="📍 Jacksonville & Gainesville (Norte de Florida)">
+            <option value="8">🏛️ Kuhn Flowers (Jacksonville · Mega-Floristería Histórica · Target Clave)</option>
+            <option value="9">🌸 Why Not Flowers (Jacksonville · Rosas de Exportación)</option>
+            <option value="10">🐝 Bee's Blossoms Floral (Jacksonville · Boutique & Eventos)</option>
+            <option value="11">🎨 Lori Parker Floral Studios (Jacksonville · Diseño de Autor)</option>
+            <option value="12">🌾 Floral Expressions (Gainesville · Floristería Selecta)</option>
+          </optgroup>
+          <optgroup label="📍 Palm Beach County (Costa Este)">
+            <option value="13">🏝️ Flowers of Palm Beach (West Palm Beach · Gran Volumen)</option>
+            <option value="14">💎 Amazing Flowers Palm Beach (Palm Beach Gardens · Lujo)</option>
+            <option value="15">👑 Boca Raton Florist (Boca Raton · Floristería Tradicional)</option>
+            <option value="16">💐 BocaFlowers.com (Boca Raton · E-Commerce & Retail)</option>
+            <option value="17">🛍️ Lily's Bloom Boutique (Boca Raton · Boutique Exclusiva)</option>
+            <option value="18">🌻 Field of Flowers (Boca Raton · Mega Retail Floral)</option>
+          </optgroup>
+          <optgroup label="📍 Southwest FL (Sarasota, Fort Myers & Naples)">
+            <option value="19">🌹 Uprooted Rose (Sarasota · Diseño Floral)</option>
+            <option value="20">🌺 Victoria Blooms (Sarasota · Bodas y Eventos)</option>
+            <option value="21">🌿 Forget Me Not Flower Market (Bonita Springs · Mercado de Flor)</option>
+            <option value="22">🌴 Fort Myers Florist (Fort Myers · Consumo Diario)</option>
+            <option value="23">☀️ April Flowers LLC (Fort Myers · Floristería Local)</option>
+          </optgroup>
         </select>
       </div>
 
@@ -255,45 +291,92 @@
       { id: 6, name: "Jennie's Flowers", city: "Tampa, FL", contact: "Dpto. de Compras", email: "support@jennies.com", phone: "18132298521", specialty: "consumo mayorista masivo en Tampa Bay" },
       { id: 7, name: "Flora Fine Flowers", city: "Tampa, FL", contact: "Estudio Botánico", email: "orders@florafineflowers.com", phone: "18132511799", specialty: "rosas ecuatorianas selectas y bodas de alta gama" },
       { id: 8, name: "Kuhn Flowers", city: "Jacksonville, FL", contact: "Trade Customer Desk", email: "", phone: "19043988601", specialty: "volumen mayorista masivo" },
-      { id: 9, name: "Why Not Flowers", city: "Jacksonville, FL", contact: "Equipo Floral", email: "butterfly.flowers.usa@gmail.com", phone: "19043166716", specialty: "rosas premium de exportación e hidratación diaria" }
+      { id: 9, name: "Why Not Flowers", city: "Jacksonville, FL", contact: "Equipo Floral", email: "butterfly.flowers.usa@gmail.com", phone: "19043166716", specialty: "rosas premium de exportación e hidratación diaria" },
+      { id: 10, name: "Bee's Blossoms Floral", city: "Jacksonville, FL", contact: "Diseño Boutique", email: "beesblossomsfloraldesign@gmail.com", phone: "19048445008", specialty: "eventos boutique y rosas selectas" },
+      { id: 11, name: "Lori Parker Floral Studios", city: "Jacksonville, FL", contact: "Lori Parker", email: "info@loriparkerfloralstudios.com", phone: "19048068820", specialty: "diseño floral contemporáneo y bodas" },
+      { id: 12, name: "Floral Expressions", city: "Gainesville, FL", contact: "Dpto. de Compras", email: "floralexpressionsflorist@gmail.com", phone: "18003291234", specialty: "corte fresco surtido y rotación semanal" },
+      { id: 13, name: "Flowers of Palm Beach", city: "West Palm Beach, FL", contact: "Gerencia de Ventas", email: "sales@extratouchflowers.com", phone: "15618358000", specialty: "hoteles de lujo y residencias exclusivas" },
+      { id: 14, name: "Amazing Flowers Palm Beach", city: "Palm Beach Gardens, FL", contact: "Equipo de Diseño", email: "info@amazingflowerspalmbeach.com", phone: "15616278118", specialty: "eventos de alta gama y bodas costeras" },
+      { id: 15, name: "Boca Raton Florist", city: "Boca Raton, FL", contact: "Gerencia Floral", email: "sales@bocaratonflorist.com", phone: "15613951943", specialty: "rosas de exportación y montajes corporativos" },
+      { id: 16, name: "BocaFlowers.com", city: "Boca Raton, FL", contact: "Mesa de Pedidos", email: "hello@bocaflowers.com", phone: "15615710099", specialty: "compras frecuentes y floristería digital" },
+      { id: 17, name: "Lily's Bloom Boutique", city: "Boca Raton, FL", contact: "Lily Bloom Team", email: "lilybloomboutique@gmail.com", phone: "15617576744", specialty: "arreglos boutique y rosas nupciales" },
+      { id: 18, name: "Field of Flowers", city: "Boca Raton, FL", contact: "Servicio al Cliente", email: "customerservice@fieldofflowers.com", phone: "15614877500", specialty: "gran escala y surtido mayorista diario" },
+      { id: 19, name: "Uprooted Rose", city: "Sarasota, FL", contact: "Equipo Creativo", email: "info@uprootedrose.com", phone: "19413667673", specialty: "rosas de jardín y ambientación de eventos" },
+      { id: 20, name: "Victoria Blooms", city: "Sarasota, FL", contact: "Victoria Blooms Team", email: "info@victoriabloomssrq.com", phone: "19413630900", specialty: "bodas de destino en la costa oeste" },
+      { id: 21, name: "Forget Me Not Flower Market", city: "Bonita Springs, FL", contact: "Market Team", email: "Hello@ForgetMeNotFlowerMarkets.com", phone: "12398783433", specialty: "mercado de flor fresca y tallos seleccionados" },
+      { id: 22, name: "Fort Myers Florist", city: "Fort Myers, FL", contact: "Dpto. de Compras", email: "support@fmflorist.com", phone: "12399310506", specialty: "arreglos comerciales y consumo diario regular" },
+      { id: 23, name: "April Flowers LLC", city: "Fort Myers, FL", contact: "Gerencia", email: "aprilflowers239@gmail.com", phone: "12397229283", specialty: "corte fresco directo y pompones" }
     ];
 
     const inventory = [
-      { id: 1, name: "Freedom (Rojo Clásico)", cat: "Rosas", grade: "60cm", pack: "QB (150 tallos)", priceStem: "$0.69", priceBox: "$103.50", savePct: "48%", qty: 18, reserved: 7 },
-      { id: 2, name: "Explorer (Rojo Oscuro)", cat: "Rosas", grade: "70cm", pack: "QB (150 tallos)", priceStem: "$0.73", priceBox: "$109.50", savePct: "46%", qty: 10, reserved: 5 },
-      { id: 3, name: "Playa Blanca (Nupcial)", cat: "Bodas", grade: "60cm", pack: "QB (150 tallos)", priceStem: "$0.69", priceBox: "$103.50", savePct: "52%", qty: 14, reserved: 6 },
-      { id: 4, name: "Mondial (Blanco Crema)", cat: "Bodas", grade: "60cm", pack: "QB (150 tallos)", priceStem: "$0.63", priceBox: "$94.50", savePct: "48%", qty: 12, reserved: 6 },
-      { id: 5, name: "Shimmer (Nude / Durazno)", cat: "Bodas", grade: "60cm", pack: "QB (150 tallos)", priceStem: "$0.75", priceBox: "$112.50", savePct: "45%", qty: 6, reserved: 4 },
-      { id: 6, name: "Hortensia White Select", cat: "Hortensias", grade: "Jumbo 22cm", pack: "Caja 30 tallos", priceStem: "$1.10", priceBox: "$33.00", savePct: "58%", qty: 22, reserved: 8 },
-      { id: 7, name: "Hortensia Blue Premium", cat: "Hortensias", grade: "Jumbo 20cm", pack: "Caja 30 tallos", priceStem: "$1.15", priceBox: "$34.50", savePct: "55%", qty: 15, reserved: 5 },
-      { id: 8, name: "Gypsophila Million Stars", cat: "Follajes", grade: "1000g", pack: "QB (10 bunches)", priceStem: "$4.80/b", priceBox: "$48.00", savePct: "50%", qty: 19, reserved: 6 },
-      { id: 9, name: "Ruscus Italiano", cat: "Follajes", grade: "60-70cm", pack: "Bunch 10 tallos", priceStem: "$5.50/b", priceBox: "$5.50/b", savePct: "45%", qty: 30, reserved: 10 },
-      { id: 10, name: "Eucalipto Silver Dollar", cat: "Follajes", grade: "Fresco", pack: "Bunch importado", priceStem: "$4.80/b", priceBox: "$4.80/b", savePct: "55%", qty: 14, reserved: 6 }
+      { id: 1, name: "Freedom (Rojo Clásico)", cat: "Rosas", grade: "60cm", pack: "QB (150 tallos)", priceStem: "$0.69", unitPriceVal: 103.50, savePct: "48%", daysInCold: 2, qty: 18, reserved: 7 },
+      { id: 2, name: "Explorer (Rojo Oscuro)", cat: "Rosas", grade: "70cm", pack: "QB (150 tallos)", priceStem: "$0.73", unitPriceVal: 109.50, savePct: "46%", daysInCold: 4, qty: 10, reserved: 5 },
+      { id: 3, name: "Playa Blanca (Nupcial)", cat: "Bodas", grade: "60cm", pack: "QB (150 tallos)", priceStem: "$0.69", unitPriceVal: 103.50, savePct: "52%", daysInCold: 1, qty: 14, reserved: 6 },
+      { id: 4, name: "Mondial (Blanco Crema)", cat: "Bodas", grade: "60cm", pack: "QB (150 tallos)", priceStem: "$0.63", unitPriceVal: 94.50, savePct: "48%", daysInCold: 3, qty: 12, reserved: 6 },
+      { id: 5, name: "Shimmer (Nude / Durazno)", cat: "Bodas", grade: "60cm", pack: "QB (150 tallos)", priceStem: "$0.75", unitPriceVal: 112.50, savePct: "45%", daysInCold: 5, qty: 6, reserved: 4 },
+      { id: 6, name: "Hortensia White Select", cat: "Hortensias", grade: "Jumbo 22cm", pack: "Caja 30 tallos", priceStem: "$1.10", unitPriceVal: 33.00, savePct: "58%", daysInCold: 2, qty: 22, reserved: 8 },
+      { id: 7, name: "Hortensia Blue Premium", cat: "Hortensias", grade: "Jumbo 20cm", pack: "Caja 30 tallos", priceStem: "$1.15", unitPriceVal: 34.50, savePct: "55%", daysInCold: 4, qty: 15, reserved: 5 },
+      { id: 8, name: "Gypsophila Million Stars", cat: "Follajes", grade: "1000g", pack: "QB (10 bunches)", priceStem: "$4.80/b", unitPriceVal: 48.00, savePct: "50%", daysInCold: 2, qty: 19, reserved: 6 },
+      { id: 9, name: "Ruscus Italiano", cat: "Follajes", grade: "60-70cm", pack: "Bunch 10 tallos", priceStem: "$5.50/b", unitPriceVal: 5.50, savePct: "45%", daysInCold: 5, qty: 30, reserved: 10 },
+      { id: 10, name: "Eucalipto Silver Dollar", cat: "Follajes", grade: "Fresco", pack: "Bunch importado", priceStem: "$4.80/b", unitPriceVal: 4.80, savePct: "55%", daysInCold: 3, qty: 14, reserved: 6 }
     ];
 
+    let currentFilter = 'all'; // 'all' o 'risk'
     let currentChannel = 'whatsapp';
     let currentSubProfile = 'bodas';
     let selectedClient = clients[0];
+
+    function setFilter(filter) {
+      currentFilter = filter;
+      document.getElementById('pill-all').className = 'pill-btn' + (filter === 'all' ? ' active' : '');
+      document.getElementById('pill-risk').className = 'pill-btn' + (filter === 'risk' ? ' risk-active' : '');
+      
+      if (filter === 'risk') {
+        currentSubProfile = 'retail';
+      }
+      renderTable();
+    }
 
     function renderTable() {
       const tbody = document.getElementById('inventory-tbody');
       tbody.innerHTML = '';
       let totalAvail = 0;
-      let totalRes = 0;
+      let totalValue = 0;
+      let totalRiskCapital = 0;
 
       inventory.forEach((item, index) => {
+        const itemVal = item.qty * item.unitPriceVal;
         totalAvail += item.qty;
-        totalRes += item.reserved;
+        totalValue += itemVal;
+
+        if (item.daysInCold >= 4) {
+          totalRiskCapital += itemVal;
+        }
+
+        // Filtro visual
+        if (currentFilter === 'risk' && item.daysInCold < 4) {
+          return; // Ocultar si no está en riesgo
+        }
+
+        let freshnessPill = '<span class="status-pill status-ok">🟢 Día ' + item.daysInCold + '</span>';
+        if (item.daysInCold === 4) {
+          freshnessPill = '<span class="status-pill status-mid">🟡 Día ' + item.daysInCold + ' (Rotar)</span>';
+        } else if (item.daysInCold >= 5) {
+          freshnessPill = '<span class="status-pill status-risk">🔴 Día ' + item.daysInCold + ' (Crítico)</span>';
+        }
 
         let statusClass = "status-ok";
         let statusText = "En Stock";
-        if (item.qty === 0) { statusClass = "status-out"; statusText = "Agotado"; }
-        else if (item.qty <= 5) { statusClass = "status-low"; statusText = "Bajo Stock"; }
+        if (item.qty === 0) { statusClass = "status-risk"; statusText = "Agotado"; }
+        else if (item.qty <= 5) { statusClass = "status-mid"; statusText = "Bajo Stock"; }
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td><strong>${item.name}</strong></td>
-          <td style="color: var(--text-muted); font-size: 12.5px;">${item.grade}</td>
+          <td>
+            <strong>${item.name}</strong><br>
+            <span style="color: var(--text-muted); font-size: 11.5px;">${item.grade} · ${item.pack}</span>
+          </td>
+          <td>${freshnessPill}</td>
           <td style="font-size: 12.5px;">${item.pack}</td>
           <td style="color: #38bdf8; font-weight: 600;">
             ${item.priceStem} 
@@ -312,7 +395,8 @@
       });
 
       document.getElementById('total-disponibles').innerText = totalAvail;
-      document.getElementById('total-reservadas').innerText = totalRes;
+      document.getElementById('total-valor-inventario').innerText = '$' + totalValue.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+      document.getElementById('total-capital-riesgo').innerText = '$' + totalRiskCapital.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
       updateMessage();
     }
@@ -363,20 +447,20 @@
       container.innerHTML = '';
 
       if (currentChannel === 'whatsapp') {
-        currentSubProfile = 'bodas';
+        currentSubProfile = (currentFilter === 'risk') ? 'retail' : 'bodas';
         container.innerHTML = `
-          <button class="tab-btn active" onclick="selectSubProfile(this, 'bodas')">💍 1. Bodas & Lujo (Nupcial)</button>
-          <button class="tab-btn" onclick="selectSubProfile(this, 'retail')">🏪 2. Floristerías Retail</button>
+          <button class="tab-btn ${currentSubProfile === 'bodas' ? 'active' : ''}" onclick="selectSubProfile(this, 'bodas')">💍 1. Bodas & Lujo (Nupcial)</button>
+          <button class="tab-btn ${currentSubProfile === 'retail' ? 'active' : ''}" onclick="selectSubProfile(this, 'retail')">⚡ 2. Flash Sale (Rotación Rápida)</button>
           <button class="tab-btn" onclick="selectSubProfile(this, 'mayorista')">🚚 3. Muelle Will-Call 6:30 AM</button>
         `;
         document.getElementById('btn-copy-action').innerText = '📋 Copiar Borrador WhatsApp';
         document.getElementById('btn-manual-open').innerText = '📲 Revisar en WhatsApp';
       } 
       else if (currentChannel === 'email') {
-        currentSubProfile = 'email_mayorista';
+        currentSubProfile = (currentFilter === 'risk') ? 'email_urgente' : 'email_mayorista';
         container.innerHTML = `
-          <button class="tab-btn active" onclick="selectSubProfile(this, 'email_mayorista')">📑 Oferta B2B Directa de Muelle</button>
-          <button class="tab-btn" onclick="selectSubProfile(this, 'email_urgente')">⚡ Flash Sale (Cuarto Frío 34°F)</button>
+          <button class="tab-btn ${currentSubProfile === 'email_mayorista' ? 'active' : ''}" onclick="selectSubProfile(this, 'email_mayorista')">📑 Oferta B2B Directa de Muelle</button>
+          <button class="tab-btn ${currentSubProfile === 'email_urgente' ? 'active' : ''}" onclick="selectSubProfile(this, 'email_urgente')">⚡ Flash Sale (Liquidación Frío)</button>
         `;
         document.getElementById('btn-copy-action').innerText = '📋 Copiar Borrador Email B2B';
         document.getElementById('btn-manual-open').innerText = '📧 Abrir Borrador de Correo';
@@ -456,6 +540,7 @@
       const exp = inventory.find(i => i.name.includes("Explorer"));
       const shi = inventory.find(i => i.name.includes("Shimmer"));
       const hortW = inventory.find(i => i.name.includes("Hortensia White"));
+      const hortB = inventory.find(i => i.name.includes("Hortensia Blue"));
       const gyp = inventory.find(i => i.name.includes("Gypsophila"));
       const rusc = inventory.find(i => i.name.includes("Ruscus"));
       const euca = inventory.find(i => i.name.includes("Eucalipto"));
@@ -474,10 +559,10 @@ Le escribe Camilo Bueno de Tropical Blooms Miami (Hub Refrigerado Doral / Aeropu
 
 Sabemos de su especialidad en ${cSpec} y queremos presentarle nuestra disponibilidad física hoy en cuarto frío a 34°F, con precios directos de importación (ahorros netos del 45% al 52% frente a distribuidores locales):
 
-💍 DISPONIBLE HOY EN DORAL:
-• Playa Blanca 60cm: ${pb.qty} cajas QB (${pb.priceStem}/tallo · ${pb.priceBox}/caja) - Botón nupcial cerrado
-• Mondial 60cm: ${mon.qty} cajas QB (${mon.priceStem}/tallo · ${mon.priceBox}/caja)
-• Shimmer Nude 60cm: ${shi.qty} cajas QB (${shi.priceStem}/tallo)
+💍 DISPONIBLE HOY EN DORAL (MÁXIMA FRESCURA 34°F):
+• Playa Blanca 60cm: ${pb.qty} cajas QB (${pb.priceStem}/tallo · $103.50/caja) - Botón nupcial cerrado
+• Mondial 60cm: ${mon.qty} cajas QB (${mon.priceStem}/tallo · $94.50/caja)
+• Shimmer Nude 60cm: ${shi.qty} cajas QB (${shi.priceStem}/tallo · Rotación prioritaria)
 • Hortensia Jumbo White: ${hortW.qty} cajas (${hortW.priceStem}/tallo · $33.00 caja 30 tallos)
 • Eucalipto Silver Dollar: ${euca.qty} bunches (${euca.priceStem}/bunch)
 
@@ -490,25 +575,27 @@ Quedo a su disposición.`;
           box.innerText = 
 `Hola equipo de ${cName} (${cCity}), buen día.
 
-Reporte de stock directo desde cuarto frío en Doral (Tropical Blooms Miami):
+🚨 OPORTUNIDAD FLASH DE ROTACIÓN RÁPIDA (DORAL COLD STORAGE 34°F):
 
-🏪 DISPONIBILIDAD INMEDIATA (AHORRO DEL 50% VS DISTRIBUIDOR LOCAL):
-• Freedom Ecuatoriana 60cm: ${fre.qty} cajas QB (${fre.priceStem}/tallo · ${fre.priceBox}/caja)
-• Explorer 70cm: ${exp.qty} cajas QB (${exp.priceStem}/tallo · ${exp.priceBox}/caja)
-• Gypsophila Million Stars: ${gyp.qty} cajas QB (${gyp.priceStem}/bunch)
-• Hortensias Jumbo White: ${hortW.qty} cajas (${hortW.priceStem}/tallo)
-• Ruscus Italiano: ${rusc.qty} bunches (${rusc.priceStem}/bunch)
+Tenemos un lote prioritario recién descargado listo para rotación inmediata hoy a precios especiales de muelle:
 
-🚚 Despacho refrigerado diario o retiro Will-Call desde las 6:30 AM en Doral. Pago con Zelle o contra entrega.
+⚡ LOTES DE SALIDA PRIORITARIA:
+• Explorer 70cm: ${exp.qty} cajas QB (${exp.priceStem}/tallo · 4 días en frío · calidad A1)
+• Hortensias Blue Premium: ${hortB.qty} cajas (${hortB.priceStem}/tallo)
+• Shimmer Nude 60cm: ${shi.qty} cajas QB (${shi.priceStem}/tallo)
+• Ruscus Italiano Fresco: ${rusc.qty} bunches ($5.50/bunch)
+• Rosa Freedom 60cm: ${fre.qty} cajas QB (${fre.priceStem}/tallo · $103.50 caja)
 
-¿Le agregamos producto a la ruta de despacho de hoy?`;
+🚚 Despacho refrigerado hoy mismo o retiro Will-Call desde las 6:30 AM en Doral. Pago con Zelle o contra entrega.
+
+¿Le apartamos algunas cajas de este lote antes de las 11:00 AM?`;
         } 
         else {
           box.innerText = 
 `Atención ${cName} / Distribuidores Mayoristas:
 
 📦 MUELLE ABIERTO DORAL (WILL-CALL DESDE 6:30 AM · PRECIOS DE IMPORTADOR):
-• Freedom 60cm: ${fre.qty} Cajas QB a ${fre.priceStem}/tallo (${fre.priceBox}/caja)
+• Freedom 60cm: ${fre.qty} Cajas QB a ${fre.priceStem}/tallo ($103.50/caja)
 • Explorer 70cm: ${exp.qty} Cajas QB a ${exp.priceStem}/tallo
 • Playa Blanca 60cm: ${pb.qty} Cajas QB a ${pb.priceStem}/tallo
 • Gypsophila Million Stars: ${gyp.qty} Cajas QB (${gyp.priceStem}/bunch)
@@ -564,13 +651,14 @@ Doral Cold Storage Facility, FL`;
 
 Atención Equipo de ${cName}:
 
-Acabamos de recibir inspección de vuelo en nuestro cuarto frío a 34°F en Doral con excedente para rotación inmediata hoy:
+Acabamos de habilitar rotación preferencial en nuestro cuarto frío a 34°F en Doral para despacho inmediato hoy:
 
 🔥 PRECIOS DE LIQUIDACIÓN DE MUELLE:
 • Rosa Freedom 60cm: ${fre.qty} Cajas a $0.69/tallo ($103.50 QB)
-• Rosa Playa Blanca 60cm: ${pb.qty} Cajas a $0.69/tallo
-• Hortensias Jumbo White: ${hortW.qty} Cajas a $1.10/tallo ($33.00 caja)
-• Eucalipto Silver Dollar: ${euca.qty} Bunches a $4.80/bunch
+• Rosa Explorer 70cm: ${exp.qty} Cajas a $0.73/tallo
+• Rosa Shimmer Nude 60cm: ${shi.qty} Cajas a $0.75/tallo
+• Hortensias Jumbo Blue: ${hortB.qty} Cajas a $1.15/tallo ($34.50 caja)
+• Ruscus Italiano Fresco: ${rusc.qty} Bunches a $5.50/bunch
 
 ⏰ VÁLIDO ÚNICAMENTE HOY HASTA LAS 2:00 PM.
 Retiro inmediato en muelle Will-Call Doral o despacho refrigerado express.
@@ -650,8 +738,8 @@ Escribe 'WILLCALL' por DM y te enviamos la ubicación exacta y precios de hoy."`
 
 3. RAMA CONDICIONAL - SI PULSA BOTÓN 1 (Rosas Rojas):
    "Excelente elección. Tenemos disponible hoy en Doral:
-   • Freedom 60cm: ${fre.qty} Cajas (${fre.priceStem}/tallo · ${fre.priceBox}/caja)
-   • Explorer 70cm: ${exp.qty} Cajas (${exp.priceStem}/tallo · ${exp.priceBox}/caja)
+   • Freedom 60cm: ${fre.qty} Cajas (${fre.priceStem}/tallo · $103.50/caja)
+   • Explorer 70cm: ${exp.qty} Cajas (${exp.priceStem}/tallo · $109.50/caja)
    
    ¿A qué número de WhatsApp podemos enviarte la ubicación exacta de muelle o coordinar entrega refrigerada?"
    [CAMPO DE ENTRADA DE USUARIO: Teléfono]
