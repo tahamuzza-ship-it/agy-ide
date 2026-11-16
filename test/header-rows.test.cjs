@@ -12,6 +12,8 @@ test('Header CSS: soporte completo multi-fila en desktop y flex-wrap', () => {
   assert.ok(css.includes('.header-btns'), 'style.css debe contener .header-btns');
   assert.ok(css.includes('.header-row-break'), 'style.css debe definir .header-row-break');
   assert.ok(css.includes('flex-wrap: wrap'), 'style.css debe contemplar flex-wrap: wrap');
+  assert.ok(css.includes('flex: 1 1 0'), 'style.css debe expandir botones con flex: 1 1 0 para eliminar vacíos');
+  assert.ok(css.includes('justify-content: center'), 'style.css debe centrar el contenido de los botones');
 });
 
 test('Header HTML: exactamente 2 filas de botones balanceadas sin apiñuscamiento', () => {

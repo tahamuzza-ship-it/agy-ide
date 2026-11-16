@@ -124,6 +124,8 @@
       margin: 2px 0;
       padding: 0;
       border: none;
+      flex-grow: 0;
+      flex-shrink: 0;
     }
 
     .hbtn {
@@ -438,13 +440,17 @@
         flex: 0 0 100%;
         display: flex;
         flex-wrap: wrap;
-        gap: 5px;
+        gap: 6px;
         align-items: center;
+        width: 100%;
         overflow: visible;
       }
       .header-btns > .hbtn,
       .header-btns > a {
-        height: 27px;
+        flex: 1 1 0;
+        justify-content: center;
+        text-align: center;
+        height: 28px;
         min-width: 0;
         display: inline-flex;
         align-items: center;
