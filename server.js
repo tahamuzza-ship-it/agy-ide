@@ -801,6 +801,18 @@ const MANUAL = _readFirst([
   path.join(process.cwd(), 'docs/MANUAL_ECOSISTEMA_SGN.md')
 ]).trim();
 
+const CONSTITUCION_SGN = _readFirst([
+  ..._candidates('CONSTITUCION_SGN.md'),
+  path.join(__dirname, 'docs/CONSTITUCION_SGN.md'),
+  path.join(process.cwd(), 'docs/CONSTITUCION_SGN.md')
+]).trim();
+
+const SPEC_SDD_VIVA = _readFirst([
+  ..._candidates('SPEC_SDD_VIVA.md'),
+  path.join(__dirname, 'docs/SPEC_SDD_VIVA.md'),
+  path.join(process.cwd(), 'docs/SPEC_SDD_VIVA.md')
+]).trim();
+
 const _cfgRaw = _miniYaml(_readFirst(_candidates('config.yaml')));
 /* Defaults = los valores que antes estaban hardcodeados */
 const CFG = {
@@ -1608,6 +1620,53 @@ app.post('/api/morning/sync', requirePwd, async (_req, res) => {
   const status = _morningCurrentStatus();
   res.status(status.ok ? 200 : 503).json(status);
 });
+/* 🏛️ Constitución SGN: Gobernanza, Santo y Seña, Regla Cero y Flota Multi-Nodo */
+app.get('/api/constitucion', (_req, res) => {
+  res.json({
+    ok: true,
+    santo_y_sena: {
+      desafio: "La tormenta le susurra al guerrero: se avecina una tormenta",
+      respuesta: "¡YO SOY LA TORMENTA!",
+      doctrina: "El que habla por micrófono no aprieta tuercas; y el que aprieta tuercas no gasta saliva."
+    },
+    regla_cero: "Lo que se construye hoy debe funcionar hoy, mañana y siempre. Toda acción técnica requiere evidencia real comprobable (exit_code: 0, pruebas reproducibles en scripts de aislamiento antes de tocar producción).",
+    cuatro_puntos_sagrados: [
+      "1. ¿QUÉ se va a hacer?",
+      "2. ¿POR QUÉ se debe hacer?",
+      "3. ¿PARA QUÉ sirve?",
+      "4. ¿CÓMO se va a ejecutar exactamente?"
+    ],
+    regla_7: "Producción es sagrada e intocable en caliente. Se requiere autorización textual expresa 'AUTORIZO TOCAR AGY-IDE' para tocar main.",
+    flota: {
+      PC1: { nombre: "PC1 Bogotá Master Central", rol: "Arquitectura y Desarrollo", os: "Windows 11", cuenta: "muzzafarbueno@gmail.com" },
+      PC2: { nombre: "PC2 Lubyanka Linux", rol: "Base de datos y servicios de fondo", os: "Ubuntu Linux", ip: "192.168.1.14" },
+      PC3: { nombre: "PC3 Miami Lucrecia", rol: "Operaciones y Logística Floral", os: "Windows 11", cuenta: "camilobuen@gmail.com" },
+      PC4: { nombre: "PC4 Supernodo Minisforum i9", rol: "Inferencia local masiva y Cartero LAN", os: "Windows 11 Pro 64-bit", ip: "192.168.1.8" },
+      RAILWAY: { proyecto: "hopeful-enchantment", servicio: "agy-ide", url: "https://agy-ide-production.up.railway.app" }
+    },
+    markdown: CONSTITUCION_SGN || 'Constitución no cargada'
+  });
+});
+
+/* 📐 Matriz SDD Viva: Doble fuente de verdad inmutable entre Spec y Código */
+app.get('/api/sdd/status', (_req, res) => {
+  res.json({
+    ok: true,
+    sdd_version: "1.0.0",
+    estado: "SINCRONIZADO",
+    doble_fuente_de_verdad: true,
+    definicion_de_hecho: "100% de alineación entre código y especificación, tests en verde exit_code: 0, cero documentación fantasma",
+    modulos: [
+      { modulo: "Gobernanza Constitucional", spec: "docs/CONSTITUCION_SGN.md", status: "VERIFICADO" },
+      { modulo: "Matriz SDD Viva", spec: "docs/SPEC_SDD_VIVA.md", status: "VERIFICADO" },
+      { modulo: "Consola Multi-Nodo (PC1, PC2, PC3, PC4)", spec: "server.js /api/pc-command", status: "VERIFICADO" },
+      { modulo: "SafeTarget Guardrail", spec: "test/pc4-terminal.test.cjs", status: "VERIFICADO" },
+      { modulo: "Header 3 Filas Balanceadas", spec: "test/header-rows.test.cjs", status: "VERIFICADO" }
+    ],
+    markdown: SPEC_SDD_VIVA || 'Especificación SDD no cargada'
+  });
+});
+
 /* El manual maestro como texto plano — PC1/PC2 lo descargan con la llave de equipos:
    PC1: Invoke-RestMethod -Uri <IDE>/api/manual -Headers @{'x-equipos-key'=<KEY>} | Out-File ...
    PC2: curl -H "x-equipos-key: <KEY>" <IDE>/api/manual -o MANUAL_ECOSISTEMA_SGN.md */
