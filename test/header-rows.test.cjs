@@ -7,29 +7,48 @@ const ROOT = path.resolve(__dirname, '..');
 const htmlPath = path.join(ROOT, 'public', 'index.html');
 const cssPath = path.join(ROOT, 'public', 'style.css');
 
-test('Header Buttons Layout: no forzar flex-wrap nowrap en resoluciones grandes', () => {
+test('Header CSS: soporte completo multi-fila en desktop y flex-wrap', () => {
   const css = fs.readFileSync(cssPath, 'utf8');
   assert.ok(css.includes('.header-btns'), 'style.css debe contener .header-btns');
-  
-  // Verificar que el header permite wrap
-  assert.ok(
-    css.includes('flex-wrap: wrap'),
-    'style.css debe contemplar flex-wrap: wrap para el header o los botones'
-  );
+  assert.ok(css.includes('.header-row-break'), 'style.css debe definir .header-row-break');
+  assert.ok(css.includes('flex-wrap: wrap'), 'style.css debe contemplar flex-wrap: wrap');
 });
 
-test('Header Rows: index.html contiene separadores de fila o estructura multi-fila para evitar apiñuscamiento', () => {
+test('Header HTML: exactamente 2 filas de botones balanceadas sin apiñuscamiento', () => {
   const html = fs.readFileSync(htmlPath, 'utf8');
   
-  // Verificar que existen los botones clave
-  assert.ok(html.includes('id="btn-run"'), 'debe existir btn-run');
-  assert.ok(html.includes('id="btn-console-pc4"'), 'debe existir btn-console-pc4');
-  assert.ok(html.includes('id="btn-console-pc3"'), 'debe existir btn-console-pc3');
-  assert.ok(html.includes('id="btn-puente-pc2"'), 'debe existir btn-puente-pc2');
-  assert.ok(html.includes('id="btn-puente-pc1"'), 'debe existir btn-puente-pc1');
-  assert.ok(html.includes('id="btn-files"'), 'debe existir btn-files');
+  // Extraer el bloque .header-btns
+  const match = html.match(/<div class="header-btns">([\s\S]*?)<\/div>\s*<\/header>/);
+  assert.ok(match, 'Debe existir el contenedor .header-btns dentro de header');
   
-  // Verificar que los botones están divididos en filas o tienen saltos de fila
-  const hasRowBreaks = html.includes('header-row-break') || html.includes('header-row');
-  assert.ok(hasRowBreaks, 'index.html debe estructurar los botones en filas para evitar que queden en una sola fila');
+  const content = match[1];
+  
+  // Contar los separadores de fila
+  const breaks = (content.match(/class="header-row-break"/g) || []).length;
+  assert.equal(breaks, 1, 'Debe haber exactamente 1 separador header-row-break para generar exactamente 2 filas');
+  
+  // Dividir en las dos filas
+  const parts = content.split(/<div class="header-row-break"[^>]*><\/div>/);
+  assert.equal(parts.length, 2, 'El contenido debe dividirse en exactamente 2 filas');
+  
+  // Contar botones/enlaces en cada fila
+  const countButtons = (part) => (part.match(/<(button|a)\b/g) || []).length;
+  const row1Count = countButtons(parts[0]);
+  const row2Count = countButtons(parts[1]);
+  
+  // Fila 1 debe tener exactamente 8 botones en HTML (más 1 inyectado en runtime = 9)
+  assert.equal(row1Count, 8, `Fila 1 debe tener exactamente 8 botones en HTML (actual: ${row1Count})`);
+  // Fila 2 debe tener exactamente 9 botones (4 consolas de flota + 5 accesos globales)
+  assert.equal(row2Count, 9, `Fila 2 debe tener exactamente 9 botones en HTML (actual: ${row2Count})`);
+  
+  // Verificar presencia de todas las consolas de flota multi-nodo en Fila 2
+  assert.ok(parts[1].includes('id="btn-puente-pc1"'), 'Puente PC1 debe estar en Fila 2');
+  assert.ok(parts[1].includes('id="btn-puente-pc2"'), 'Consola PC2 debe estar en Fila 2');
+  assert.ok(parts[1].includes('id="btn-console-pc3"'), 'Consola PC3 Miami debe estar en Fila 2');
+  assert.ok(parts[1].includes('id="btn-console-pc4"'), 'Consola PC4 Supernodo debe estar en Fila 2');
+  
+  // Verificar presencia de botones de control y herramientas en Fila 1
+  assert.ok(parts[0].includes('id="btn-run"'), 'Botón Ejecutar debe estar en Fila 1');
+  assert.ok(parts[0].includes('id="btn-goal"'), 'Botón Goal debe estar en Fila 1');
+  assert.ok(parts[0].includes('id="btn-notebooklm"'), 'Botón NotebookLM debe estar en Fila 1');
 });
