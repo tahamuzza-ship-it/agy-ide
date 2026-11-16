@@ -94,23 +94,21 @@
       </div>
 
       <div class="header-btns">
-        <!-- Fila 1: Ejecución, Limpieza y Asistente NotebookLM -->
+        <!-- Fila 1: Mando de Ejecución, Limpieza, Asistencia y Herramientas Locales -->
         <button class="hbtn hbtn-run"  id="btn-run">▶ EJECUTAR</button>
         <button class="hbtn hbtn-goal" id="btn-goal">/goal</button>
         <button class="hbtn hbtn-clr" id="btn-clear-out" type="button" title="Vaciar completamente el panel de salida" onclick="document.getElementById('output').replaceChildren();document.getElementById('out-status').textContent='listo';document.getElementById('out-status').style.color='';">🗑 LIMPIAR OUTPUT</button>
         <button class="hbtn hbtn-clr"  id="btn-clear-chat">🗑 Chat</button>
         <button class="hbtn hbtn-notebooklm" id="btn-notebooklm" type="button" aria-haspopup="dialog" aria-controls="notebooklm-overlay" title="Abrir Notebook LM: investigar, generar audio y gestionar fuentes">📚 NOTEBOOK LM</button>
-        <div class="header-row-break" aria-hidden="true"></div>
-        <!-- Fila 2: Consolas y Puentes de Nodos Remotos SGN -->
-        <button class="hbtn" id="btn-puente-pc2" title="Abrir la consola no interactiva de PC2" style="background:linear-gradient(135deg,#5a0010,#cc0020);color:#fff;border:none;font-weight:700;">🖥 CONSOLA PC2</button>
-        <button class="hbtn" id="btn-console-pc3" title="Abrir la consola no interactiva de PC3 Miami" aria-label="Abrir consola PC3 Miami" style="background:linear-gradient(135deg,#12305a,#1479b8);color:#fff;border:none;font-weight:700;">🖥 CONSOLA PC3 MIAMI</button>
-        <button class="hbtn" id="btn-console-pc4" title="Abrir la consola no interactiva de PC4 Supernodo i9" aria-label="Abrir consola PC4 i9" style="background:linear-gradient(135deg,#4a154b,#7c3aed);color:#fff;border:none;font-weight:700;">🖥 CONSOLA PC4</button>
-        <button class="hbtn" id="btn-puente-pc1" title="PUENTE PC1 — SSH Windows. Termius: ssh Roberto1@192.168.1.2" style="background:linear-gradient(135deg,#003a7f,#0055cc);color:#fff;border:none;font-weight:700;">🔵 PUENTE PC1</button>
-        <div class="header-row-break" aria-hidden="true"></div>
-        <!-- Fila 3: Herramientas, Documentación y Accesos Externos -->
         <button class="hbtn" id="btn-comandos" onclick="toggleComandos()" style="background:linear-gradient(135deg,#1a4731,#22c55e);color:#fff;border:none;font-weight:700;">📋 COMANDOS</button>
         <button class="hbtn" id="btn-files" style="background:linear-gradient(135deg,#0a1f3a,#1a4700);color:#86efac;border:1px solid rgba(134,239,172,0.4);font-weight:700;">📁 ARCHIVOS</button>
         <button class="hbtn" id="btn-chats" style="background:linear-gradient(135deg,#0a1f3a,#0055cc);color:#00f3ff;border:1px solid rgba(0,243,255,0.4);font-weight:700;">💬 CHATS</button>
+        <div class="header-row-break" aria-hidden="true"></div>
+        <!-- Fila 2: Flota Multi-Nodo SGN (PC1, PC2, PC3, PC4) y Enlaces Globales -->
+        <button class="hbtn" id="btn-puente-pc1" title="PUENTE PC1 — SSH Windows. Termius: ssh Roberto1@192.168.1.2" style="background:linear-gradient(135deg,#003a7f,#0055cc);color:#fff;border:none;font-weight:700;">🔵 PUENTE PC1</button>
+        <button class="hbtn" id="btn-puente-pc2" title="Abrir la consola no interactiva de PC2" style="background:linear-gradient(135deg,#5a0010,#cc0020);color:#fff;border:none;font-weight:700;">🖥 CONSOLA PC2</button>
+        <button class="hbtn" id="btn-console-pc3" title="Abrir la consola no interactiva de PC3 Miami" aria-label="Abrir consola PC3 Miami" style="background:linear-gradient(135deg,#12305a,#1479b8);color:#fff;border:none;font-weight:700;">🖥 CONSOLA PC3 MIAMI</button>
+        <button class="hbtn" id="btn-console-pc4" title="Abrir la consola no interactiva de PC4 Supernodo i9" aria-label="Abrir consola PC4 i9" style="background:linear-gradient(135deg,#4a154b,#7c3aed);color:#fff;border:none;font-weight:700;">🖥 CONSOLA PC4</button>
         <button class="hbtn" id="btn-mailbox" style="background:linear-gradient(135deg,#25003f,#72008f);color:#f3b7ff;border:1px solid rgba(240,0,255,0.55);font-weight:700;box-shadow:0 0 14px rgba(240,0,255,0.12);">📬 BUZÓN AGY</button>
         <a class="hbtn" href="manual.html" target="_blank" rel="noopener noreferrer" title="Abrir el manual de uso de AGY IDE"
            style="text-decoration:none;display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,#5c4200,#ba8500);color:#fff4c2;border:1px solid rgba(255,210,70,0.7);font-weight:800;box-shadow:0 0 14px rgba(255,190,0,0.18);">📖 MANUAL</a>
