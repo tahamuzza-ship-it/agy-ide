@@ -121,6 +121,12 @@
            title="Abrir CiberCode — Agente generador de apps">
           💻 CIBERCODE
         </a>
+        <div class="header-row-break" aria-hidden="true"></div>
+        <!-- Fila 3: Gobernanza Constitucional, SDD Vivo y Consola de Pruebas Didácticas HTML -->
+        <button class="hbtn" id="btn-constitucion" type="button" title="Abrir Constitución SGN y Principios Doctrinales" style="background:linear-gradient(135deg,#3b2d54,#6d28d9);color:#ede9fe;border:1px solid rgba(167,139,250,0.5);font-weight:800;letter-spacing:0.04em;">🏛️ CONSTITUCIÓN SGN</button>
+        <button class="hbtn" id="btn-sdd-matrix" type="button" title="Ver Matriz de Especificación SDD Viva y Contratos" style="background:linear-gradient(135deg,#064e3b,#059669);color:#d1fae5;border:1px solid rgba(52,211,153,0.5);font-weight:800;letter-spacing:0.04em;">📐 MATRIZ SDD VIVA</button>
+        <button class="hbtn" id="btn-pruebas-html" type="button" title="Abrir Consola Didáctica de Pruebas HTML (1-clic)" style="background:linear-gradient(135deg,#0c4a6e,#0284c7);color:#e0f2fe;border:1px solid rgba(56,189,248,0.5);font-weight:800;letter-spacing:0.04em;">🧪 PRUEBAS DIDÁCTICAS HTML</button>
+        <button class="hbtn" id="btn-salud-flota" type="button" title="Diagnóstico Rápido de Salud de Flota (PC1, PC2, PC3, PC4)" style="background:linear-gradient(135deg,#78350f,#d97706);color:#fef3c7;border:1px solid rgba(251,191,36,0.5);font-weight:800;letter-spacing:0.04em;">📊 SALUD FLOTA</button>
       </div>
     </header>
 
@@ -387,6 +393,192 @@
   </div>
 </div>
 <!-- /BUZÓN AGY -->
+
+<!-- 🏛️ MODAL CONSTITUCIÓN SGN & MATRIZ SDD VIVA -->
+<div id="constitucion-modal" role="dialog" aria-modal="true" aria-labelledby="constitucion-title" style="display:none;position:fixed;inset:0;background:rgba(2,5,16,0.94);z-index:9850;align-items:center;justify-content:center;backdrop-filter:blur(8px);padding:14px;box-sizing:border-box;">
+  <div style="width:min(1050px,96vw);max-height:92vh;background:linear-gradient(145deg,#0a0d1f,#121630);border:1px solid rgba(167,139,250,0.5);border-radius:16px;box-shadow:0 0 60px rgba(124,58,237,0.22),0 0 25px rgba(0,243,255,0.12);overflow:hidden;display:flex;flex-direction:column;font-family:'Inter',sans-serif;">
+    <!-- Barra Superior -->
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 20px;border-bottom:1px solid rgba(167,139,250,0.25);background:rgba(7,10,25,0.98);">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="font-size:1.6rem;">🏛️</span>
+        <div>
+          <div id="constitucion-title" style="font-family:'Orbitron',monospace;font-size:1.05rem;font-weight:900;color:#ddd6fe;letter-spacing:0.08em;">CONSTITUCIÓN SGN & MATRIZ SDD VIVA</div>
+          <div style="font-size:0.64rem;color:#8b5cf6;margin-top:3px;letter-spacing:0.08em;font-weight:600;">DOBLE FUENTE DE VERDAD · GOBERNANZA MULTI-NODO · ESPECIFICACIÓN FUSIONADA</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button id="constitucion-refresh" type="button" title="Refrescar desde /api/constitucion" style="background:rgba(139,92,246,0.15);border:1px solid rgba(167,139,250,0.4);color:#c4b5fd;border-radius:8px;padding:6px 12px;font-size:0.7rem;font-weight:700;cursor:pointer;">🔄 Sincronizar</button>
+        <button id="constitucion-close" type="button" aria-label="Cerrar modal" style="background:rgba(255,255,255,0.06);border:1px solid rgba(140,156,178,0.25);color:#c4b5fd;border-radius:8px;font-size:1.1rem;cursor:pointer;padding:4px 12px;line-height:1;">✕</button>
+      </div>
+    </div>
+
+    <!-- Navegación por Pestañas -->
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 18px;border-bottom:1px solid rgba(167,139,250,0.15);background:rgba(10,14,35,0.9);flex-wrap:wrap;">
+      <div id="constitucion-tabs" role="tablist" style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="const-tab-btn active" data-tab="doctrina" type="button" style="background:rgba(124,58,237,0.25);border:1px solid #8b5cf6;color:#ede9fe;border-radius:8px;padding:6px 12px;font-size:0.72rem;font-weight:800;cursor:pointer;">⚡ Doctrina & Santo y Seña</button>
+        <button class="const-tab-btn" data-tab="flota" type="button" style="background:rgba(255,255,255,0.04);border:1px solid rgba(167,139,250,0.25);color:#a78bfa;border-radius:8px;padding:6px 12px;font-size:0.72rem;font-weight:700;cursor:pointer;">🌐 Flota Multi-Nodo</button>
+        <button class="const-tab-btn" data-tab="regla7" type="button" style="background:rgba(255,255,255,0.04);border:1px solid rgba(167,139,250,0.25);color:#a78bfa;border-radius:8px;padding:6px 12px;font-size:0.72rem;font-weight:700;cursor:pointer;">🛑 Regla 7 Producción</button>
+        <button class="const-tab-btn" data-tab="sdd" type="button" style="background:rgba(255,255,255,0.04);border:1px solid rgba(52,211,153,0.35);color:#6ee7b7;border-radius:8px;padding:6px 12px;font-size:0.72rem;font-weight:700;cursor:pointer;">📐 Matriz SDD Viva</button>
+        <button class="const-tab-btn" data-tab="markdown" type="button" style="background:rgba(255,255,255,0.04);border:1px solid rgba(167,139,250,0.25);color:#a78bfa;border-radius:8px;padding:6px 12px;font-size:0.72rem;font-weight:700;cursor:pointer;">📜 Documento Completo</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input id="constitucion-search" type="text" placeholder="🔍 Filtrar contenido…" style="background:#070a18;border:1px solid rgba(167,139,250,0.3);border-radius:8px;color:#ede9fe;padding:6px 10px;font-size:0.72rem;outline:none;width:180px;">
+      </div>
+    </div>
+
+    <!-- Cuerpo del Modal -->
+    <div id="constitucion-body" style="padding:18px 22px;overflow-y:auto;flex:1;min-height:320px;max-height:calc(92vh - 140px);color:#e2e8f0;font-size:0.8rem;line-height:1.6;">
+      <div style="text-align:center;padding:40px;color:#8b5cf6;">Cargando Constitución SGN…</div>
+    </div>
+
+    <!-- Pie del Modal -->
+    <div style="padding:10px 20px;border-top:1px solid rgba(167,139,250,0.18);background:#070a1a;color:#7c3aed;font-size:0.65rem;display:flex;align-items:center;justify-content:space-between;letter-spacing:0.04em;">
+      <span>🏛️ CONSTITUCIÓN MAESTRA SGN · DOBLE FUENTE DE VERDAD INMUTABLE</span>
+      <span id="constitucion-hash-status" style="color:#10b981;">● SINCRONIZADA CON EL SERVIDOR</span>
+    </div>
+  </div>
+</div>
+
+<!-- 🧪 CONSOLA DIDÁCTICA DE PRUEBAS HTML -->
+<div id="pruebas-didacticas-modal" role="dialog" aria-modal="true" aria-labelledby="pruebas-title" style="display:none;position:fixed;inset:0;background:rgba(2,6,18,0.95);z-index:9850;align-items:center;justify-content:center;backdrop-filter:blur(8px);padding:14px;box-sizing:border-box;">
+  <div style="width:min(1100px,96vw);max-height:92vh;background:linear-gradient(145deg,#071226,#0b1a38);border:1px solid rgba(56,189,248,0.5);border-radius:16px;box-shadow:0 0 60px rgba(2,132,199,0.22),0 0 25px rgba(0,243,255,0.12);overflow:hidden;display:flex;flex-direction:column;font-family:'Inter',sans-serif;">
+    <!-- Barra Superior -->
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 20px;border-bottom:1px solid rgba(56,189,248,0.25);background:rgba(4,10,28,0.98);">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span style="font-size:1.6rem;">🧪</span>
+        <div>
+          <div id="pruebas-title" style="font-family:'Orbitron',monospace;font-size:1.05rem;font-weight:900;color:#bae6fd;letter-spacing:0.08em;">CONSOLA DIDÁCTICA DE PRUEBAS HTML</div>
+          <div style="font-size:0.64rem;color:#0284c7;margin-top:3px;letter-spacing:0.08em;font-weight:600;">PRUEBAS EN 1-CLIC · CERO COMANDOS COMPLEJOS · INTERFAZ VISUAL DIDÁCTICA PARA HUMANOS</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <button id="btn-ejecutar-todas-pruebas" type="button" style="background:linear-gradient(135deg,#0284c7,#0369a1);border:1px solid #38bdf8;color:#fff;border-radius:8px;padding:7px 14px;font-size:0.72rem;font-weight:800;cursor:pointer;box-shadow:0 0 12px rgba(56,189,248,0.25);">⚡ PROBAR TODO EN BATERÍA</button>
+        <button id="pruebas-close" type="button" aria-label="Cerrar modal de pruebas" style="background:rgba(255,255,255,0.06);border:1px solid rgba(140,156,178,0.25);color:#7dd3fc;border-radius:8px;font-size:1.1rem;cursor:pointer;padding:4px 12px;line-height:1;">✕</button>
+      </div>
+    </div>
+
+    <!-- Contenido Principal: Grid de 2 Columnas -->
+    <div style="display:grid;grid-template-columns:minmax(340px, 420px) 1fr;gap:16px;padding:18px 20px;overflow-y:auto;flex:1;min-height:380px;max-height:calc(92vh - 140px);">
+      <!-- Columna Izquierda: Botones de Prueba en 1-Clic -->
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-family:'Orbitron',monospace;font-size:0.75rem;color:#38bdf8;letter-spacing:0.06em;margin-bottom:2px;">CATÁLOGO DE PRUEBAS DE FLOTA</div>
+
+        <!-- Tarjeta 1: Heartbeat Universal -->
+        <div class="prueba-card" style="background:rgba(6,18,42,0.8);border:1px solid rgba(56,189,248,0.25);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-weight:700;color:#e0f2fe;font-size:0.78rem;">⚡ 1. Heartbeat Universal</div>
+            <span class="prueba-status-pill" id="status-heartbeat" style="font-size:0.62rem;background:#1e293b;color:#94a3b8;padding:2px 8px;border-radius:6px;font-weight:700;">⚪ PENDIENTE</span>
+          </div>
+          <div style="font-size:0.67rem;color:#93c5fd;">Verifica pulso y conectividad viva con el Replit Relay / Railway Cloud.</div>
+          <button class="btn-lanzar-prueba" id="btn-run-heartbeat" style="background:linear-gradient(135deg,#0369a1,#0284c7);color:#fff;border:none;border-radius:6px;padding:6px;font-size:0.68rem;font-weight:700;cursor:pointer;">Ejecutar Prueba</button>
+        </div>
+
+        <!-- Tarjeta 2: Conexión PC1 Windows -->
+        <div class="prueba-card" style="background:rgba(6,18,42,0.8);border:1px solid rgba(56,189,248,0.25);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-weight:700;color:#e0f2fe;font-size:0.78rem;">🔵 2. Puente PC1 Bogotá</div>
+            <span class="prueba-status-pill" id="status-pc1" style="font-size:0.62rem;background:#1e293b;color:#94a3b8;padding:2px 8px;border-radius:6px;font-weight:700;">⚪ PENDIENTE</span>
+          </div>
+          <div style="font-size:0.67rem;color:#93c5fd;">Comando de prueba rápido a PC1 Master Central (/pc1 hostname).</div>
+          <button class="btn-lanzar-prueba" id="btn-run-pc1" style="background:linear-gradient(135deg,#003a7f,#0055cc);color:#fff;border:none;border-radius:6px;padding:6px;font-size:0.68rem;font-weight:700;cursor:pointer;">Ejecutar Prueba</button>
+        </div>
+
+        <!-- Tarjeta 3: Conexión PC2 Linux -->
+        <div class="prueba-card" style="background:rgba(6,18,42,0.8);border:1px solid rgba(56,189,248,0.25);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-weight:700;color:#e0f2fe;font-size:0.78rem;">🐧 3. Consola PC2 Lubyanka Linux</div>
+            <span class="prueba-status-pill" id="status-pc2" style="font-size:0.62rem;background:#1e293b;color:#94a3b8;padding:2px 8px;border-radius:6px;font-weight:700;">⚪ PENDIENTE</span>
+          </div>
+          <div style="font-size:0.67rem;color:#93c5fd;">Verifica canal no interactivo hacia Ubuntu Linux 192.168.1.14.</div>
+          <button class="btn-lanzar-prueba" id="btn-run-pc2" style="background:linear-gradient(135deg,#5a0010,#cc0020);color:#fff;border:none;border-radius:6px;padding:6px;font-size:0.68rem;font-weight:700;cursor:pointer;">Ejecutar Prueba</button>
+        </div>
+
+        <!-- Tarjeta 4: Conexión PC3 Miami -->
+        <div class="prueba-card" style="background:rgba(6,18,42,0.8);border:1px solid rgba(56,189,248,0.25);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-weight:700;color:#e0f2fe;font-size:0.78rem;">🌺 4. Nodo PC3 Miami</div>
+            <span class="prueba-status-pill" id="status-pc3" style="font-size:0.62rem;background:#1e293b;color:#94a3b8;padding:2px 8px;border-radius:6px;font-weight:700;">⚪ PENDIENTE</span>
+          </div>
+          <div style="font-size:0.67rem;color:#93c5fd;">Consulta estado operativo del brazo floral de Miami.</div>
+          <button class="btn-lanzar-prueba" id="btn-run-pc3" style="background:linear-gradient(135deg,#12305a,#1479b8);color:#fff;border:none;border-radius:6px;padding:6px;font-size:0.68rem;font-weight:700;cursor:pointer;">Ejecutar Prueba</button>
+        </div>
+
+        <!-- Tarjeta 5: Conexión PC4 Supernodo i9 -->
+        <div class="prueba-card" style="background:rgba(6,18,42,0.8);border:1px solid rgba(56,189,248,0.25);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-weight:700;color:#e0f2fe;font-size:0.78rem;">🚀 5. Consola PC4 Supernodo i9</div>
+            <span class="prueba-status-pill" id="status-pc4" style="font-size:0.62rem;background:#1e293b;color:#94a3b8;padding:2px 8px;border-radius:6px;font-weight:700;">⚪ PENDIENTE</span>
+          </div>
+          <div style="font-size:0.67rem;color:#93c5fd;">Comando de prueba rápido a PC4 Minisforum (/pc4 hostname).</div>
+          <button class="btn-lanzar-prueba" id="btn-run-pc4" style="background:linear-gradient(135deg,#4a154b,#7c3aed);color:#fff;border:none;border-radius:6px;padding:6px;font-size:0.68rem;font-weight:700;cursor:pointer;">Ejecutar Prueba</button>
+        </div>
+
+        <!-- Tarjeta 6: SafeTarget Guardrail -->
+        <div class="prueba-card" style="background:rgba(6,18,42,0.8);border:1px solid rgba(56,189,248,0.25);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-weight:700;color:#e0f2fe;font-size:0.78rem;">🛡️ 6. Filtro SafeTarget Guardrail</div>
+            <span class="prueba-status-pill" id="status-safetarget" style="font-size:0.62rem;background:#1e293b;color:#94a3b8;padding:2px 8px;border-radius:6px;font-weight:700;">⚪ PENDIENTE</span>
+          </div>
+          <div style="font-size:0.67rem;color:#93c5fd;">Verifica que el servidor rechace objetivos inválidos (ej. /pc999).</div>
+          <button class="btn-lanzar-prueba" id="btn-run-safetarget" style="background:linear-gradient(135deg,#334155,#475569);color:#fff;border:none;border-radius:6px;padding:6px;font-size:0.68rem;font-weight:700;cursor:pointer;">Ejecutar Prueba</button>
+        </div>
+
+        <!-- Tarjeta 7: Sincronización SDD Viva -->
+        <div class="prueba-card" style="background:rgba(6,18,42,0.8);border:1px solid rgba(52,211,153,0.3);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="font-weight:700;color:#d1fae5;font-size:0.78rem;">📐 7. Matriz SDD Viva</div>
+            <span class="prueba-status-pill" id="status-sdd" style="font-size:0.62rem;background:#1e293b;color:#94a3b8;padding:2px 8px;border-radius:6px;font-weight:700;">⚪ PENDIENTE</span>
+          </div>
+          <div style="font-size:0.67rem;color:#a7f3d0;">Verifica sincronización bidireccional entre la especificación y el código.</div>
+          <button class="btn-lanzar-prueba" id="btn-run-sdd" style="background:linear-gradient(135deg,#064e3b,#059669);color:#fff;border:none;border-radius:6px;padding:6px;font-size:0.68rem;font-weight:700;cursor:pointer;">Ejecutar Prueba</button>
+        </div>
+      </div>
+
+      <!-- Columna Derecha: Visor Didáctico de Resultados en Vivo -->
+      <div style="background:rgba(3,8,22,0.9);border:1px solid rgba(56,189,248,0.25);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(56,189,248,0.15);padding-bottom:10px;">
+          <div>
+            <div style="font-family:'Orbitron',monospace;font-size:0.8rem;color:#38bdf8;font-weight:700;">VISOR DE RESULTADO FACTUAL</div>
+            <div id="prueba-resultado-subtitulo" style="font-size:0.65rem;color:#64748b;margin-top:2px;">Selecciona una prueba para ver los datos en vivo.</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="prueba-badge-resultado" style="font-size:0.7rem;font-weight:800;padding:4px 10px;border-radius:6px;background:rgba(100,116,139,0.2);color:#94a3b8;">⚪ SIN EJECUTAR</span>
+            <span id="prueba-tiempo-ms" style="font-size:0.7rem;font-weight:700;color:#38bdf8;">⏱️ 0 ms</span>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:8px;" id="prueba-metricas-rapidas">
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:8px;text-align:center;">
+            <div style="font-size:0.6rem;color:#94a3b8;">ESTADO HTTP</div>
+            <div id="metrica-http-status" style="font-size:0.95rem;font-weight:800;color:#e2e8f0;margin-top:2px;">-</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:8px;text-align:center;">
+            <div style="font-size:0.6rem;color:#94a3b8;">LATENCIA</div>
+            <div id="metrica-latencia" style="font-size:0.95rem;font-weight:800;color:#e2e8f0;margin-top:2px;">-</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:8px;text-align:center;">
+            <div style="font-size:0.6rem;color:#94a3b8;">TIPO DE PRUEBA</div>
+            <div id="metrica-tipo" style="font-size:0.95rem;font-weight:800;color:#e2e8f0;margin-top:2px;">-</div>
+          </div>
+        </div>
+
+        <div style="flex:1;display:flex;flex-direction:column;min-height:220px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:0.68rem;color:#94a3b8;font-weight:600;">RESPUESTA JSON SANITIZADA:</span>
+            <button id="btn-copiar-resultado-prueba" type="button" style="background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.3);color:#38bdf8;border-radius:6px;padding:3px 8px;font-size:0.63rem;cursor:pointer;">📋 Copiar JSON</button>
+          </div>
+          <pre id="prueba-json-output" style="flex:1;background:#020612;border:1px solid rgba(56,189,248,0.2);border-radius:8px;padding:12px;font-family:'Courier New',monospace;font-size:0.72rem;color:#7dd3fc;overflow:auto;margin:0;line-height:1.45;white-space:pre-wrap;word-break:break-word;">Esperando ejecución de pruebas…</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pie del Modal -->
+    <div style="padding:10px 20px;border-top:1px solid rgba(56,189,248,0.18);background:#040c20;color:#0284c7;font-size:0.65rem;display:flex;align-items:center;justify-content:space-between;letter-spacing:0.04em;">
+      <span>🧪 CONSOLA DE PRUEBAS DIDÁCTICAS · REGLA CERO CARROS LOCOS</span>
+      <span>VALIDACIÓN FÁCTICA E2E · COMPROBACIÓN EN 1-CLIC</span>
+    </div>
+  </div>
+</div>
 
 
     <script>
@@ -3707,5 +3899,6 @@
     <script src="/yarbis-mcp.js?v=1"></script>
     <script src="./notebooklm.js"></script>
     <script src="./notebooklm-cloud-admin.js"></script>
+    <script src="./constitucion-sdd.js"></script>
 </body>
     </html>

@@ -16,7 +16,7 @@ test('Header CSS: soporte completo multi-fila en desktop y flex-wrap', () => {
   assert.ok(css.includes('justify-content: center'), 'style.css debe centrar el contenido de los botones');
 });
 
-test('Header HTML: exactamente 2 filas de botones balanceadas sin apiñuscamiento', () => {
+test('Header HTML: exactamente 3 filas de botones balanceadas sin apiñuscamiento ni vacíos', () => {
   const html = fs.readFileSync(htmlPath, 'utf8');
   
   // Extraer el bloque .header-btns
@@ -27,27 +27,36 @@ test('Header HTML: exactamente 2 filas de botones balanceadas sin apiñuscamient
   
   // Contar los separadores de fila
   const breaks = (content.match(/class="header-row-break"/g) || []).length;
-  assert.equal(breaks, 1, 'Debe haber exactamente 1 separador header-row-break para generar exactamente 2 filas');
+  assert.equal(breaks, 2, 'Debe haber exactamente 2 separadores header-row-break para generar exactamente 3 filas');
   
-  // Dividir en las dos filas
+  // Dividir en las tres filas
   const parts = content.split(/<div class="header-row-break"[^>]*><\/div>/);
-  assert.equal(parts.length, 2, 'El contenido debe dividirse en exactamente 2 filas');
+  assert.equal(parts.length, 3, 'El contenido debe dividirse en exactamente 3 filas');
   
   // Contar botones/enlaces en cada fila
   const countButtons = (part) => (part.match(/<(button|a)\b/g) || []).length;
   const row1Count = countButtons(parts[0]);
   const row2Count = countButtons(parts[1]);
+  const row3Count = countButtons(parts[2]);
   
   // Fila 1 debe tener exactamente 8 botones en HTML (más 1 inyectado en runtime = 9)
   assert.equal(row1Count, 8, `Fila 1 debe tener exactamente 8 botones en HTML (actual: ${row1Count})`);
   // Fila 2 debe tener exactamente 9 botones (4 consolas de flota + 5 accesos globales)
   assert.equal(row2Count, 9, `Fila 2 debe tener exactamente 9 botones en HTML (actual: ${row2Count})`);
+  // Fila 3 debe tener exactamente 4 botones (Constitución, SDD Viva, Pruebas HTML, Salud Flota)
+  assert.equal(row3Count, 4, `Fila 3 debe tener exactamente 4 botones en HTML (actual: ${row3Count})`);
   
   // Verificar presencia de todas las consolas de flota multi-nodo en Fila 2
   assert.ok(parts[1].includes('id="btn-puente-pc1"'), 'Puente PC1 debe estar en Fila 2');
   assert.ok(parts[1].includes('id="btn-puente-pc2"'), 'Consola PC2 debe estar en Fila 2');
   assert.ok(parts[1].includes('id="btn-console-pc3"'), 'Consola PC3 Miami debe estar en Fila 2');
   assert.ok(parts[1].includes('id="btn-console-pc4"'), 'Consola PC4 Supernodo debe estar en Fila 2');
+  
+  // Verificar presencia de botones de Fila 3
+  assert.ok(parts[2].includes('id="btn-constitucion"'), 'Constitución SGN debe estar en Fila 3');
+  assert.ok(parts[2].includes('id="btn-sdd-matrix"'), 'Matriz SDD Viva debe estar en Fila 3');
+  assert.ok(parts[2].includes('id="btn-pruebas-html"'), 'Pruebas Didácticas HTML debe estar en Fila 3');
+  assert.ok(parts[2].includes('id="btn-salud-flota"'), 'Salud Flota debe estar en Fila 3');
   
   // Verificar presencia de botones de control y herramientas en Fila 1
   assert.ok(parts[0].includes('id="btn-run"'), 'Botón Ejecutar debe estar en Fila 1');
