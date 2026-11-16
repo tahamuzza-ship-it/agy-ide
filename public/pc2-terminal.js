@@ -29,10 +29,23 @@
       description: 'Consola de comandos no interactiva de Windows. Cada comando se ejecuta por separado; no hay PTY, stdin ni directorio de trabajo persistente.',
       help: 'Para cambiar de carpeta y ejecutar algo en la misma orden usa: cd ruta && comando.',
       shortcuts: [['hostname', 'hostname'], ['dir', 'dir'], ['ver', 'ver']]
+    },
+    PC4: {
+      key: 'PC4',
+      storageKey: 'agyide.pc4.console.pending-id',
+      title: 'Consola PC4 Supernodo i9 — Windows',
+      titleId: 'pc4-console-title',
+      commandName: 'pc4-command',
+      endpoint: '/api/pc-command',
+      statusText: 'Listo: no se ejecuta nada al abrir.',
+      description: 'Consola de comandos no interactiva de PC4 (Minisforum M1 i9). Cada comando se ejecuta por separado; no hay PTY, stdin ni directorio persistente.',
+      help: 'Para cambiar de carpeta y ejecutar algo en la misma orden usa: cd ruta && comando.',
+      shortcuts: [['hostname', 'hostname'], ['dir', 'dir'], ['powershell -Command "Get-Process | Select -First 10"', 'procesos']]
     }
   };
   var STORAGE_KEY = TARGETS.PC2.storageKey;
   var PC3_STORAGE_KEY = TARGETS.PC3.storageKey;
+  var PC4_STORAGE_KEY = TARGETS.PC4.storageKey;
   var instances = typeof WeakMap === 'function' ? new WeakMap() : null;
   function targetFor(options) {
     var requested = options && options.target != null ? String(options.target).toUpperCase() : 'PC2';
@@ -184,7 +197,7 @@
         response = await fetchFor(record.options)('/api/pc-command', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-agyide-pwd': typeof record.options.getPwd === 'function' ? record.options.getPwd() : '' },
-          body: JSON.stringify({ text: '/pc2 ' + command })
+          body: JSON.stringify({ text: '/' + config.key.toLowerCase() + ' ' + command })
         });
       }
     } catch (error) {
@@ -212,7 +225,7 @@
       try {
         var url = config.key === 'PC3'
           ? config.endpoint + '/' + encodeURIComponent(id)
-          : '/api/status/' + encodeURIComponent(id) + '?target=PC2';
+          : '/api/status/' + encodeURIComponent(id) + '?target=' + encodeURIComponent(config.key);
         response = await fetchFunction(url, {
           method: 'GET',
           headers: { 'x-agyide-pwd': typeof record.options.getPwd === 'function' ? record.options.getPwd() : '' }
@@ -462,10 +475,13 @@
   }
   return {
     launch: launch,
+    targetFor: targetFor,
+    TARGETS: TARGETS,
     DEFAULT_MAX_MS: MAX_MS,
     DEFAULT_INTERVAL_MS: INTERVAL_MS,
     STORAGE_KEY: STORAGE_KEY,
     PC3_STORAGE_KEY: PC3_STORAGE_KEY,
-    STORAGE_KEYS: { PC2: STORAGE_KEY, PC3: PC3_STORAGE_KEY }
+    PC4_STORAGE_KEY: PC4_STORAGE_KEY,
+    STORAGE_KEYS: { PC2: STORAGE_KEY, PC3: PC3_STORAGE_KEY, PC4: PC4_STORAGE_KEY }
   };
 });
