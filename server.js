@@ -1632,8 +1632,8 @@ app.get('/api/heartbeat', async (_req, res) => {
 app.post('/api/pc-command', requirePwd, async (req, res) => {
   try {
     const text = String(req.body && req.body.text || '').trim();
-    const directMatch = text.match(/^\/(pc1|pc2)\b(?:\s+([\s\S]+))?$/i);
-    const missionMatch = text.match(/^misiones\s+(pc1|pc2)\b(?:\s+([\s\S]+))?$/i);
+    const directMatch = text.match(/^\/(pc1|pc2|pc4)\b(?:\s+([\s\S]+))?$/i);
+    const missionMatch = text.match(/^misiones\s+(pc1|pc2|pc4)\b(?:\s+([\s\S]+))?$/i);
     const match = directMatch || missionMatch;
     if (!match) return res.status(400).json({ error: 'Comando universal no reconocido' });
 
@@ -1712,7 +1712,7 @@ app.get('/api/status/:id', requirePwd, async (req, res) => {
   try {
     const { id } = req.params;
     const requestedTarget = String(req.query.target || '').toUpperCase();
-    const safeTarget = requestedTarget === 'PC1' || requestedTarget === 'PC2' ? requestedTarget : null;
+    const safeTarget = requestedTarget === 'PC1' || requestedTarget === 'PC2' || requestedTarget === 'PC4' ? requestedTarget : null;
     if (id.startsWith('groq_') && SUPABASE_URL && SUPABASE_KEY) {
       const r = await fetch(
         `${SUPABASE_URL}/rest/v1/antigravity_commands?id=eq.${encodeURIComponent(id)}&select=id,status,result`,
